@@ -2,11 +2,13 @@
   "name": "canvas-extractor-tools",
   "version": "1.0.0",
   "description": "Desktop app for exporting Canvas course content, quizzes, and rubrics to Google Docs",
+  "author": "Greg Snow (Boise State eCampus)",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && electron-builder",
     "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint ."
   },
   "devDependencies": {
