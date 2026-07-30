@@ -261,9 +261,21 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
             </button>
           </div>
 
-          {/* Progress bar — only once a total is known */}
+          {/* Progress bar — only once a total is known.
+              Deliberately a progressbar rather than an aria-live region: the count changes
+              once per item, and announcing every change would talk over the user for the
+              whole export. A progressbar is read on demand instead. Completion and failure
+              below are what actually get announced. */}
           {progress && progress.total > 0 && (
-            <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              role="progressbar"
+              aria-label={`${label} export progress`}
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.done}
+              aria-valuetext={`${progress.done} of ${progress.total} items`}
+              className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"
+            >
               <div
                 className="h-full bg-[#0033a0] transition-all duration-300"
                 style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
@@ -292,22 +304,27 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
               title={nothingSelected ? 'Select at least one item to export' : undefined}
               className="flex-1 rounded-l-xl bg-[#0033a0] hover:bg-[#002d8f] disabled:opacity-40 disabled:hover:bg-[#0033a0] text-white font-black text-[13px] py-2.5 flex items-center justify-center gap-2 transition"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4" aria-hidden="true" />
               {nothingSelected ? 'Nothing selected' : exportLabel}
             </button>
             <button
               onClick={openPicker}
               aria-label="Choose specific items"
+              aria-expanded={pickerOpen}
+              aria-controls={`${tool}-item-picker`}
               className="rounded-r-xl bg-[#0033a0] hover:bg-[#002d8f] text-white px-3 border-l border-white/25 transition"
             >
-              <ChevronDown className={`w-4 h-4 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${pickerOpen ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
             </button>
           </div>
 
           <button
             onClick={() => runLocalSave(selectionArgs)}
             disabled={nothingSelected}
-            className="w-full text-center text-xs font-bold text-gray-400 hover:text-gray-600 mt-2 disabled:opacity-50"
+            className="w-full text-center text-xs font-bold text-gray-600 hover:text-gray-900 mt-2 disabled:opacity-50"
           >
             or save a local copy (.html)
           </button>
@@ -315,17 +332,17 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
       )}
 
       {pickerOpen && (
-        <div className="mt-2.5 border border-gray-200 rounded-xl p-3 bg-white">
+        <div id={`${tool}-item-picker`} className="mt-2.5 border border-gray-200 rounded-xl p-3 bg-white">
           {loadingItems && (
-            <p className="text-xs text-gray-500 flex items-center gap-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…
+            <p className="text-xs text-gray-600 flex items-center gap-2" role="status">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Loading…
             </p>
           )}
-          {itemsError && <p className="text-xs text-red-600">{itemsError}</p>}
+          {itemsError && <p role="alert" className="text-xs text-red-700">{itemsError}</p>}
           {items && (
             <>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wide text-gray-400">
+                <span className="text-[10px] font-black uppercase tracking-wide text-gray-600">
                   Choose items to export
                 </span>
                 <button onClick={toggleAll} className="text-xs font-bold text-blue-600 hover:underline">
@@ -336,7 +353,7 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
                 {grouped.map(({ group, rows }) => (
                   <div key={group ?? '__flat__'}>
                     {group && (
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 mt-2 mb-0.5 px-1">
+                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-600 mt-2 mb-0.5 px-1">
                         {group}
                       </p>
                     )}
@@ -369,30 +386,40 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
         </div>
       )}
 
+      {/* An export runs for minutes, so its outcome must be announced — a sighted user sees
+          this block appear, a screen reader user otherwise gets nothing at all. */}
       {status === 'success' && (
-        <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-green-50 border border-green-200 rounded-xl text-[12.5px] text-green-800">
-          <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600" />
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-2.5 flex items-start gap-2.5 p-3 bg-green-50 border border-green-200 rounded-xl text-[12.5px] text-green-800"
+        >
+          <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600" aria-hidden="true" />
           <div className="flex-1">
-            <p className="font-black">Done</p>
-            <p className="text-gray-600 mt-0.5">{message}</p>
+            <p className="font-black">{label} export done</p>
+            <p className="text-gray-700 mt-0.5">{message}</p>
             {webViewLink && (
               <button
                 onClick={() => window.open(webViewLink, '_blank')}
                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-black text-blue-700 border border-blue-200 rounded-lg px-2.5 py-1.5 hover:bg-blue-50 transition"
               >
-                <ExternalLink className="w-3.5 h-3.5" /> Open again
+                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" /> Open again
               </button>
             )}
           </div>
         </div>
       )}
 
+      {/* role="alert" rather than status: a failure should interrupt, not queue politely. */}
       {status === 'error' && (
-        <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">
-          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-500" />
+        <div
+          role="alert"
+          className="mt-2.5 flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800"
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" aria-hidden="true" />
           <div>
-            <p className="font-black">Export failed</p>
-            <p className="text-gray-600 mt-0.5">{message}</p>
+            <p className="font-black">{label} export failed</p>
+            <p className="text-gray-700 mt-0.5">{message}</p>
           </div>
         </div>
       )}

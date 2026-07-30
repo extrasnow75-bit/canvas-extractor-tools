@@ -43,7 +43,7 @@ function Avatar({ picture, name, email }: { picture?: string; name?: string; ema
 }
 
 const GoogleIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24">
+  <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -78,32 +78,44 @@ export function SetupPanel({
     <div className="rounded-2xl overflow-hidden shadow-sm">
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="w-full bg-[#0033a0] hover:bg-[#002d8f] text-white px-4 py-3.5 flex items-center gap-3 transition-colors text-left"
+        aria-expanded={isOpen}
+        aria-controls="initial-setup-panel"
+        className="w-full bg-[#0033a0] hover:bg-[#002d8f] text-white px-4 py-3.5 flex items-center gap-3 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-inset"
       >
-        <SlidersHorizontal className="w-[18px] h-[18px] flex-shrink-0" />
+        <SlidersHorizontal className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
         <span className="font-black text-[15px]">Initial setup</span>
         <div className="ml-auto flex items-center gap-3">
+          {/* The dots carry state by colour alone, so each pairs with visually hidden text. */}
           <div className="flex items-center gap-1.5">
             <span
-              title="Canvas token"
               className={`w-2 h-2 rounded-full ${tokenValid ? 'bg-green-400' : 'bg-white/30'}`}
+              aria-hidden="true"
             />
+            <span className="sr-only">
+              Canvas token {tokenValid ? 'saved' : 'not set'}.
+            </span>
             <span
-              title="Google sign-in (optional)"
               className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/30'}`}
+              aria-hidden="true"
             />
+            <span className="sr-only">
+              Google sign-in (optional) {googleStatus.signedIn ? 'complete' : 'not signed in'}.
+            </span>
           </div>
           <span className="text-[11px] font-bold">{statusText}</span>
-          <ChevronDown className={`w-[18px] h-[18px] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            className={`w-[18px] h-[18px] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
         </div>
       </button>
 
       {isOpen && (
-        <div className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
+        <div id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
           {/* Canvas token */}
           <div className={`rounded-2xl border-2 p-4 ${tokenValid ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
-              <KeyRound className="w-4 h-4 text-red-600 flex-shrink-0" />
+              <KeyRound className="w-4 h-4 text-red-600 flex-shrink-0" aria-hidden="true" />
               <span className="font-black text-[15px]">
                 Canvas API token <span className="text-red-500">*</span>
               </span>
@@ -115,14 +127,15 @@ export function SetupPanel({
                   <span className="w-2 h-2 rounded-full bg-green-500" />
                   <span className="text-[13px] font-bold text-green-700">Token saved</span>
                 </div>
-                <p className="text-xs font-mono text-gray-400 mb-3 break-all">
+                <p className="text-xs font-mono text-gray-600 mb-3 break-all">
+                  <span className="sr-only">Saved token, partially hidden: </span>
                   {canvasToken.slice(0, 8)}··············{canvasToken.slice(-4)}
                 </p>
                 <button
                   onClick={onRemoveToken}
-                  className="w-full text-sm font-bold text-gray-600 border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                  className="w-full text-sm font-bold text-gray-700 border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition flex items-center justify-center gap-2"
                 >
-                  <LogOut className="w-4 h-4" /> Remove token
+                  <LogOut className="w-4 h-4" aria-hidden="true" /> Remove token
                 </button>
               </div>
             ) : (
@@ -131,20 +144,33 @@ export function SetupPanel({
                   Paste your Canvas token here. It's stored encrypted on this computer only.
                 </p>
                 <div className="relative mb-2.5">
+                  <label htmlFor="canvas-token" className="sr-only">
+                    Canvas API token
+                  </label>
                   <input
+                    id="canvas-token"
                     type={showToken ? 'text' : 'password'}
                     value={tokenInput}
                     onChange={(e) => setTokenInput(e.target.value)}
                     placeholder="Paste your Canvas API token"
-                    className="w-full border-2 border-gray-200 rounded-xl px-3.5 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:border-red-400 transition"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full border-2 border-gray-200 rounded-xl px-3.5 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200 transition"
                   />
+                  {/* Previously tabIndex={-1}, which left keyboard-only users unable to check
+                      what they had pasted into a masked field. */}
                   <button
                     type="button"
                     onClick={() => setShowToken((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    tabIndex={-1}
+                    aria-label={showToken ? 'Hide token' : 'Show token'}
+                    aria-pressed={showToken}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                   >
-                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showToken ? (
+                      <EyeOff className="w-4 h-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="w-4 h-4" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
                 <button
@@ -174,7 +200,7 @@ export function SetupPanel({
             <div className="flex items-center gap-2 mb-2">
               <GoogleIcon />
               <span className="font-black text-[15px]">Google sign-in</span>
-              <span className="ml-auto text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <span className="ml-auto text-[10px] font-black text-gray-600 uppercase tracking-widest">
                 Optional
               </span>
             </div>
@@ -190,11 +216,11 @@ export function SetupPanel({
                 />
                 <div className="flex-1 min-w-0">
                   <p className="font-black text-sm truncate">{googleStatus.name ?? googleStatus.email}</p>
-                  {googleStatus.email && <p className="text-xs text-gray-500 truncate">{googleStatus.email}</p>}
+                  {googleStatus.email && <p className="text-xs text-gray-600 truncate">{googleStatus.email}</p>}
                 </div>
                 <button
                   onClick={onGoogleSignOut}
-                  className="text-xs font-bold text-gray-500 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition flex-shrink-0"
+                  className="text-xs font-bold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition flex-shrink-0"
                 >
                   Sign out
                 </button>
@@ -206,7 +232,7 @@ export function SetupPanel({
               >
                 {googleBusy ? 'Opening Google…' : 'Use a different account'}
               </button>
-              {googleError && <p className="text-xs text-red-600 mt-2">{googleError}</p>}
+              {googleError && <p role="alert" className="text-xs text-red-700 mt-2">{googleError}</p>}
               </div>
             ) : (
               <div>
@@ -228,13 +254,13 @@ export function SetupPanel({
                 >
                   Use a different account
                 </button>
-                {googleError && <p className="text-xs text-red-600 mt-2">{googleError}</p>}
+                {googleError && <p role="alert" className="text-xs text-red-700 mt-2">{googleError}</p>}
               </div>
             )}
           </div>
 
-          <div className="flex items-start gap-1.5 text-[11px] text-gray-400 px-1">
-            <Shield className="w-[13px] h-[13px] mt-0.5 flex-shrink-0" />
+          <div className="flex items-start gap-1.5 text-[11px] text-gray-600 px-1">
+            <Shield className="w-[13px] h-[13px] mt-0.5 flex-shrink-0" aria-hidden="true" />
             <span>
               Tokens stored encrypted in your OS keychain — never written to disk in plain text. Google
               uses least-privilege access (files this app creates only).

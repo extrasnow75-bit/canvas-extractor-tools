@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { X, ShieldCheck } from 'lucide-react'
 
 interface Props {
@@ -8,12 +8,39 @@ interface Props {
 
 const PlaceholderLink: React.FC<{ label: string }> = ({ label }) => (
   <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-    <span className="text-sm font-bold text-gray-500">{label}</span>
-    <span className="text-[10px] font-black text-amber-600 uppercase tracking-wide">Coming soon</span>
+    <span className="text-sm font-bold text-gray-600">{label}</span>
+    <span className="text-[10px] font-black text-amber-700 uppercase tracking-wide">Coming soon</span>
   </div>
 )
 
 export function HelpCenter({ isOpen, onClose }: Props) {
+  const panelRef = useRef<HTMLElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  /**
+   * The panel stays mounted so it can slide in and out, which means that when it is closed
+   * its buttons and links are still in the tab order — keyboard users would tab off the end
+   * of the page into an invisible drawer. `inert` removes the whole subtree from focus and
+   * from assistive tech without disturbing the transition.
+   */
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    if (isOpen) el.removeAttribute('inert')
+    else el.setAttribute('inert', '')
+  }, [isOpen])
+
+  // Move focus into the panel when it opens, and let Escape close it, as a dialog should.
+  useEffect(() => {
+    if (!isOpen) return
+    closeRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
+
   return (
     <>
       {isOpen && (
@@ -21,6 +48,10 @@ export function HelpCenter({ isOpen, onClose }: Props) {
       )}
 
       <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Help Center"
         className={`fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         } overflow-y-auto`}
@@ -31,17 +62,19 @@ export function HelpCenter({ isOpen, onClose }: Props) {
             <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">eCampus</p>
           </div>
           <button
+            ref={closeRef}
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-900"
+            aria-label="Close Help Center"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600 hover:text-gray-900"
           >
-            <X className="h-6 w-6" />
+            <X className="h-6 w-6" aria-hidden="true" />
           </button>
         </div>
 
         <div className="p-6 space-y-8">
           {/* Canvas setup */}
           <section>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Canvas setup</h3>
+            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">Canvas setup</h3>
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
               <p className="text-sm font-black text-gray-900">How to generate a Canvas access token</p>
               <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
@@ -52,7 +85,7 @@ export function HelpCenter({ isOpen, onClose }: Props) {
                 <li>Give it a name (and an expiry), then click <span className="font-bold">Generate Token</span>.</li>
                 <li>Copy the token and paste it into the app.</li>
               </ol>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-600">
                 Source:{' '}
                 <a
                   href="https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account"
@@ -68,7 +101,7 @@ export function HelpCenter({ isOpen, onClose }: Props) {
 
           {/* Resources & Training */}
           <section>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Resources &amp; training</h3>
+            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">Resources &amp; training</h3>
             <div className="space-y-3">
               <PlaceholderLink label="Selected training documents" />
             </div>
@@ -76,7 +109,7 @@ export function HelpCenter({ isOpen, onClose }: Props) {
 
           {/* App Suggestions */}
           <section className="pt-8 border-t border-gray-100">
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4">
+            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">
               Find bugs? Have improvement requests?
             </h3>
             <PlaceholderLink label="App Suggestions document" />
@@ -86,7 +119,7 @@ export function HelpCenter({ isOpen, onClose }: Props) {
           <section className="pt-4">
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
               <p className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
-                <ShieldCheck className="w-4 h-4 text-gray-500 shrink-0" />
+                <ShieldCheck className="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
                 Security &amp; privacy
               </p>
               <ul className="space-y-2 text-sm text-gray-600">

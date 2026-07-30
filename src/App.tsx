@@ -53,7 +53,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-50">
-        <p className="text-gray-500 text-sm">Loading…</p>
+        <p className="text-gray-600 text-sm" role="status">Loading…</p>
       </div>
     )
   }
@@ -73,7 +73,7 @@ export default function App() {
         className="flex items-center justify-between px-4 h-11 bg-white border-b border-gray-200 flex-shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-gray-600">
           Export Canvas course content, quizzes, and rubrics
         </span>
         <button
