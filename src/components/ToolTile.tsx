@@ -88,6 +88,31 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
   const [loadingItems, setLoadingItems] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
+  /**
+   * A selection belongs to the course it was made in. Without this, picking items in one
+   * course and then switching to another sent the first course's item ids as the filter for
+   * the second: nothing matched, every module was skipped, and the export silently produced
+   * a document containing only the home page and syllabus — which are emitted before the
+   * module loop and so escape the filter. It looked like a working export, which is worse
+   * than an error.
+   *
+   * Clearing `items` also matters on its own: `openPicker` returns early when items are
+   * already loaded, so a stale list would otherwise be shown for the new course too.
+   */
+  useEffect(() => {
+    setPickerOpen(false)
+    setItems(null)
+    setItemsError(null)
+    setSelected(new Set())
+  }, [courseUrl])
+
+  // A finished export's result refers to the course it ran against, so it is stale too.
+  // A running export is left alone: its progress and Stop button must survive an edit to
+  // the URL field, and its own completion will overwrite this.
+  useEffect(() => {
+    setStatus((s) => (s === 'running' ? s : 'idle'))
+  }, [courseUrl])
+
   const grouped = useMemo(() => {
     if (!items) return []
     const order: string[] = []

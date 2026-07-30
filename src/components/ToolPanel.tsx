@@ -92,6 +92,9 @@ export function ToolPanel({ token }: Props) {
   const [courseName, setCourseName] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
+  // Bumped by "Start again": it is part of each tile's key, so the tiles remount with
+  // completely fresh state rather than relying on this file knowing what they hold.
+  const [resetKey, setResetKey] = useState(0)
 
   const urlValid = COURSE_URL_RE.test(courseUrl.trim())
 
@@ -103,12 +106,28 @@ export function ToolPanel({ token }: Props) {
   }, [courseUrl])
 
   // Start with the caret after the prefix so the course id can be typed straight away.
+  // Keyed on resetKey as well as mount, so "Start again" lands the caret in the same place.
   useEffect(() => {
     const el = inputRef.current
     if (!el) return
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
-  }, [])
+  }, [resetKey])
+
+  /**
+   * Return every tool to the state it had at launch, for the common case of exporting one
+   * course and then moving on to the next.
+   *
+   * This is a convenience, not the safeguard: each tile already discards its own selection
+   * when the course URL changes. Without that, this button would be load-bearing, and an
+   * export would silently come out wrong whenever someone forgot to press it.
+   */
+  const startOver = () => {
+    setCourseUrl(DEFAULT_COURSE_URL)
+    setCourseName(null)
+    setNameError(null)
+    setResetKey((k) => k + 1)
+  }
 
   const validateCourse = async () => {
     if (!urlValid || validating) return
@@ -201,7 +220,15 @@ export function ToolPanel({ token }: Props) {
         )}
       </div>
 
-      <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black px-1 pt-1">Export tools</h2>
+      <div className="flex items-baseline justify-between px-1 pt-1">
+        <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black">Export tools</h2>
+        <button
+          onClick={startOver}
+          className="text-[12.5px] font-bold text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+        >
+          Start again with a new course
+        </button>
+      </div>
       <p className="text-xs text-gray-600 -mt-2 px-1">
         Each export becomes a Google Doc in your Drive. Not signed in to Google? Use "save a local copy" instead.
       </p>
@@ -209,7 +236,7 @@ export function ToolPanel({ token }: Props) {
       <div className="space-y-3">
         {TOOLS.map((t) => (
           <ToolTile
-            key={t.id}
+            key={`${t.id}-${resetKey}`}
             tool={t.id}
             label={t.label}
             description={t.description}
