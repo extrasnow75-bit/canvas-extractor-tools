@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link2, CheckCircle2, Loader2 } from 'lucide-react'
+import { Link2, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
 import { ToolTile } from './ToolTile'
 
 interface Props {
@@ -222,10 +222,13 @@ export function ToolPanel({ token }: Props) {
 
       <div className="flex items-baseline justify-between px-1 pt-1">
         <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black">Export tools</h2>
+        {/* White on green-800 (#166534) measures 6.6:1, comfortably past the 4.5:1 needed
+            for normal text — green-600 and green-700 are both too light to rely on here. */}
         <button
           onClick={startOver}
-          className="text-[12.5px] font-bold text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-green-800 hover:bg-green-900 px-3 py-1.5 text-[12.5px] font-black text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-green-700 focus-visible:ring-offset-2"
         >
+          <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
           Start again with a new course
         </button>
       </div>

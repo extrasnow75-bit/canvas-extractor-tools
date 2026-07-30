@@ -421,7 +421,8 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
         >
           <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600" aria-hidden="true" />
           <div className="flex-1">
-            <p className="font-black">{label} export done</p>
+            {/* `label` already ends in "export" ("Course content export"), so no extra noun. */}
+            <p className="font-black">{label} done</p>
             <p className="text-gray-700 mt-0.5">{message}</p>
             {webViewLink && (
               <button
@@ -443,7 +444,7 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
         >
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" aria-hidden="true" />
           <div>
-            <p className="font-black">{label} export failed</p>
+            <p className="font-black">{label} failed</p>
             <p className="text-gray-700 mt-0.5">{message}</p>
           </div>
         </div>
