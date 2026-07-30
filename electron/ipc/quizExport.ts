@@ -268,9 +268,9 @@ export async function handleQuizExport(
   const parsed = parseCourseUrl(args.courseUrl)
   if (!parsed) return { ok: false, message: 'Invalid Canvas course URL.' }
 
-  const ref: CourseRef = { ...parsed, token: args.token }
   const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
   const cancel = beginJob(args.jobId)
+  const ref: CourseRef = { ...parsed, token: args.token, cancel }
   try {
     const result = await buildQuizzesHtml(
       ref,

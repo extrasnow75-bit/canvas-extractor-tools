@@ -147,19 +147,36 @@ export async function buildRubricsHtml(
   for (const rubricRef of list) {
     throwIfCancelled(cancel)
     // Two-step fetch: the single-rubric endpoint returns the full criteria (`data`).
-    let full: CanvasRubricFull
+    let full: CanvasRubricFull | null = null
+    let failure = ''
     try {
       full = await canvasGetOne<CanvasRubricFull>(
         `/courses/${ref.courseId}/rubrics/${rubricRef.id}`,
         ref,
       )
-    } catch {
-      // Fall back to whatever the list gave us
-      full = { id: rubricRef.id, title: rubricRef.title, points_possible: 0 }
+    } catch (err) {
+      if (isCancellation(err)) throw err
+      failure = err instanceof Error ? err.message : 'unknown error'
     }
 
-    parts.push(`<h2 style="font-family:${FONT};">${escapeHtml(full.title || rubricRef.title)}</h2>`)
-    parts.push(buildRubricTableHtml(full))
+    parts.push(
+      `<h2 style="font-family:${FONT};">${escapeHtml(full?.title || rubricRef.title)}</h2>`,
+    )
+
+    if (full) {
+      parts.push(buildRubricTableHtml(full))
+    } else {
+      // Say so, loudly. This used to substitute an empty rubric with 0 points possible, which
+      // is indistinguishable from a rubric that genuinely has no criteria — so a failed fetch
+      // silently became plausible-looking data. One bad rubric still must not abort the
+      // export, so the run continues with the failure recorded in place.
+      parts.push(
+        '<p style="color:purple;font-weight:bold;">' +
+          'This rubric could not be retrieved from Canvas, so its criteria are missing here — ' +
+          'this is NOT an empty rubric. Please check it manually. ' +
+          `(${escapeHtml(failure)})</p>`,
+      )
+    }
     parts.push('<p style="margin:0;">&nbsp;</p>')
     done++
     progress?.(done, list.length)
@@ -179,9 +196,9 @@ export async function handleRubricExport(
   const parsed = parseCourseUrl(args.courseUrl)
   if (!parsed) return { ok: false, message: 'Invalid Canvas course URL.' }
 
-  const ref: CourseRef = { ...parsed, token: args.token }
   const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
   const cancel = beginJob(args.jobId)
+  const ref: CourseRef = { ...parsed, token: args.token, cancel }
   try {
     const result = await buildRubricsHtml(
       ref,
