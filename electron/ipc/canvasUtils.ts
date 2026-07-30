@@ -83,9 +83,37 @@ export function isCancellation(err: unknown): boolean {
   return err instanceof ExportCancelledError
 }
 
+/**
+ * Hosts this app is willing to send a Canvas token to.
+ *
+ * Every Canvas request carries the user's token as a Bearer credential, and this function is
+ * the only thing deciding where those requests go. Without a host check, any
+ * `https://<anything>/courses/<digits>` parsed happily — so a course link pasted from a
+ * phishing message would hand the token to whoever sent it.
+ *
+ * Canvas cloud instances all sit under instructure.com. If eCampus ever moves to a
+ * self-hosted Canvas on a boisestate.edu domain, add it here — this is deliberately a
+ * short, explicit list rather than a pattern that tries to guess what "looks like" Canvas.
+ */
+const ALLOWED_CANVAS_HOSTS = [/(^|\.)instructure\.com$/i]
+
+export function isAllowedCanvasHost(hostname: string): boolean {
+  return ALLOWED_CANVAS_HOSTS.some((re) => re.test(hostname))
+}
+
 export function parseCourseUrl(raw: string): { baseUrl: string; courseId: string } | null {
   const match = raw.trim().match(/^(https:\/\/[^/]+)\/courses\/(\d+)/)
-  return match ? { baseUrl: match[1], courseId: match[2] } : null
+  if (!match) return null
+
+  let hostname: string
+  try {
+    hostname = new URL(match[1]).hostname
+  } catch {
+    return null
+  }
+  if (!isAllowedCanvasHost(hostname)) return null
+
+  return { baseUrl: match[1], courseId: match[2] }
 }
 
 /**
@@ -173,6 +201,15 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
   }
 }
 
+/** True when two URLs share scheme, host and port. Malformed input is treated as not matching. */
+function isSameOrigin(candidate: string, expected: string): boolean {
+  try {
+    return new URL(candidate).origin === new URL(expected).origin
+  } catch {
+    return false
+  }
+}
+
 /**
  * GET a Canvas API endpoint, following pagination automatically.
  */
@@ -195,10 +232,15 @@ export async function canvasGet<T>(
       return [data as T]
     }
 
-    // Follow the Link: <url>; rel="next" pagination header
+    // Follow the Link: <url>; rel="next" pagination header.
+    //
+    // The next-page URL is chosen by the server and refetched with the Authorization header
+    // still attached, so a host that returned `Link: <https://elsewhere/…>; rel="next"` could
+    // walk the user's Canvas token off to another origin. Only follow it if it stays on the
+    // origin we were configured to talk to; a cross-origin hop ends pagination instead.
     const link: string = response.headers.get('link') ?? ''
     const next: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/)
-    url = next ? next[1] : null
+    url = next && isSameOrigin(next[1], ref.baseUrl) ? next[1] : null
   }
 
   return all

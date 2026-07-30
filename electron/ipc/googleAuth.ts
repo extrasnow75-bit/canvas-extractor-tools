@@ -137,7 +137,18 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
         finish(() => resolve({ code: returnedCode!, redirectUri }))
       })
 
-      server.on('error', (e) => finish(() => reject(e)))
+      // Close on the error path too. A server that failed while listening can still hold the
+      // socket, and this was the one exit that left it open — every other path closes.
+      server.on('error', (e) =>
+        finish(() => {
+          try {
+            server.close()
+          } catch {
+            /* never started, or already closed */
+          }
+          reject(e)
+        }),
+      )
 
       server.listen(0, '127.0.0.1', () => {
         const addr = server.address()

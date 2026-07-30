@@ -6,7 +6,12 @@ interface Props {
   token: string
 }
 
-const COURSE_URL_RE = /^https:\/\/.+\/courses\/\d+/
+/**
+ * Kept in step with `isAllowedCanvasHost` in electron/ipc/canvasUtils.ts, which is the real
+ * gate — the main process will not send the Canvas token anywhere outside instructure.com.
+ * Matching here only so the field turns red immediately instead of after a round trip.
+ */
+const COURSE_URL_RE = /^https:\/\/[^/]*\binstructure\.com\/courses\/\d+/i
 
 // Prefilled as real (fully editable) text rather than a placeholder: every Boise State
 // course shares this prefix, so usually only the trailing id needs typing.

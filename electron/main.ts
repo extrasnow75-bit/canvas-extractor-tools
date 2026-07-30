@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { handleCanvasExport, buildContentHtml, makeProgressReporter } from './ipc/canvasExport'
@@ -39,6 +39,23 @@ function createWindow(): BrowserWindow {
       height: 36,
     },
     backgroundColor: '#f8fafc',
+  })
+
+  // This window only ever shows our own bundled UI. Everything external — the Google consent
+  // screen, the finished Doc, the Canvas help article — is opened in the user's real browser
+  // via shell.openExternal. So refuse both routes by which remote content could end up
+  // rendering inside the app instead: window.open, and navigation away from our own page.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const current = win.webContents.getURL()
+    // Vite's dev server issues same-origin reloads for HMR; anything else is not ours.
+    if (current && new URL(url).origin === new URL(current).origin) return
+    event.preventDefault()
+    void shell.openExternal(url)
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -101,7 +118,7 @@ ipcMain.handle('canvas:cancelExport', (_e, jobId: string) => cancelJob(jobId))
 
 ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; token: string }) => {
   const parsed = parseCourseUrl(args.courseUrl)
-  if (!parsed) return { ok: false, message: 'Invalid Canvas course URL.' }
+  if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
   const ref: CourseRef = { ...parsed, token: args.token }
   try {
     const course = await canvasGetOne<{ name: string }>(`/courses/${ref.courseId}`, ref)
@@ -117,7 +134,7 @@ ipcMain.handle(
   'canvas:listItems',
   async (_e, args: { tool: PickerTool; courseUrl: string; token: string }) => {
     const parsed = parseCourseUrl(args.courseUrl)
-    if (!parsed) return { ok: false, message: 'Invalid Canvas course URL.' }
+    if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
     const ref: CourseRef = { ...parsed, token: args.token }
     try {
       const items = await listItemsForTool(args.tool, ref)
@@ -149,7 +166,7 @@ ipcMain.handle(
     },
   ) => {
     const parsed = parseCourseUrl(args.courseUrl)
-    if (!parsed) return { ok: false, message: 'Invalid Canvas course URL.' }
+    if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
     const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
     const cancel = beginJob(args.jobId)
     const ref: CourseRef = { ...parsed, token: args.token, cancel }

@@ -280,7 +280,7 @@ export async function handleCanvasExport(
   args: ExportContentArgs,
 ): Promise<{ ok: boolean; message: string; cancelled?: boolean }> {
   const parsed = parseCourseUrl(args.courseUrl)
-  if (!parsed) return { ok: false, message: 'Invalid Canvas course URL.' }
+  if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
 
   const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
   const cancel = beginJob(args.jobId)
