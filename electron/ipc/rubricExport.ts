@@ -12,6 +12,8 @@ import {
   beginJob,
   endJob,
   isCancellation,
+  mapWithConcurrency,
+  CANVAS_CONCURRENCY,
 } from './canvasUtils'
 import { FONT, htmlDocument, escapeHtml } from './blueprintFormat'
 import { makeProgressReporter } from './canvasExport'
@@ -144,20 +146,30 @@ export async function buildRubricsHtml(
   let done = 0
   progress?.(0, list.length)
 
-  for (const rubricRef of list) {
+  // The detail fetches run concurrently — a course can hold dozens of rubrics, and one
+  // round trip each was the whole cost of this export. Results are collected first and
+  // written out afterwards so the document still follows Canvas's rubric order.
+  const fetched = await mapWithConcurrency(list.length, CANVAS_CONCURRENCY, async (i) => {
     throwIfCancelled(cancel)
     // Two-step fetch: the single-rubric endpoint returns the full criteria (`data`).
     let full: CanvasRubricFull | null = null
     let failure = ''
     try {
       full = await canvasGetOne<CanvasRubricFull>(
-        `/courses/${ref.courseId}/rubrics/${rubricRef.id}`,
+        `/courses/${ref.courseId}/rubrics/${list[i].id}`,
         ref,
       )
     } catch (err) {
       if (isCancellation(err)) throw err
       failure = err instanceof Error ? err.message : 'unknown error'
     }
+    done++
+    progress?.(done, list.length)
+    return { full, failure }
+  })
+
+  list.forEach((rubricRef, i) => {
+    const { full, failure } = fetched[i]
 
     parts.push(
       `<h2 style="font-family:${FONT};">${escapeHtml(full?.title || rubricRef.title)}</h2>`,
@@ -178,9 +190,7 @@ export async function buildRubricsHtml(
       )
     }
     parts.push('<p style="margin:0;">&nbsp;</p>')
-    done++
-    progress?.(done, list.length)
-  }
+  })
 
   return {
     html: htmlDocument(`${course.name} Rubrics`, parts),

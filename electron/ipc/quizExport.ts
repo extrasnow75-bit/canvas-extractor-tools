@@ -12,6 +12,8 @@ import {
   beginJob,
   endJob,
   isCancellation,
+  mapWithConcurrency,
+  CANVAS_CONCURRENCY,
 } from './canvasUtils'
 import { FONT, htmlDocument, escapeHtml } from './blueprintFormat'
 import { makeProgressReporter } from './canvasExport'
@@ -196,13 +198,33 @@ export async function buildQuizzesHtml(
 
   parts.push(`<h1 style="font-family:${FONT};">${escapeHtml(`${course.name} Quiz Questions`)}</h1>`)
 
-  let classicCount = 0
-  let newQuizCount = 0
   let done = 0
   progress?.(0, quizzes.length)
 
-  for (const quiz of quizzes) {
+  // One question fetch per classic quiz, run concurrently. New Quizzes need no request at
+  // all, so they resolve immediately and never occupy a slot in the pool.
+  const fetched = await mapWithConcurrency(quizzes.length, CANVAS_CONCURRENCY, async (i) => {
     throwIfCancelled(cancel)
+    const quiz = quizzes[i]
+    const isNewQuiz = quiz.quiz_type === 'quizzes.next'
+    const questions = isNewQuiz
+      ? []
+      : await canvasGet<CanvasQuestion>(
+          `/courses/${ref.courseId}/quizzes/${quiz.id}/questions`,
+          ref,
+        )
+    done++
+    progress?.(done, quizzes.length)
+    return { isNewQuiz, questions }
+  })
+
+  // Ordered pass: quizzes must appear in Canvas's order, and the classic/new tallies that
+  // the completion message reports have to count each quiz exactly once.
+  let classicCount = 0
+  let newQuizCount = 0
+
+  quizzes.forEach((quiz, i) => {
+    const { isNewQuiz, questions } = fetched[i]
     parts.push(`<h2 style="font-family:${FONT};">${escapeHtml(quiz.title)}</h2>`)
 
     const moduleName = moduleMap.get(quiz.id)
@@ -210,23 +232,17 @@ export async function buildQuizzesHtml(
       parts.push(`<h3 style="font-family:${FONT};">${escapeHtml(moduleName)}</h3>`)
     }
 
-    if (quiz.quiz_type === 'quizzes.next') {
+    if (isNewQuiz) {
       newQuizCount++
       parts.push(
         `<p style="font-family:${FONT};font-size:12pt;color:#cc0000;font-style:italic;">` +
           'New Quizzes are not supported. Questions for this quiz could not be extracted.</p>',
       )
       parts.push(spacer())
-      done++
-      progress?.(done, quizzes.length)
-      continue
+      return
     }
 
     classicCount++
-    const questions = await canvasGet<CanvasQuestion>(
-      `/courses/${ref.courseId}/quizzes/${quiz.id}/questions`,
-      ref,
-    )
 
     const supported = questions.filter((q) => SUPPORTED_TYPES.has(q.question_type))
     const skipped = questions.length - supported.length
@@ -249,9 +265,7 @@ export async function buildQuizzesHtml(
     }
 
     parts.push(spacer())
-    done++
-    progress?.(done, quizzes.length)
-  }
+  })
 
   return {
     html: htmlDocument(`${course.name} Quiz Questions`, parts),
