@@ -18,6 +18,11 @@ interface Props {
   tileBg: string
   courseUrl: string
   token: string
+  /**
+   * Reports this tile's status upward, so the panel can decide when to offer "Start again":
+   * only once something has actually been exported, and not while an export is still going.
+   */
+  onStatusChange?(tool: Tool, status: Status): void
 }
 
 type Status = 'idle' | 'running' | 'success' | 'error'
@@ -50,7 +55,16 @@ const LOCAL_HANDLERS: Record<
   rubrics: (args) => window.api.canvas.exportRubrics(args),
 }
 
-export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, token }: Props) {
+export function ToolTile({
+  tool,
+  label,
+  description,
+  icon,
+  tileBg,
+  courseUrl,
+  token,
+  onStatusChange,
+}: Props) {
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState('')
   const [webViewLink, setWebViewLink] = useState<string | null>(null)
@@ -59,6 +73,12 @@ export function ToolTile({ tool, label, description, icon, tileBg, courseUrl, to
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+
+  // Publish status upward on every change, including the 'idle' a fresh mount starts from,
+  // so the panel's view resets along with the tiles rather than drifting out of step.
+  useEffect(() => {
+    onStatusChange?.(tool, status)
+  }, [tool, status, onStatusChange])
 
   // Tick the elapsed clock once a second while an export is running.
   useEffect(() => {

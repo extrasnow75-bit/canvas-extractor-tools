@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link2, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
 import { ToolTile } from './ToolTile'
 
@@ -96,6 +96,19 @@ export function ToolPanel({ token }: Props) {
   // completely fresh state rather than relying on this file knowing what they hold.
   const [resetKey, setResetKey] = useState(0)
 
+  // Each tile's latest status, so "Start again" can appear only when it is useful.
+  const [toolStatus, setToolStatus] = useState<Record<string, string>>({})
+  const handleStatusChange = useCallback((tool: string, status: string) => {
+    setToolStatus((prev) => (prev[tool] === status ? prev : { ...prev, [tool]: status }))
+  }, [])
+
+  const anyRunning = Object.values(toolStatus).some((s) => s === 'running')
+  const anyFinished = Object.values(toolStatus).some((s) => s === 'success' || s === 'error')
+  // Hidden until an export has actually finished — there is nothing to start again from
+  // before that — and hidden again while one is running, because resetting mid-export would
+  // remount the tile and orphan a job that is still going.
+  const showStartOver = anyFinished && !anyRunning
+
   const urlValid = COURSE_URL_RE.test(courseUrl.trim())
 
   // Any previous result is stale the moment the URL changes — clear it so a name
@@ -126,6 +139,7 @@ export function ToolPanel({ token }: Props) {
     setCourseUrl(DEFAULT_COURSE_URL)
     setCourseName(null)
     setNameError(null)
+    setToolStatus({})
     setResetKey((k) => k + 1)
   }
 
@@ -183,8 +197,7 @@ export function ToolPanel({ token }: Props) {
               if (e.key === 'Enter') void validateCourse()
             }}
             placeholder="https://boisestatecanvas.instructure.com/courses/12345"
-            aria-invalid={!!courseUrl && !urlValid}
-            aria-describedby={courseUrl && !urlValid ? 'course-url-error' : undefined}
+            aria-describedby={courseUrl && !urlValid ? 'course-url-hint' : undefined}
             className="flex-1 min-w-0 border-2 border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-[#0033a0] focus:ring-2 focus:ring-blue-200 transition"
           />
           <button
@@ -196,8 +209,10 @@ export function ToolPanel({ token }: Props) {
             {validating ? 'Checking…' : 'Validate'}
           </button>
         </div>
+        {/* Guidance on the expected format, not a failure — the user has usually just not
+            finished typing yet, so this stays neutral grey rather than error red. */}
         {courseUrl && !urlValid && (
-          <p id="course-url-error" className="text-xs text-red-700 mt-1.5">
+          <p id="course-url-hint" className="text-xs text-gray-600 mt-1.5">
             Enter the full course URL, e.g. https://boisestatecanvas.instructure.com/courses/12345
           </p>
         )}
@@ -218,20 +233,22 @@ export function ToolPanel({ token }: Props) {
             )}
           </div>
         )}
+
+        {/* Appears only once an export has finished. White on green-800 (#166534) measures
+            6.6:1, comfortably past the 4.5:1 needed for normal text — green-600 and
+            green-700 are both too light to carry white text at this size. */}
+        {showStartOver && (
+          <button
+            onClick={startOver}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-green-800 hover:bg-green-900 px-3 py-2 text-[12.5px] font-black text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-green-700 focus-visible:ring-offset-2"
+          >
+            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+            Start again with a new course
+          </button>
+        )}
       </div>
 
-      <div className="flex items-baseline justify-between px-1 pt-1">
-        <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black">Export tools</h2>
-        {/* White on green-800 (#166534) measures 6.6:1, comfortably past the 4.5:1 needed
-            for normal text — green-600 and green-700 are both too light to rely on here. */}
-        <button
-          onClick={startOver}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-green-800 hover:bg-green-900 px-3 py-1.5 text-[12.5px] font-black text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-green-700 focus-visible:ring-offset-2"
-        >
-          <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-          Start again with a new course
-        </button>
-      </div>
+      <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black px-1 pt-1">Export tools</h2>
       <p className="text-xs text-gray-600 -mt-2 px-1">
         Each export becomes a Google Doc in your Drive. Not signed in to Google? Use "save a local copy" instead.
       </p>
@@ -247,6 +264,7 @@ export function ToolPanel({ token }: Props) {
             tileBg={t.tileBg}
             courseUrl={courseUrl.trim()}
             token={token}
+            onStatusChange={handleStatusChange}
           />
         ))}
       </div>
