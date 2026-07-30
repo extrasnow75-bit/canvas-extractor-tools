@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent text selection on drag — common Electron UX fix */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Allow text selection in inputs and textareas */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}

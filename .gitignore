@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-electron/
+out/
+release/
+*.local
+.env
+
+# TypeScript incremental-build caches (tsconfig.web.tsbuildinfo etc.)
+*.tsbuildinfo
