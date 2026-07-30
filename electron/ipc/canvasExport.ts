@@ -12,6 +12,8 @@ import {
   beginJob,
   endJob,
   isCancellation,
+  mapWithConcurrency,
+  CANVAS_CONCURRENCY,
 } from './canvasUtils'
 import {
   FONT,
@@ -91,6 +93,93 @@ function itemKey(item: CanvasModuleItem): string {
   return `mi-${item.id}`
 }
 
+/**
+ * One module item's finished HTML fragments, plus whether it is a due-date header — the
+ * caller needs that to record the header's index once the document order is settled.
+ */
+interface RenderedItem {
+  parts: string[]
+  isDueHeader?: boolean
+}
+
+/**
+ * Fetch and format a single module item.
+ *
+ * Split out of the main loop so items can be rendered concurrently. It returns fragments
+ * instead of appending to a shared array, because with several of these in flight the order
+ * of completion says nothing about the order they belong in.
+ */
+async function renderModuleItem(item: CanvasModuleItem, ref: CourseRef): Promise<RenderedItem> {
+  switch (item.type) {
+    case 'Page': {
+      const page = await canvasGetOne<CanvasPage>(
+        `/courses/${ref.courseId}/pages/${item.page_url}`,
+        ref,
+      )
+      return { parts: [itemTitle(page.title), toolLabel('Page'), formatCanvasBody(page.body)] }
+    }
+    case 'Assignment': {
+      const asgn = await canvasGetOne<CanvasAssignment>(
+        `/courses/${ref.courseId}/assignments/${item.content_id}`,
+        ref,
+      )
+      return {
+        parts: [
+          itemTitle(asgn.name),
+          // A New Quiz lands here rather than in the `Quiz` case. Canvas labels it "Quiz"
+          // on the Modules page, and the tool label is the cue QA reads, so match Canvas
+          // rather than the underlying object type.
+          toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment'),
+          formatCanvasBody(asgn.description),
+        ],
+      }
+    }
+    case 'Discussion': {
+      const disc = await canvasGetOne<CanvasDiscussion>(
+        `/courses/${ref.courseId}/discussion_topics/${item.content_id}`,
+        ref,
+      )
+      return {
+        parts: [itemTitle(disc.title), toolLabel('Discussion'), formatCanvasBody(disc.message)],
+      }
+    }
+    case 'Quiz': {
+      // Classic Quiz. The questions are the quiz export's job, but the instructions above
+      // them are authored body content like any page's — without this they appeared in
+      // neither export.
+      const quiz = await canvasGetOne<CanvasQuiz>(
+        `/courses/${ref.courseId}/quizzes/${item.content_id}`,
+        ref,
+      )
+      return {
+        parts: [itemTitle(quiz.title), toolLabel('Quiz'), formatCanvasBody(quiz.description)],
+      }
+    }
+    case 'File':
+      return { parts: [itemTitle(item.title), toolLabel('File')] }
+    case 'ExternalUrl':
+      return {
+        parts: [
+          itemTitle(
+            `<a href="${escapeHtml(item.external_url ?? '')}">${escapeHtml(item.title)}</a>`,
+            false,
+          ),
+          toolLabel('External Link'),
+        ],
+      }
+    case 'SubHeader':
+      return isDueHeader(item.title)
+        ? { parts: [dueHeader(item.title)], isDueHeader: true }
+        : { parts: [subHeader(item.title)] }
+    default:
+      return {
+        parts: [
+          `<p style="color:gray;"><em>${escapeHtml(item.type)}: ${escapeHtml(item.title)}</em></p>`,
+        ],
+      }
+  }
+}
+
 /** List every module item in the course, grouped by module, for the picker UI. */
 export async function listContentItems(ref: CourseRef): Promise<PickerItem[]> {
   const modules = await canvasGet<CanvasModule>(`/courses/${ref.courseId}/modules`, ref)
@@ -149,102 +238,50 @@ export async function buildContentHtml(
   // Pre-pass: collect each module's items first so the total is known before the slow
   // per-item fetches start. That total is what makes a remaining-time estimate possible.
   // Listing items is one request per module; the expensive work is the per-item fetches.
-  const plan: Array<{ mod: CanvasModule; items: CanvasModuleItem[] }> = []
-  for (const mod of modules) {
+  const listed = await mapWithConcurrency(modules.length, CANVAS_CONCURRENCY, async (i) => {
     throwIfCancelled(cancel)
-    const allItems = await canvasGet<CanvasModuleItem>(
-      `/courses/${ref.courseId}/modules/${mod.id}/items?include[]=content_details`,
+    return canvasGet<CanvasModuleItem>(
+      `/courses/${ref.courseId}/modules/${modules[i].id}/items?include[]=content_details`,
       ref,
     )
-    const items = selectedIds ? allItems.filter((it) => selectedIds.has(itemKey(it))) : allItems
-    if (selectedIds && items.length === 0) continue
+  })
+
+  const plan: Array<{ mod: CanvasModule; items: CanvasModuleItem[] }> = []
+  modules.forEach((mod, i) => {
+    const items = selectedIds ? listed[i].filter((it) => selectedIds.has(itemKey(it))) : listed[i]
+    if (selectedIds && items.length === 0) return
     plan.push({ mod, items })
-  }
+  })
 
   const total = plan.reduce((n, p) => n + p.items.length, 0)
   let done = 0
   progress?.(0, total)
 
+  // Flatten every module's items into one list so that requests can overlap across module
+  // boundaries too — otherwise a module holding a single item would drain the pool.
+  const flatItems: CanvasModuleItem[] = plan.flatMap((p) => p.items)
+
+  const rendered = await mapWithConcurrency(flatItems.length, CANVAS_CONCURRENCY, async (i) => {
+    // Checked per item rather than per batch, so Stop takes effect within one request rather
+    // than after the whole in-flight group drains.
+    throwIfCancelled(cancel)
+    const result = await renderModuleItem(flatItems[i], ref)
+    done++
+    progress?.(done, total)
+    return result
+  })
+
+  // Assembly is a separate, strictly ordered pass. The fetches above may finish in any
+  // order, but the document must read in Modules-page order, and the due-header bookkeeping
+  // depends on knowing each fragment's final index — so nothing is appended until every
+  // item is in hand.
+  let cursor = 0
   for (const { mod, items } of plan) {
     parts.push(moduleHeader(mod.name))
-
-    for (const item of items) {
-      throwIfCancelled(cancel)
-      switch (item.type) {
-        case 'Page': {
-          const page = await canvasGetOne<CanvasPage>(
-            `/courses/${ref.courseId}/pages/${item.page_url}`,
-            ref,
-          )
-          parts.push(itemTitle(page.title))
-          parts.push(toolLabel('Page'))
-          parts.push(formatCanvasBody(page.body))
-          break
-        }
-        case 'Assignment': {
-          const asgn = await canvasGetOne<CanvasAssignment>(
-            `/courses/${ref.courseId}/assignments/${item.content_id}`,
-            ref,
-          )
-          parts.push(itemTitle(asgn.name))
-          // A New Quiz lands here rather than in the `Quiz` case. Canvas labels it "Quiz"
-          // on the Modules page, and the tool label is the cue QA reads, so match Canvas
-          // rather than the underlying object type.
-          parts.push(toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment'))
-          parts.push(formatCanvasBody(asgn.description))
-          break
-        }
-        case 'Discussion': {
-          const disc = await canvasGetOne<CanvasDiscussion>(
-            `/courses/${ref.courseId}/discussion_topics/${item.content_id}`,
-            ref,
-          )
-          parts.push(itemTitle(disc.title))
-          parts.push(toolLabel('Discussion'))
-          parts.push(formatCanvasBody(disc.message))
-          break
-        }
-        case 'Quiz': {
-          // Classic Quiz. The questions are the quiz export's job, but the instructions above
-          // them are authored body content like any page's — without this they appeared in
-          // neither export.
-          const quiz = await canvasGetOne<CanvasQuiz>(
-            `/courses/${ref.courseId}/quizzes/${item.content_id}`,
-            ref,
-          )
-          parts.push(itemTitle(quiz.title))
-          parts.push(toolLabel('Quiz'))
-          parts.push(formatCanvasBody(quiz.description))
-          break
-        }
-        case 'File':
-          parts.push(itemTitle(item.title))
-          parts.push(toolLabel('File'))
-          break
-        case 'ExternalUrl':
-          parts.push(
-            itemTitle(
-              `<a href="${escapeHtml(item.external_url ?? '')}">${escapeHtml(item.title)}</a>`,
-              false,
-            ),
-          )
-          parts.push(toolLabel('External Link'))
-          break
-        case 'SubHeader':
-          if (isDueHeader(item.title)) {
-            dueHeaderIndices.push(parts.length)
-            parts.push(dueHeader(item.title))
-          } else {
-            parts.push(subHeader(item.title))
-          }
-          break
-        default:
-          parts.push(
-            `<p style="color:gray;"><em>${escapeHtml(item.type)}: ${escapeHtml(item.title)}</em></p>`,
-          )
-      }
-      done++
-      progress?.(done, total)
+    for (let i = 0; i < items.length; i++) {
+      const item = rendered[cursor++]
+      if (item.isDueHeader) dueHeaderIndices.push(parts.length)
+      parts.push(...item.parts)
     }
   }
 

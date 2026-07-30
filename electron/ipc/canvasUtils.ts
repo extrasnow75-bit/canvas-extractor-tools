@@ -84,6 +84,52 @@ export function isCancellation(err: unknown): boolean {
 }
 
 /**
+ * How many Canvas requests an export keeps in flight.
+ *
+ * Canvas meters requests with a leaky bucket rather than a fixed rate, and cost is charged
+ * per in-flight request, so concurrency is the dial that decides whether an export drains it.
+ * Four is deliberately modest: most of the speedup is in escaping the strictly-serial round
+ * trip, and pushing higher mainly buys more 403s for `canvasFetch` to sit out.
+ */
+export const CANVAS_CONCURRENCY = 4
+
+/**
+ * Run `worker` for indices 0..count-1 with at most `limit` in flight, returning the results
+ * in index order regardless of the order they completed in.
+ *
+ * On the first failure it stops handing out new work and waits for the already-running
+ * workers to settle before rethrowing, so a cancelled or failed export never leaves a
+ * promise rejecting into nothing.
+ */
+export async function mapWithConcurrency<T>(
+  count: number,
+  limit: number,
+  worker: (index: number) => Promise<T>,
+): Promise<T[]> {
+  const results = new Array<T>(count)
+  let next = 0
+  let failure: unknown = null
+
+  const runners = Array.from({ length: Math.max(1, Math.min(limit, count)) }, async () => {
+    for (;;) {
+      if (failure !== null) return
+      const index = next++
+      if (index >= count) return
+      try {
+        results[index] = await worker(index)
+      } catch (err) {
+        if (failure === null) failure = err
+        return
+      }
+    }
+  })
+
+  await Promise.all(runners)
+  if (failure !== null) throw failure
+  return results
+}
+
+/**
  * Hosts this app is willing to send a Canvas token to.
  *
  * Every Canvas request carries the user's token as a Bearer credential, and this function is
