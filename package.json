@@ -44,6 +44,13 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "resources/icon.png",
+      "category": "public.app-category.education"
+    },
     "files": [
       "out/**"
     ]
