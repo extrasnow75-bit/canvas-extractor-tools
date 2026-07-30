@@ -63,6 +63,12 @@ interface CanvasPage {
 interface CanvasAssignment {
   name: string
   description: string
+  /**
+   * True for a New Quiz. Canvas models those as an assignment submitted through the
+   * Quizzes.Next LTI tool, so they arrive as an `Assignment` module item and never reach
+   * the `Quiz` case below.
+   */
+  is_quiz_lti_assignment?: boolean
 }
 
 interface CanvasDiscussion {
@@ -72,6 +78,12 @@ interface CanvasDiscussion {
 
 interface CanvasQuiz {
   title: string
+  /**
+   * The Rich Content Editor instructions shown above the questions. This is body content
+   * like a page's, so it belongs in the content export; the questions themselves belong to
+   * the quiz export and are deliberately not fetched here.
+   */
+  description?: string
 }
 
 /** Stable key for a module item, used by the "choose specific items" picker. */
@@ -175,7 +187,10 @@ export async function buildContentHtml(
             ref,
           )
           parts.push(itemTitle(asgn.name))
-          parts.push(toolLabel('Assignment'))
+          // A New Quiz lands here rather than in the `Quiz` case. Canvas labels it "Quiz"
+          // on the Modules page, and the tool label is the cue QA reads, so match Canvas
+          // rather than the underlying object type.
+          parts.push(toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment'))
           parts.push(formatCanvasBody(asgn.description))
           break
         }
@@ -190,13 +205,16 @@ export async function buildContentHtml(
           break
         }
         case 'Quiz': {
-          // Quiz questions are exported separately; here we record the title + tool label only.
+          // Classic Quiz. The questions are the quiz export's job, but the instructions above
+          // them are authored body content like any page's — without this they appeared in
+          // neither export.
           const quiz = await canvasGetOne<CanvasQuiz>(
             `/courses/${ref.courseId}/quizzes/${item.content_id}`,
             ref,
           )
           parts.push(itemTitle(quiz.title))
           parts.push(toolLabel('Quiz'))
+          parts.push(formatCanvasBody(quiz.description))
           break
         }
         case 'File':
