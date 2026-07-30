@@ -57,6 +57,10 @@ HEAD_X0, HEAD_X1 = 25.2, 38.8
 SUBSAMPLES = 4
 SIZES = (256, 128, 64, 48, 32, 16)
 
+# electron-builder refuses a macOS icon smaller than this, so the standalone PNG is rendered
+# separately from the .ico entries rather than reusing the 256px one.
+PNG_SIZE = 512
+
 
 def in_rrect(x: float, y: float, x0: float, y0: float, w: float, h: float, r: float) -> bool:
     """Point-in-rounded-rectangle."""
@@ -182,8 +186,8 @@ def main() -> None:
     print(f'wrote {ico} ({ico.stat().st_size:,} bytes)')
 
     png = here / 'icon.png'
-    png.write_bytes(dict(images)[256])
-    print(f'wrote {png} ({png.stat().st_size:,} bytes)')
+    png.write_bytes(to_png(PNG_SIZE, render(PNG_SIZE)))
+    print(f'wrote {png} at {PNG_SIZE}x{PNG_SIZE} ({png.stat().st_size:,} bytes)')
 
 
 if __name__ == '__main__':

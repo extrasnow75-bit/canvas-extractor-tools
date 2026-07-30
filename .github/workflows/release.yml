@@ -46,7 +46,10 @@ jobs:
         run: npm run typecheck
 
       - name: Build installer
-        run: npm run build
+        # `--publish never` is essential: electron-builder detects CI and otherwise tries to
+        # publish the artifacts itself, failing with "GitHub Personal Access Token is not set"
+        # *after* the installer has already been built. Publishing is the release job's work.
+        run: npm run build -- --publish never
         env:
           MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
           # Builds are unsigned. Without this, electron-builder hunts for a signing identity
