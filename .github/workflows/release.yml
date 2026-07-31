@@ -102,8 +102,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # A hyphen in the tag means a pre-release under semver (v0.9.0-rc.1), so mark it as
+          # one. Otherwise GitHub would present a release candidate as the current release and
+          # point everybody at it.
+          prerelease=""
+          case "$GITHUB_REF_NAME" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Canvas Extractor Tools $GITHUB_REF_NAME" \
             --notes-file notes.md \
+            $prerelease \
             artifacts/*
