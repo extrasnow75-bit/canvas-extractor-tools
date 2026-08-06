@@ -40,6 +40,12 @@ export interface CourseNameResult {
 declare global {
   interface Window {
     api: {
+      app: {
+        version(): Promise<string>
+        /** Resolves to null when up to date, offline, or the check fails. */
+        checkUpdate(): Promise<{ version: string } | null>
+        openReleases(): Promise<void>
+      }
       credentials: {
         save(creds: Record<string, string>): Promise<void>
         load(): Promise<Record<string, string>>

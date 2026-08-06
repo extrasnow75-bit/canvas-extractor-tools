@@ -3,6 +3,7 @@ import { HelpCircle } from 'lucide-react'
 import { SetupPanel } from './components/SetupPanel'
 import { ToolPanel } from './components/ToolPanel'
 import { HelpCenter } from './components/HelpCenter'
+import { UpdateBanner } from './components/UpdateBanner'
 import type { GoogleStatus } from './types'
 
 export default function App() {
@@ -14,12 +15,21 @@ export default function App() {
   const [googleBusy, setGoogleBusy] = useState(false)
   const [googleError, setGoogleError] = useState<string | null>(null)
 
+  const [appVersion, setAppVersion] = useState('')
+  const [update, setUpdate] = useState<{ version: string } | null>(null)
+  const [updateDismissed, setUpdateDismissed] = useState(false)
+
   useEffect(() => {
     window.api.credentials.load().then((raw) => {
       setCanvasToken(raw.canvasToken ?? null)
       setLoading(false)
     })
     window.api.google.status().then(setGoogleStatus)
+
+    // Both resolve quietly when offline; a failed update check must never block startup or
+    // surface an error, so nothing here rejects into the UI.
+    window.api.app.version().then(setAppVersion)
+    window.api.app.checkUpdate().then(setUpdate)
   }, [])
 
   const saveToken = async (token: string) => {
@@ -83,6 +93,14 @@ export default function App() {
           <HelpCircle className="w-3.5 h-3.5" /> Help Center &amp; More
         </button>
       </div>
+
+      {update && !updateDismissed && (
+        <UpdateBanner
+          version={update.version}
+          currentVersion={appVersion}
+          onDismiss={() => setUpdateDismissed(true)}
+        />
+      )}
 
       {/* Main content */}
       <div className="flex-1 overflow-auto">

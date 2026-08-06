@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // Expose a narrow, typed API to the renderer — no direct Node/Electron access
 contextBridge.exposeInMainWorld('api', {
+  app: {
+    version: (): Promise<string> => ipcRenderer.invoke('app:version'),
+    /** Resolves to null when up to date, offline, or the check fails. */
+    checkUpdate: (): Promise<{ version: string } | null> => ipcRenderer.invoke('app:checkUpdate'),
+    openReleases: (): Promise<void> => ipcRenderer.invoke('app:openReleases'),
+  },
   credentials: {
     save: (creds: Record<string, string>) => ipcRenderer.invoke('credentials:save', creds),
     load: (): Promise<Record<string, string>> => ipcRenderer.invoke('credentials:load'),

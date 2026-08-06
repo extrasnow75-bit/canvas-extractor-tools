@@ -17,6 +17,7 @@ import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
 import { applyDueHeaderBorders } from './ipc/googleDocs'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
+import { checkForUpdate, RELEASES_PAGE } from './ipc/updateCheck'
 
 const CREDS_PATH = join(app.getPath('userData'), 'credentials.enc')
 
@@ -103,6 +104,15 @@ ipcMain.handle('dialog:saveFile', async (_e, opts: { defaultName: string; ext: s
   })
   return filePath ?? null
 })
+
+// ─── Update check ─────────────────────────────────────────────────────────────
+
+ipcMain.handle('app:version', () => app.getVersion())
+ipcMain.handle('app:checkUpdate', () => checkForUpdate())
+
+// Takes no URL on purpose: the destination is a constant here, so the renderer cannot use
+// this as a general "open any link in the browser" capability.
+ipcMain.handle('app:openReleases', () => shell.openExternal(RELEASES_PAGE))
 
 // ─── Canvas feature handlers ──────────────────────────────────────────────────
 
