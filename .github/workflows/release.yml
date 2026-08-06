@@ -36,7 +36,9 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          # vite and electron-vite require ^20.19 || >=22.12. Plain "20" resolves to the
+          # latest 20.x, which clears that floor only just — 22 leaves room.
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
