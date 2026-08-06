@@ -30,6 +30,14 @@ export default function App() {
     // surface an error, so nothing here rejects into the UI.
     window.api.app.version().then(setAppVersion)
     window.api.app.checkUpdate().then(setUpdate)
+
+    // A stored Google sign-in can die between launches — Google expires refresh tokens
+    // after seven days while the OAuth consent screen is in Testing. When that surfaces
+    // mid-export, stop showing the user as signed in.
+    return window.api.google.onSignedOut(() => {
+      setGoogleStatus({ signedIn: false })
+      setGoogleError('Your Google sign-in expired. Please sign in again.')
+    })
   }, [])
 
   const saveToken = async (token: string) => {

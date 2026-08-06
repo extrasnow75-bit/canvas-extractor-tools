@@ -49,5 +49,11 @@ contextBridge.exposeInMainWorld('api', {
     signOut: () => ipcRenderer.invoke('google:signOut'),
     status: (): Promise<{ signedIn: boolean; email?: string; name?: string; picture?: string }> =>
       ipcRenderer.invoke('google:status'),
+    /** Fires when a stored sign-in turns out to be dead. Returns an unsubscribe function. */
+    onSignedOut: (callback: () => void): (() => void) => {
+      const listener = () => callback()
+      ipcRenderer.on('google:signedOut', listener)
+      return () => ipcRenderer.removeListener('google:signedOut', listener)
+    },
   },
 })

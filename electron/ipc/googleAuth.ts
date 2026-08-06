@@ -1,4 +1,4 @@
-import { app, shell, safeStorage } from 'electron'
+import { app, shell, safeStorage, BrowserWindow } from 'electron'
 import { createServer } from 'http'
 import { createHash, randomBytes } from 'crypto'
 import { join } from 'path'
@@ -60,6 +60,17 @@ function saveTokens(t: StoredTokens): void {
 
 export function clearTokens(): void {
   if (existsSync(TOKEN_PATH)) writeFileSync(TOKEN_PATH, Buffer.alloc(0))
+}
+
+/**
+ * Tells the UI the stored sign-in is gone, so the setup panel stops showing a signed-in user
+ * whose credentials no longer work. Without this the renderer only learns the truth on the
+ * next relaunch, having shown a name and email the whole time.
+ */
+function notifySignedOut(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('google:signedOut')
+  }
 }
 
 /** Decode the JWT id_token payload for the user's email/name/picture (display only). */
@@ -250,7 +261,22 @@ export async function getAccessToken(): Promise<string> {
       grant_type: 'refresh_token',
     }).toString(),
   })
-  if (!res.ok) throw new Error(`Google token refresh failed (${res.status}). Please sign in again.`)
+  if (!res.ok) {
+    // 400 invalid_grant means the refresh token is dead, not that the network hiccuped:
+    // revoked, the password changed, or — most often here — the seven-day expiry that
+    // Google applies to refresh tokens issued while the consent screen is in Testing.
+    //
+    // Drop them. Leaving them on disk is what made this confusing: getStatus() only checks
+    // that a refreshToken string exists, so the panel kept showing the user signed in while
+    // every Drive call failed.
+    if (res.status === 400 || res.status === 401) {
+      clearTokens()
+      notifySignedOut()
+    }
+    throw new Error(
+      `Google sign-in has expired (${res.status}). Please sign in again in Initial setup.`,
+    )
+  }
 
   const data = (await res.json()) as TokenResponse
   const updated: StoredTokens = {

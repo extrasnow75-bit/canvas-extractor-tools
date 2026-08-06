@@ -99,6 +99,8 @@ declare global {
         signIn(options?: { useAnotherAccount?: boolean }): Promise<GoogleStatus>
         signOut(): Promise<void>
         status(): Promise<GoogleStatus>
+        /** Fires when a stored sign-in turns out to be dead. Returns an unsubscribe function. */
+        onSignedOut(callback: () => void): () => void
       }
     }
   }
