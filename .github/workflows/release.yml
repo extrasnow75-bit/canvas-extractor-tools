@@ -102,6 +102,10 @@ jobs:
       - name: Write release notes
         # Quoted heredoc so the markdown's backticks are not run as command substitution;
         # the version is substituted afterwards.
+        #
+        # The install steps deliberately describe the warning the reader will see on screen
+        # ("Windows protected your PC") rather than its cause. The audience is course staff,
+        # so "unsigned build" and "Gatekeeper" name nothing they can match to their display.
         run: |
           cat > notes.md <<'NOTES'
           ## Which file do I download?
@@ -121,14 +125,22 @@ jobs:
 
           ## Installing
 
-          **Windows** — download the `.exe` and run it. These builds are unsigned, so
-          SmartScreen will warn you the first time: choose **More info → Run anyway**.
+          Both warnings below are normal and expected. They appear because this app was built
+          in-house rather than distributed through the Microsoft or Apple stores — not because
+          anything is wrong with it.
 
-          **macOS** — download the `.dmg` and drag the app to Applications. Because the build
-          is unsigned, macOS blocks the first launch. Double-click the app, and when you are
-          told it cannot be opened, go to **System Settings → Privacy & Security**, scroll to
-          the bottom, and click **Open Anyway** next to the app's name. You only have to do
-          this once.
+          **Windows** — download the `.exe` file and double-click it to install.
+
+          The first time you run it, Windows will show a blue screen saying **"Windows
+          protected your PC."** Click **More info**, then click **Run anyway**. You will only
+          see this once.
+
+          **macOS** — download the `.dmg` file and drag the app into your Applications folder.
+
+          The first time you open it, macOS will say the app **"cannot be opened."** To get
+          past this, go to **System Settings → Privacy & Security**, scroll to the bottom, and
+          click **Open Anyway** next to Canvas Extractor Tools. You will only need to do this
+          once.
 
           ---
 
