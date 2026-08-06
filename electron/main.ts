@@ -193,7 +193,9 @@ ipcMain.handle(
 
     try {
       if (args.tool === 'content') {
-        const built = await buildContentHtml(ref, selectedIds, cancel, progress)
+        // cssBorders: false — the Docs importer turns the due-header border CSS into grey
+        // rules of its own; applyDueHeaderBorders below is what draws the blue ones.
+        const built = await buildContentHtml(ref, selectedIds, cancel, progress, false)
         html = built.html
         docName = `${built.courseName} — Course Content`
       } else if (args.tool === 'quizzes') {

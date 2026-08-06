@@ -109,7 +109,11 @@ interface RenderedItem {
  * instead of appending to a shared array, because with several of these in flight the order
  * of completion says nothing about the order they belong in.
  */
-async function renderModuleItem(item: CanvasModuleItem, ref: CourseRef): Promise<RenderedItem> {
+async function renderModuleItem(
+  item: CanvasModuleItem,
+  ref: CourseRef,
+  cssBorders: boolean,
+): Promise<RenderedItem> {
   switch (item.type) {
     case 'Page': {
       const page = await canvasGetOne<CanvasPage>(
@@ -169,7 +173,7 @@ async function renderModuleItem(item: CanvasModuleItem, ref: CourseRef): Promise
       }
     case 'SubHeader':
       return isDueHeader(item.title)
-        ? { parts: [dueHeader(item.title)], isDueHeader: true }
+        ? { parts: [dueHeader(item.title, cssBorders)], isDueHeader: true }
         : { parts: [subHeader(item.title)] }
     default:
       return {
@@ -207,6 +211,11 @@ export async function buildContentHtml(
   selectedIds?: Set<string> | null,
   cancel?: CancelToken | null,
   progress?: ProgressReporter | null,
+  /**
+   * False when the result is uploaded to Google Docs: the API post-pass draws the blue
+   * due-header rules there, and leaving the CSS in makes the importer emit grey ones too.
+   */
+  cssBorders = true,
 ): Promise<{ html: string; courseName: string; moduleCount: number }> {
   const course = await canvasGetOne<CanvasCourse>(
     `/courses/${ref.courseId}?include[]=syllabus_body`,
@@ -265,7 +274,7 @@ export async function buildContentHtml(
     // Checked per item rather than per batch, so Stop takes effect within one request rather
     // than after the whole in-flight group drains.
     throwIfCancelled(cancel)
-    const result = await renderModuleItem(flatItems[i], ref)
+    const result = await renderModuleItem(flatItems[i], ref, cssBorders)
     done++
     progress?.(done, total)
     return result

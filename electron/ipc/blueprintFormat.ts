@@ -120,13 +120,26 @@ export function isDueHeader(title: string): boolean {
 /**
  * Blueprint due-by header — Heading 3, Arial 15pt bold #0033a0, with blue horizontal
  * rules above and below (Code.gs:601 — #0000e7, 1.5pt, 2pt padding, solid, top+bottom).
- * QA treats both rules as required, so they are set on the paragraph as top/bottom borders.
+ * QA treats both rules as required.
+ *
+ * `cssBorders` must be false for HTML destined for Google Docs. Docs' importer cannot
+ * represent a paragraph border, and rather than dropping the declaration it renders each
+ * one as its own grey rule — so the CSS produces exactly the grey lines above and below
+ * the header that it was meant to produce in blue. The real blue rules are applied after
+ * upload by applyDueHeaderBorders() in googleDocs.ts, which is authoritative for that path.
+ *
+ * Keep it true for the local .html export, where nothing runs afterwards and the CSS is
+ * the only thing drawing the rules.
  */
-export function dueHeader(title: string): string {
+export function dueHeader(title: string, cssBorders = true): string {
+  const borders = cssBorders
+    ? `border-top:1.5pt solid ${BORDER_BLUE};border-bottom:1.5pt solid ${BORDER_BLUE};` +
+      'padding-top:2pt;padding-bottom:2pt;'
+    : ''
   return (
     `<h3 style="${NO_INDENT}font-family:${FONT};font-size:15pt;font-weight:bold;color:${DEEP_BLUE};` +
-    `border-top:1.5pt solid ${BORDER_BLUE};border-bottom:1.5pt solid ${BORDER_BLUE};` +
-    'padding-top:2pt;padding-bottom:2pt;">' +
+    borders +
+    '">' +
     `<span style="font-family:${FONT};font-size:15pt;font-weight:bold;color:${DEEP_BLUE};">${escapeHtml(title)}</span>` +
     '</h3>'
   )
