@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('dialog:saveFile', opts),
   },
   canvas: {
+    /** 'unknown' means the check itself failed (offline, Canvas down) — not a verdict. */
+    verifyToken: (args: {
+      token: string
+      courseUrl?: string
+    }): Promise<'valid' | 'expired' | 'unknown'> => ipcRenderer.invoke('canvas:verifyToken', args),
     exportContent: (args: unknown) => ipcRenderer.invoke('canvas:exportContent', args),
     exportQuizzes: (args: unknown) => ipcRenderer.invoke('canvas:exportQuizzes', args),
     exportRubrics: (args: unknown) => ipcRenderer.invoke('canvas:exportRubrics', args),

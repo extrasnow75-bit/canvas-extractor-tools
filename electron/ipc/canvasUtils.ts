@@ -147,6 +147,42 @@ export function isAllowedCanvasHost(hostname: string): boolean {
   return ALLOWED_CANVAS_HOSTS.some((re) => re.test(hostname))
 }
 
+/**
+ * Where to check a token when no course URL has been entered yet. Every Boise State course
+ * lives here, and the renderer prefills the same host in the course field.
+ */
+export const DEFAULT_CANVAS_ORIGIN = 'https://boisestatecanvas.instructure.com'
+
+export type TokenState = 'valid' | 'expired' | 'unknown'
+
+/**
+ * Asks Canvas whether a token actually works, rather than merely whether one was typed in.
+ *
+ * Canvas expires personal access tokens on a schedule, so a saved token is not a working
+ * token — and a setup panel that reports "Complete" for a dead token sends the user hunting
+ * through the wrong part of the app when exports start failing.
+ *
+ * Returns 'unknown' for anything that is not a clear yes or a clear no: offline, DNS blocked,
+ * Canvas down, rate limited. Those say nothing about the token, and claiming otherwise would
+ * mean telling people to regenerate a perfectly good one.
+ */
+export async function verifyToken(token: string, origin?: string): Promise<TokenState> {
+  const base = origin ?? DEFAULT_CANVAS_ORIGIN
+  try {
+    if (!isAllowedCanvasHost(new URL(base).hostname)) return 'unknown'
+    const res = await fetch(`${base}/api/v1/users/self`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (res.ok) return 'valid'
+    // Canvas answers both "expired" and "revoked" with 401.
+    if (res.status === 401) return 'expired'
+    return 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 export function parseCourseUrl(raw: string): { baseUrl: string; courseId: string } | null {
   const match = raw.trim().match(/^(https:\/\/[^/]+)\/courses\/(\d+)/)
   if (!match) return null

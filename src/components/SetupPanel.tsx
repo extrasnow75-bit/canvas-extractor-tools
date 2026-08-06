@@ -62,17 +62,46 @@ export function SetupPanel({
   googleError,
   onOpenHelp,
 }: Props) {
-  const tokenValid = !!canvasToken
-  const [isOpen, setIsOpen] = useState(!tokenValid)
+  const tokenPresent = !!canvasToken
+  const [isOpen, setIsOpen] = useState(!tokenPresent)
   const [tokenInput, setTokenInput] = useState('')
   const [showToken, setShowToken] = useState(false)
 
-  // Auto-collapse once the required item (Canvas token) is set.
-  useEffect(() => {
-    if (tokenValid) setIsOpen(false)
-  }, [tokenValid])
+  // A saved token is not a working token: Canvas expires them on a schedule. Until this
+  // resolves we say "saved" rather than claiming either way.
+  const [tokenState, setTokenState] = useState<'checking' | 'valid' | 'expired' | 'unknown'>(
+    'checking',
+  )
 
-  const statusText = tokenValid ? 'Complete' : '1 required item'
+  useEffect(() => {
+    if (!canvasToken) {
+      setTokenState('unknown')
+      return
+    }
+    let cancelled = false
+    setTokenState('checking')
+    window.api.canvas.verifyToken({ token: canvasToken }).then((state) => {
+      if (!cancelled) setTokenState(state)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [canvasToken])
+
+  const tokenExpired = tokenPresent && tokenState === 'expired'
+
+  // Auto-collapse once the required item is set — but not when the token turns out to be
+  // dead, since the fix for that lives inside this panel.
+  useEffect(() => {
+    if (tokenPresent && !tokenExpired) setIsOpen(false)
+    if (tokenExpired) setIsOpen(true)
+  }, [tokenPresent, tokenExpired])
+
+  const statusText = tokenExpired
+    ? 'Action needed'
+    : tokenPresent
+      ? 'Complete'
+      : '1 required item'
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm">
@@ -88,11 +117,13 @@ export function SetupPanel({
           {/* The dots carry state by colour alone, so each pairs with visually hidden text. */}
           <div className="flex items-center gap-1.5">
             <span
-              className={`w-2 h-2 rounded-full ${tokenValid ? 'bg-green-400' : 'bg-white/30'}`}
+              className={`w-2 h-2 rounded-full ${
+                tokenExpired ? 'bg-amber-300' : tokenPresent ? 'bg-green-400' : 'bg-white/30'
+              }`}
               aria-hidden="true"
             />
             <span className="sr-only">
-              Canvas token {tokenValid ? 'saved' : 'not set'}.
+              Canvas token {tokenExpired ? 'expired' : tokenPresent ? 'saved' : 'not set'}.
             </span>
             <span
               className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/30'}`}
@@ -113,7 +144,7 @@ export function SetupPanel({
       {isOpen && (
         <div id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
           {/* Canvas token */}
-          <div className={`rounded-2xl border-2 p-4 ${tokenValid ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
+          <div className={`rounded-2xl border-2 p-4 ${tokenExpired ? 'border-amber-300 shadow-[0_0_0_3px_rgba(255,251,235,1)]' : tokenPresent ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
               <KeyRound className="w-4 h-4 text-red-600 flex-shrink-0" aria-hidden="true" />
               <span className="font-black text-[15px]">
@@ -121,12 +152,41 @@ export function SetupPanel({
               </span>
             </div>
 
-            {tokenValid ? (
+            {tokenPresent ? (
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-[13px] font-bold text-green-700">Token saved</span>
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      tokenExpired
+                        ? 'bg-amber-500'
+                        : tokenState === 'valid'
+                          ? 'bg-green-500'
+                          : 'bg-gray-400'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className={`text-[13px] font-bold ${
+                      tokenExpired ? 'text-amber-800' : tokenState === 'valid' ? 'text-green-700' : 'text-gray-700'
+                    }`}
+                  >
+                    {tokenExpired
+                      ? 'Token expired'
+                      : tokenState === 'valid'
+                        ? 'Token valid'
+                        : tokenState === 'checking'
+                          ? 'Checking token…'
+                          : 'Token saved'}
+                  </span>
                 </div>
+
+                {tokenExpired && (
+                  <p className="text-xs text-amber-900 mb-2" role="alert">
+                    Canvas is no longer accepting this token. Generate a new one in Canvas under{' '}
+                    <span className="font-bold">Account → Settings → New Access Token</span>, then
+                    remove this one and paste the new one in.
+                  </p>
+                )}
                 <p className="text-xs font-mono text-gray-600 mb-3 break-all">
                   <span className="sr-only">Saved token, partially hidden: </span>
                   {canvasToken.slice(0, 8)}··············{canvasToken.slice(-4)}

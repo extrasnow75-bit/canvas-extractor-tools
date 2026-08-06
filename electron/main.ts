@@ -12,6 +12,7 @@ import {
   endJob,
   cancelJob,
   isCancellation,
+  verifyToken,
 } from './ipc/canvasUtils'
 import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
@@ -115,6 +116,11 @@ ipcMain.handle('app:checkUpdate', () => checkForUpdate())
 ipcMain.handle('app:openReleases', () => shell.openExternal(RELEASES_PAGE))
 
 // ─── Canvas feature handlers ──────────────────────────────────────────────────
+
+ipcMain.handle('canvas:verifyToken', (_e, args: { token: string; courseUrl?: string }) => {
+  const parsed = args.courseUrl ? parseCourseUrl(args.courseUrl) : null
+  return verifyToken(args.token, parsed?.baseUrl)
+})
 
 ipcMain.handle('canvas:exportContent', handleCanvasExport)
 ipcMain.handle('canvas:exportQuizzes', handleQuizExport)

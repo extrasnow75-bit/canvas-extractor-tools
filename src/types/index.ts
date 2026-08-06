@@ -55,6 +55,11 @@ declare global {
         saveFile(opts: { defaultName: string; ext: string; label: string }): Promise<string | null>
       }
       canvas: {
+        /** 'unknown' means the check itself failed (offline, Canvas down) — not a verdict. */
+        verifyToken(args: {
+          token: string
+          courseUrl?: string
+        }): Promise<'valid' | 'expired' | 'unknown'>
         exportContent(args: {
           courseUrl: string
           token: string
