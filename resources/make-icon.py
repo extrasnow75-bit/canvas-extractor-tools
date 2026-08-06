@@ -22,36 +22,57 @@ from pathlib import Path
 
 TILE = 64.0  # icon.svg's viewBox is 0 0 64 64
 TILE_RADIUS = 11.0
-RED = (0xC8, 0x10, 0x2E)
+BLUE = (0x00, 0x33, 0xA0)  # Boise State blue
 
-# The Canvas dot ring lives in a 100-unit box and is placed by `translate(8.5,-4) scale(0.47)`.
-MARK_SCALE = 0.47
-MARK_DX, MARK_DY = 8.5, -4.0
-MARK_CX = MARK_CY = 50.0
+# ─── "LMS" wordmark ───────────────────────────────────────────────────────────
+# Proportions are expressed against the cap height so the whole wordmark scales as a unit.
+# The literal coordinates in icon.svg are these same numbers, pre-multiplied.
 
-# One petal is the lower half of a radius-12 circle centred at (50,14); eight copies are
-# rotated by 45 degree steps about the ring centre.
-PETAL_CY, PETAL_R = 14.0, 12.0
-# One dot is a radius-5 circle at (50,28), eight copies offset 22.5 degrees between petals.
-DOT_CY, DOT_R = 28.0, 5.0
+CAP_H, CAP_TOP = 22.0, 9.0
+STROKE = 0.16 * CAP_H
+W_L, W_M, GAP = 0.55 * CAP_H, 0.82 * CAP_H, 0.10 * CAP_H
+# S's width is derived, not chosen: two stacked tangent arc centrelines of radius rc span a
+# cap height of 4*rc + STROKE, so rc is fixed and the outer width follows from it.
+S_RC = (CAP_H - STROKE) / 4.0
+W_S = 2 * S_RC + STROKE
 
-# Distance bands from the ring centre, used to reject samples before any rotation:
-# petals reach furthest at their chord ends, sqrt(12^2 + 36^2); dots start at 22 - 5.
-MARK_OUTER_SQ = (PETAL_R**2 + (MARK_CY - PETAL_CY) ** 2) + 0.5
-MARK_INNER_SQ = (MARK_CY - DOT_CY - DOT_R) ** 2 - 0.5
+X_L = (TILE - (W_L + W_M + W_S + 2 * GAP)) / 2.0
+X_M = X_L + W_L + GAP
+X_S = X_M + W_M + GAP
 
-# Rotations are inverted (negated) because we transform each sample point back onto the
-# base shape rather than transforming the shape.
-PETAL_TRIG = [(math.cos(math.radians(-45.0 * k)), math.sin(math.radians(-45.0 * k))) for k in range(8)]
-DOT_TRIG = [
-    (math.cos(math.radians(-(22.5 + 45.0 * k))), math.sin(math.radians(-(22.5 + 45.0 * k))))
-    for k in range(8)
-]
+CAP_BOTTOM = CAP_TOP + CAP_H
+
+L_STEM = (X_L, CAP_TOP, STROKE, CAP_H, 0.0)  # x, y, w, h, corner radius
+L_FOOT = (X_L, CAP_BOTTOM - STROKE, W_L, STROKE, 0.0)
+
+M_LEFT = (X_M, CAP_TOP, STROKE, CAP_H, 0.0)
+M_RIGHT = (X_M + W_M - STROKE, CAP_TOP, STROKE, CAP_H, 0.0)
+M_APEX_X, M_APEX_Y = X_M + W_M / 2.0, CAP_TOP + CAP_H * 0.62
+M_DIAG_L = (
+    (X_M, CAP_TOP),
+    (X_M + STROKE, CAP_TOP),
+    (M_APEX_X + STROKE / 2, M_APEX_Y),
+    (M_APEX_X - STROKE / 2, M_APEX_Y),
+)
+M_DIAG_R = (
+    (X_M + W_M - STROKE, CAP_TOP),
+    (X_M + W_M, CAP_TOP),
+    (M_APEX_X + STROKE / 2, M_APEX_Y),
+    (M_APEX_X - STROKE / 2, M_APEX_Y),
+)
+
+S_HALF = STROKE / 2.0
+S_CX = X_S + S_HALF + S_RC
+S_CY_TOP = CAP_TOP + S_HALF + S_RC
+S_CY_BOT = S_CY_TOP + 2 * S_RC
+# The bowls open on opposite corners and meet where the arcs are tangent, at (S_CX, S_CY_TOP + S_RC).
+S_UPPER_A0, S_UPPER_A1 = 20.0, 270.0
+S_LOWER_A0, S_LOWER_A1 = 200.0, 90.0
 
 # Download arrow, in tile coordinates.
-SHAFT = (29.6, 41.5, 4.8, 8.2, 0.6)  # x, y, w, h, corner radius
-BAR = (23.0, 58.0, 18.0, 3.4, 1.5)
-HEAD_TOP, HEAD_BOTTOM = 48.6, 56.4
+SHAFT = (29.6, 38.5, 4.8, 8.2, 0.6)  # x, y, w, h, corner radius
+BAR = (23.0, 55.0, 18.0, 3.4, 1.5)
+HEAD_TOP, HEAD_BOTTOM = 45.6, 53.4
 HEAD_X0, HEAD_X1 = 25.2, 38.8
 
 SUBSAMPLES = 4
@@ -71,32 +92,56 @@ def in_rrect(x: float, y: float, x0: float, y0: float, w: float, h: float, r: fl
     return qx * qx + qy * qy <= r * r
 
 
-def in_mark(x: float, y: float) -> bool:
-    """Point-in-Canvas-dot-ring, after undoing the SVG placement transform."""
-    px = (x - MARK_DX) / MARK_SCALE
-    py = (y - MARK_DY) / MARK_SCALE
-    dx, dy = px - MARK_CX, py - MARK_CY
-    d2 = dx * dx + dy * dy
-    if d2 > MARK_OUTER_SQ or d2 < MARK_INNER_SQ:
-        return False
+def in_poly(x: float, y: float, pts) -> bool:
+    """Point-in-polygon by ray casting."""
+    inside = False
+    j = len(pts) - 1
+    for i, (xi, yi) in enumerate(pts):
+        xj, yj = pts[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
 
-    for ca, sa in PETAL_TRIG:
-        ry = MARK_CY + dx * sa + dy * ca
-        if ry < PETAL_CY:
-            continue
-        rx = MARK_CX + dx * ca - dy * sa
-        ex, ey = rx - MARK_CX, ry - PETAL_CY
-        if ex * ex + ey * ey <= PETAL_R * PETAL_R:
+
+def near_arc(x: float, y: float, cx: float, cy: float, rc: float, a0: float, a1: float) -> bool:
+    """Within STROKE/2 of a circular arc centreline — a constant-width stroke with round caps.
+
+    Modelling the S as distance-from-a-path rather than as an annulus sector keeps its weight
+    equal to the straight-sided letters. An annulus cannot: at this cap height the stroke is a
+    large enough fraction of the bowl radius that the hole would close up into a solid disc.
+
+    Angles are degrees counter-clockwise, 0 = right, 90 = up.
+    """
+    dx, dy = x - cx, cy - y  # flip y so angles read conventionally
+    th = math.degrees(math.atan2(dy, dx)) % 360.0
+    within = a0 <= th <= a1 if a0 <= a1 else (th >= a0 or th <= a1)
+    if within:
+        return abs(math.hypot(dx, dy) - rc) <= S_HALF
+    for a in (a0, a1):  # round cap at each terminal
+        ex = cx + rc * math.cos(math.radians(a))
+        ey = cy - rc * math.sin(math.radians(a))
+        if (x - ex) ** 2 + (y - ey) ** 2 <= S_HALF * S_HALF:
             return True
-
-    for ca, sa in DOT_TRIG:
-        rx = MARK_CX + dx * ca - dy * sa
-        ry = MARK_CY + dx * sa + dy * ca
-        ex, ey = rx - MARK_CX, ry - DOT_CY
-        if ex * ex + ey * ey <= DOT_R * DOT_R:
-            return True
-
     return False
+
+
+def in_wordmark(x: float, y: float) -> bool:
+    """Point-in-"LMS"."""
+    if not (CAP_TOP <= y <= CAP_BOTTOM):
+        return False
+    if x < X_S:  # L and M
+        return (
+            in_rrect(x, y, *L_STEM)
+            or in_rrect(x, y, *L_FOOT)
+            or in_rrect(x, y, *M_LEFT)
+            or in_rrect(x, y, *M_RIGHT)
+            or in_poly(x, y, M_DIAG_L)
+            or in_poly(x, y, M_DIAG_R)
+        )
+    return near_arc(x, y, S_CX, S_CY_TOP, S_RC, S_UPPER_A0, S_UPPER_A1) or near_arc(
+        x, y, S_CX, S_CY_BOT, S_RC, S_LOWER_A0, S_LOWER_A1
+    )
 
 
 def in_arrow(x: float, y: float) -> bool:
@@ -125,7 +170,7 @@ def render(size: int) -> bytes:
                     if not in_rrect(x, y, 0.0, 0.0, TILE, TILE, TILE_RADIUS):
                         continue
                     covered += 1
-                    if in_mark(x, y) or in_arrow(x, y):
+                    if in_wordmark(x, y) or in_arrow(x, y):
                         white += 1
             if covered == 0:
                 out += b'\x00\x00\x00\x00'
@@ -135,9 +180,9 @@ def render(size: int) -> bytes:
             f = white / covered
             out += bytes(
                 (
-                    round(RED[0] + (255 - RED[0]) * f),
-                    round(RED[1] + (255 - RED[1]) * f),
-                    round(RED[2] + (255 - RED[2]) * f),
+                    round(BLUE[0] + (255 - BLUE[0]) * f),
+                    round(BLUE[1] + (255 - BLUE[1]) * f),
+                    round(BLUE[2] + (255 - BLUE[2]) * f),
                     round(255 * covered / total),
                 )
             )
