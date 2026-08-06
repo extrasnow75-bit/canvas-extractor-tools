@@ -82,21 +82,60 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Rename installers
+        # electron-builder names files after the arch it built for (…-arm64.dmg), which asks
+        # the reader to know what arm64 means. The people installing this are course staff,
+        # not developers, so the filename itself should say which machine it is for.
+        # The glob is expanded once, before any renaming, so this cannot reprocess its output.
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          cd artifacts
+          for f in *; do
+            case "$f" in
+              *arm64*.dmg) mv -- "$f" "Canvas-Extractor-Tools-MAC-Apple-Silicon-$ver.dmg" ;;
+              *.dmg)       mv -- "$f" "Canvas-Extractor-Tools-MAC-Intel-$ver.dmg" ;;
+              *.exe)       mv -- "$f" "Canvas-Extractor-Tools-WINDOWS-$ver.exe" ;;
+            esac
+          done
+          ls -1
+
       - name: Write release notes
+        # Quoted heredoc so the markdown's backticks are not run as command substitution;
+        # the version is substituted afterwards.
         run: |
           cat > notes.md <<'NOTES'
+          ## Which file do I download?
+
+          | If you have | Download this |
+          | --- | --- |
+          | **A Windows PC** | `Canvas-Extractor-Tools-WINDOWS-__VER__.exe` |
+          | **A Mac from late 2020 or newer** (Apple silicon) | `Canvas-Extractor-Tools-MAC-Apple-Silicon-__VER__.dmg` |
+          | **An older Intel Mac** | `Canvas-Extractor-Tools-MAC-Intel-__VER__.dmg` |
+
+          Not sure which Mac you have? Click the  menu in the top-left corner and choose
+          **About This Mac**. If you see **Chip: Apple M1** (or M2, M3, M4), take the Apple
+          silicon file. If you see **Processor: Intel**, take the Intel one.
+
+          Ignore the two "Source code" links at the bottom — GitHub adds those to every
+          release automatically. They are not the app.
+
           ## Installing
 
           **Windows** — download the `.exe` and run it. These builds are unsigned, so
-          SmartScreen will warn on first run: choose **More info → Run anyway**.
+          SmartScreen will warn you the first time: choose **More info → Run anyway**.
 
-          **macOS** — download the `.dmg`. Because the build is unsigned and not notarised,
-          Gatekeeper blocks it on a double-click: right-click the app and choose **Open**,
-          then confirm.
+          **macOS** — download the `.dmg` and drag the app to Applications. Because the build
+          is unsigned, macOS blocks the first launch. Double-click the app, and when you are
+          told it cannot be opened, go to **System Settings → Privacy & Security**, scroll to
+          the bottom, and click **Open Anyway** next to the app's name. You only have to do
+          this once.
+
+          ---
 
           Your Canvas token and Google sign-in are stored in your operating system's keychain
           and never leave your computer.
           NOTES
+          sed -i "s/__VER__/${GITHUB_REF_NAME#v}/g" notes.md
 
       - name: Publish release
         env:
