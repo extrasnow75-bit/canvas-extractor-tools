@@ -1,6 +1,6 @@
 {
   "name": "canvas-extractor-tools",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "description": "Desktop app for exporting Canvas course content, quizzes, and rubrics to Google Docs",
   "author": "Boise State University eCampus Center",
   "main": "out/main/index.js",
