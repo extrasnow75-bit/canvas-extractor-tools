@@ -198,16 +198,24 @@ async function renderModuleItem(
 /** List every module item in the course, grouped by module, for the picker UI. */
 export async function listContentItems(ref: CourseRef): Promise<PickerItem[]> {
   const modules = await canvasGet<CanvasModule>(`/courses/${ref.courseId}/modules`, ref)
+
+  // Bounded concurrency rather than a serial loop: the user is watching a spinner while this
+  // runs, and one round trip per module added up to several seconds on a normal course.
+  // mapWithConcurrency preserves index order, so the picker still lists modules in Canvas's
+  // order rather than in whatever order the responses happened to arrive.
+  const perModule = await mapWithConcurrency(
+    modules.length,
+    CANVAS_CONCURRENCY,
+    (i) =>
+      canvasGet<CanvasModuleItem>(`/courses/${ref.courseId}/modules/${modules[i].id}/items`, ref),
+  )
+
   const out: PickerItem[] = []
-  for (const mod of modules) {
-    const items = await canvasGet<CanvasModuleItem>(
-      `/courses/${ref.courseId}/modules/${mod.id}/items`,
-      ref,
-    )
-    for (const item of items) {
+  modules.forEach((mod, i) => {
+    for (const item of perModule[i]) {
       out.push({ id: itemKey(item), label: item.title, group: mod.name })
     }
-  }
+  })
   return out
 }
 

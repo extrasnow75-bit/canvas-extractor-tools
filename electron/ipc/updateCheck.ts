@@ -25,6 +25,12 @@ const LATEST_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/lates
 /** Long enough for a slow connection, short enough that nothing waits on it visibly. */
 const REQUEST_TIMEOUT_MS = 8000
 
+/** A published tag should look like a version. Anything else is not something to display. */
+const TAG_SHAPE = /^\d+(\.\d+){0,3}(-[0-9A-Za-z.-]+)?$/
+
+/** Floor between user-initiated checks, so the button cannot be used to hammer GitHub. */
+const MANUAL_CHECK_MIN_INTERVAL_MS = 10000
+
 export interface UpdateInfo {
   /** The newer version, without a leading "v". */
   version: string
@@ -84,7 +90,10 @@ async function fetchLatestVersion(): Promise<string | null> {
     const body = (await res.json()) as { tag_name?: string }
     if (!body.tag_name) return null
 
-    return body.tag_name.replace(/^v/i, '')
+    const tag = body.tag_name.replace(/^v/i, '')
+    // The tag crosses to the renderer and is displayed, so require it to look like a version
+    // before trusting it that far. Anything else means we are not talking to what we think.
+    return TAG_SHAPE.test(tag) ? tag : null
   } catch {
     // Offline, rate-limited, GitHub down, DNS blocked on a campus network.
     return null
@@ -114,8 +123,27 @@ export type ManualCheckResult =
   | { state: 'up-to-date'; current: string }
   | { state: 'check-failed'; current: string }
 
-/** Always talks to GitHub — deliberately bypasses the per-launch cache. */
-export async function checkNow(): Promise<ManualCheckResult> {
+/**
+ * Always talks to GitHub — deliberately bypasses the per-launch cache.
+ *
+ * Rate limiting lives here rather than in the renderer's `checking` flag, because that flag
+ * is renderer state and so not a control: anything able to run script could call this in a
+ * loop and burn the unauthenticated GitHub quota (~60/hour/IP) until the feature stops
+ * working for the user. Repeat calls inside the window reuse the in-flight or last result.
+ */
+let lastManualCheck: { at: number; result: Promise<ManualCheckResult> } | null = null
+
+export function checkNow(): Promise<ManualCheckResult> {
+  const now = Date.now()
+  if (lastManualCheck && now - lastManualCheck.at < MANUAL_CHECK_MIN_INTERVAL_MS) {
+    return lastManualCheck.result
+  }
+  const result = performManualCheck()
+  lastManualCheck = { at: now, result }
+  return result
+}
+
+async function performManualCheck(): Promise<ManualCheckResult> {
   const current = app.getVersion()
   const latest = await fetchLatestVersion()
   if (latest === null) return { state: 'check-failed', current }

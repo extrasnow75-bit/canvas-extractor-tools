@@ -7,9 +7,13 @@ import type { Plugin } from 'vite'
  * Content-Security-Policy for the packaged renderer.
  *
  * The renderer makes no network requests of its own — every Canvas and Google call happens
- * in the main process and arrives over IPC — so `connect-src 'none'` costs nothing and means
- * injected script has nowhere to send what it steals. That containment is the point: it is
- * what keeps a renderer-side flaw from becoming an exfiltration route.
+ * in the main process and arrives over IPC — so `connect-src 'none'` costs nothing and closes
+ * the quiet exfiltration routes: fetch, XHR, WebSocket, beacons.
+ *
+ * It is not airtight, and should not be described as such. CSP does not govern top-level
+ * navigation, and `will-navigate` hands http(s) URLs to shell.openExternal, so injected script
+ * could still leak data by navigating to `https://attacker/?data=…`. That opens the user's real
+ * browser, which is conspicuous rather than silent — worth having, but a speed bump, not a wall.
  *
  * `style-src` needs 'unsafe-inline' because React writes `style={{…}}` as inline style
  * attributes (the draggable title bar, the tile colours, the progress bar width). `img-src`
@@ -67,11 +71,6 @@ export default defineConfig({
   },
   renderer: {
     root: '.',
-    build: {
-      rollupOptions: {
-        input: { index: resolve(__dirname, 'index.html') },
-      },
-    },
     server: {
       watch: {
         // Once electron-builder has run, `release/` holds ~77 MB of packaged Electron files.
@@ -81,8 +80,17 @@ export default defineConfig({
       },
     },
     plugins: [react(), cspPlugin()],
-    css: {
-      postcss: './postcss.config.js',
+    build: {
+      // electron-vite does not minify the renderer by default. Nobody will feel the
+      // difference loading from local disk; it just keeps the installer smaller.
+      minify: true,
+      rollupOptions: {
+        input: { index: resolve(__dirname, 'index.html') },
+      },
     },
+    // The postcss config is discovered automatically. It used to be named here as
+    // `postcss.config.js`, which stopped being true when the file became `.mjs` — Tailwind
+    // kept working only because Vite fell back to auto-discovery, so the setting was a
+    // misleading no-op rather than an error.
   },
 })

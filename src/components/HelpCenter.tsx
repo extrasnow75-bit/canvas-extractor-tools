@@ -88,6 +88,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null)
 
   async function runCheck() {
+    if (checking) return // the button is aria-disabled, not disabled, so guard here
     setChecking(true)
     setCheckResult(null)
     try {
@@ -222,10 +223,17 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 You can also check at any time:
               </p>
               <div className="flex flex-col items-start gap-2 pt-1">
+                {/* aria-disabled, not disabled: Chromium blurs a focused element the moment
+                    it becomes disabled, so the click threw focus to <body> and the "Checking…"
+                    label was never announced to the user who pressed it. */}
                 <button
                   onClick={runCheck}
-                  disabled={checking}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#0033a0] px-3 py-1.5 text-sm font-bold text-white hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-1"
+                  aria-disabled={checking}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-1 ${
+                    checking
+                      ? 'bg-gray-200 text-gray-700 cursor-wait'
+                      : 'bg-[#0033a0] text-white hover:bg-[#002d8f]'
+                  }`}
                 >
                   <RefreshCw
                     className={`w-3.5 h-3.5 ${checking ? 'animate-spin' : ''}`}
@@ -236,7 +244,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
 
                 <button
                   onClick={() => void window.api.app.openReleases()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-500 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
                 >
                   <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                   View all versions on GitHub
@@ -247,6 +255,9 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               {/* Mounted always so the result is announced when it arrives, rather than the
                   region appearing with its text already in place. */}
               <div role="status" aria-live="polite" className={checkResult ? 'pt-1' : 'sr-only'}>
+                {/* The wait can run to several seconds; without this the user who pressed the
+                    button hears nothing until the result lands. */}
+                {checking && <p className="sr-only">Checking for updates…</p>}
                 {checkResult?.state === 'up-to-date' && (
                   <p className="text-sm font-bold text-green-800">
                     You're up to date — v{checkResult.current} is the latest version.
@@ -255,7 +266,8 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 {checkResult?.state === 'update-available' && (
                   <p className="text-sm font-bold text-blue-900">
                     Version {checkResult.latest} is available. You're running v
-                    {checkResult.current} — use the button above to download it.
+                    {checkResult.current} — use <span className="font-black">View all versions
+                    on GitHub</span> above to download it.
                   </p>
                 )}
                 {checkResult?.state === 'check-failed' && (
@@ -270,7 +282,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
 
           <Section id="canvas-setup" title="Canvas setup">
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
-              <p className="text-sm font-black text-gray-900">How to generate a Canvas access token</p>
+              <h4 className="text-sm font-black text-gray-900">How to generate a Canvas access token</h4>
               <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
                 <li>Log into Canvas.</li>
                 <li>Go to <span className="font-bold">Account → Settings</span>.</li>
@@ -293,7 +305,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
             </div>
 
             <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
-              <p className="text-sm font-black text-gray-900">How to find your course URL</p>
+              <h4 className="text-sm font-black text-gray-900">How to find your course URL</h4>
               <p className="text-sm text-gray-600">
                 Navigate to your Canvas course, then copy the URL from your browser's address
                 bar. It should look like:
@@ -307,7 +319,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
           <Section id="quiz-extraction" title="Quiz extraction">
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
               <div>
-                <p className="text-sm font-black text-gray-900 mb-2">Supported question types</p>
+                <h4 className="text-sm font-black text-gray-900 mb-2">Supported question types</h4>
                 <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
                   <li>Multiple Choice</li>
                   <li>Multiple Answer (select all that apply)</li>
@@ -325,7 +337,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               </div>
 
               <div className="pt-3 border-t border-gray-200">
-                <p className="text-sm font-black text-gray-900 mb-1">New Quizzes</p>
+                <h4 className="text-sm font-black text-gray-900 mb-1">New Quizzes</h4>
                 <p className="text-sm text-gray-600">
                   Quizzes built with Canvas's New Quizzes engine cannot be extracted — Canvas
                   provides no public API for their question content. These quizzes still appear
@@ -417,14 +429,15 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                   is easier to take in on its own line. */}
               <p className="text-sm text-gray-600">
                 If a tool like this app runs in a web browser, your token is stored in the
-                browser — alongside everything else that lives there:
+                browser, alongside everything else that lives there. That creates three
+                problems:
               </p>
               <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
                 <li>browser extensions can read what's stored there</li>
                 <li>a bad script on any page you have open can try to reach it</li>
                 <li>the whole profile often syncs to your other devices</li>
               </ul>
-              <p className="text-sm font-black text-gray-900 pt-1">What this app does instead</p>
+              <h4 className="text-sm font-black text-gray-900 pt-1">What this app does instead</h4>
               <p className="text-sm text-gray-600">
                 With this app, your token is not stored in a browser or on a server. It's
                 stored encrypted by Windows or macOS itself, tied to your account on this
@@ -435,10 +448,10 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
 
           <Section id="security" title="Security & privacy">
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-              <p className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
+              <h4 className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
                 Your credentials stay on this computer
-              </p>
+              </h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li>
                   <span className="font-bold text-gray-700">Canvas token</span> — stored encrypted in your

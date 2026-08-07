@@ -182,7 +182,7 @@ export function SetupPanel({
             {/* Says what the credential is for. Shown in both states — someone returning to
                 this panel with a token already saved has the same question as a first-time
                 user, and previously only the empty state explained anything. */}
-            <p className="text-[13px] text-gray-600 mb-2.5">
+            <p id="canvas-token-purpose" className="text-[13px] text-gray-600 mb-2.5">
               This allows the app to connect to Canvas.
             </p>
 
@@ -254,7 +254,7 @@ export function SetupPanel({
                     autoComplete="off"
                     spellCheck={false}
                     aria-required="true"
-                    aria-describedby="canvas-token-help"
+                    aria-describedby="canvas-token-purpose canvas-token-help"
                     /* border-gray-500 rather than -200: the border is the only thing marking
                        this out as a field, and 1.4.11 wants 3:1 for that. */
                     className="w-full border-2 border-gray-500 rounded-xl px-3.5 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:border-[#0033a0] focus:ring-2 focus:ring-blue-200 transition"
@@ -299,7 +299,7 @@ export function SetupPanel({
             )}
           </div>
 
-          {/* Google sign-in (optional) */}
+          {/* Google sign-in */}
           <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
               <GoogleIcon />

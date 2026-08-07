@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { HelpCircle, AlertCircle } from 'lucide-react'
 import { SetupPanel } from './components/SetupPanel'
 import { ToolPanel } from './components/ToolPanel'
@@ -12,6 +12,16 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [helpOpen, setHelpOpen] = useState(false)
   const helpButtonRef = useRef<HTMLButtonElement>(null)
+
+  /**
+   * Stable identity on purpose. HelpCenter's focus-trap effect depends on this callback, and
+   * its cleanup returns focus to the button that opened the drawer. Passed inline, it was a
+   * new function on every App render, so the effect tore down and re-ran — and focus jumped
+   * out of the drawer — every time unrelated state landed. The update check resolving a
+   * second or two after launch was enough to do it, which is exactly when someone is likely
+   * to have the drawer open.
+   */
+  const closeHelp = useCallback(() => setHelpOpen(false), [])
 
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus>({ signedIn: false })
   const [googleBusy, setGoogleBusy] = useState(false)
@@ -163,7 +173,7 @@ export default function App() {
 
       <HelpCenter
         isOpen={helpOpen}
-        onClose={() => setHelpOpen(false)}
+        onClose={closeHelp}
         returnFocusTo={helpButtonRef}
         appVersion={appVersion}
       />

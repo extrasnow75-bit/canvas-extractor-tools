@@ -206,6 +206,18 @@ export function parseCourseUrl(raw: string): { baseUrl: string; courseId: string
 const RATE_LIMIT_BACKOFF_MS = [2000, 5000, 10000, 20000]
 
 /**
+ * How long to wait on a single Canvas request before giving up on it.
+ *
+ * Generous, because a large Modules page genuinely can take a while to come back; the point
+ * is not to be strict but to guarantee that the request *ends*. Without it a stalled socket
+ * never settles and the export hangs with a Stop button that cannot help.
+ */
+const REQUEST_TIMEOUT_MS = 30000
+
+/** Retries for a request that never completed, as opposed to one Canvas actively refused. */
+const NETWORK_RETRY_BACKOFF_MS = [1000, 3000]
+
+/**
  * True when a response is Canvas throttling us rather than refusing us.
  *
  * Canvas signals an exhausted request bucket with **403**, not the 429 you would expect,
@@ -252,12 +264,30 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
   for (let attempt = 0; ; attempt++) {
     throwIfCancelled(ref.cancel)
 
-    const response: FetchResponseLike = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${ref.token}`,
-        Accept: 'application/json',
-      },
-    })
+    let response: FetchResponseLike
+    try {
+      response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${ref.token}`,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+    } catch (err) {
+      // Without a timeout a single stalled connection — dropped VPN, flaky campus wifi —
+      // hung the whole export permanently, and Stop could not rescue it: cancellation is
+      // only checked between requests, so a fetch that never settles is never interrupted.
+      // An export is hundreds of requests, so the odds of meeting one compound.
+      if (isCancellation(err)) throw err
+      if (attempt < NETWORK_RETRY_BACKOFF_MS.length) {
+        await sleepCancellable(NETWORK_RETRY_BACKOFF_MS[attempt], ref.cancel)
+        continue
+      }
+      throw new Error(
+        'Could not reach Canvas — the connection timed out. Check your network and try again.',
+      )
+    }
+
     if (response.ok) return response
 
     // Reading the body consumes it, so this only happens on the failure path where the
