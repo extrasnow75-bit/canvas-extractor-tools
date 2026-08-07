@@ -153,8 +153,10 @@ export function SetupPanel({
               className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/30'}`}
               aria-hidden="true"
             />
+            {/* Matches what sighted users see: the "Optional" badge was removed from the card,
+                so it should not be announced here either. */}
             <span className="sr-only">
-              Google sign-in (optional) {googleStatus.signedIn ? 'complete' : 'not signed in'}.
+              Google sign-in {googleStatus.signedIn ? 'complete' : 'not signed in'}.
             </span>
           </div>
           <span className="text-[11px] font-bold">{statusText}</span>
@@ -176,6 +178,13 @@ export function SetupPanel({
                 <span className="sr-only">(required)</span>
               </span>
             </div>
+
+            {/* Says what the credential is for. Shown in both states — someone returning to
+                this panel with a token already saved has the same question as a first-time
+                user, and previously only the empty state explained anything. */}
+            <p className="text-[13px] text-gray-600 mb-2.5">
+              This allows the app to connect to Canvas.
+            </p>
 
             {tokenPresent ? (
               <div>
@@ -295,10 +304,11 @@ export function SetupPanel({
             <div className="flex items-center gap-2 mb-2">
               <GoogleIcon />
               <span className="font-black text-[15px]">Google sign-in</span>
-              <span className="ml-auto text-[10px] font-black text-gray-600 uppercase tracking-widest">
-                Optional
-              </span>
             </div>
+
+            <p className="text-[13px] text-gray-600 mb-2.5">
+              This allows the export files to open in your Google Drive.
+            </p>
 
             {googleStatus.signedIn ? (
               <div>
@@ -330,9 +340,10 @@ export function SetupPanel({
               </div>
             ) : (
               <div>
+                {/* The purpose line above already says what signing in is for, so this keeps
+                    only the part it does not cover. */}
                 <p className="text-[13px] text-gray-600 mb-2.5">
-                  Sign in to open your exports directly in Google Drive as Google Docs. The app can only
-                  see files it creates — never the rest of your Drive.
+                  The app can only see files it creates — never the rest of your Drive.
                 </p>
                 <button
                   onClick={() => onGoogleSignIn(false)}

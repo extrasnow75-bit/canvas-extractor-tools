@@ -412,12 +412,18 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 A Canvas access token works as your Canvas ID and password rolled into one
                 string of numbers and letters. Anything you can do in Canvas, it can do.
               </p>
+              {/* A list rather than one sentence: three independent clauses in a row is
+                  grammatical but asks the reader to hold three ideas at once, and each risk
+                  is easier to take in on its own line. */}
               <p className="text-sm text-gray-600">
                 If a tool like this app runs in a web browser, your token is stored in the
-                browser — alongside everything else that lives there. Browser extensions can
-                read what's stored there, a bad script on any page you have open can try to
-                reach it, and the whole profile often syncs to your other devices.
+                browser — alongside everything else that lives there:
               </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                <li>browser extensions can read what's stored there</li>
+                <li>a bad script on any page you have open can try to reach it</li>
+                <li>the whole profile often syncs to your other devices</li>
+              </ul>
               <p className="text-sm font-black text-gray-900 pt-1">What this app does instead</p>
               <p className="text-sm text-gray-600">
                 With this app, your token is not stored in a browser or on a server. It's
