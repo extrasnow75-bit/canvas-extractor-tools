@@ -6,6 +6,12 @@ contextBridge.exposeInMainWorld('api', {
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     /** Resolves to null when up to date, offline, or the check fails. */
     checkUpdate: (): Promise<{ version: string } | null> => ipcRenderer.invoke('app:checkUpdate'),
+    /** User-initiated check. Always hits the network, and distinguishes a failed check. */
+    checkUpdateNow: (): Promise<
+      | { state: 'update-available'; current: string; latest: string }
+      | { state: 'up-to-date'; current: string }
+      | { state: 'check-failed'; current: string }
+    > => ipcRenderer.invoke('app:checkUpdateNow'),
     openReleases: (): Promise<void> => ipcRenderer.invoke('app:openReleases'),
     /** Current interface zoom, plus the range the controls should stop at. */
     getZoom: (): Promise<{ level: number; min: number; max: number }> =>

@@ -66,7 +66,8 @@ export function compareVersions(a: string, b: string): number {
   return pa.pre < pb.pre ? -1 : 1
 }
 
-async function performCheck(): Promise<UpdateInfo | null> {
+/** The newest published version, or null if GitHub could not be reached or parsed. */
+async function fetchLatestVersion(): Promise<string | null> {
   try {
     const res = await fetch(LATEST_API, {
       headers: {
@@ -83,17 +84,44 @@ async function performCheck(): Promise<UpdateInfo | null> {
     const body = (await res.json()) as { tag_name?: string }
     if (!body.tag_name) return null
 
-    const latest = body.tag_name.replace(/^v/i, '')
-    if (compareVersions(latest, app.getVersion()) <= 0) return null
-
-    // Only the version travels to the renderer. The page it opens is a constant in the main
-    // process, so the renderer never gets to choose a URL for shell.openExternal.
-    return { version: latest }
+    return body.tag_name.replace(/^v/i, '')
   } catch {
-    // Offline, rate-limited, GitHub down, DNS blocked on a campus network — none of these
-    // are the user's problem and none should surface as an error. No update, no banner.
+    // Offline, rate-limited, GitHub down, DNS blocked on a campus network.
     return null
   }
+}
+
+async function performCheck(): Promise<UpdateInfo | null> {
+  const latest = await fetchLatestVersion()
+  if (latest === null) return null
+  if (compareVersions(latest, app.getVersion()) <= 0) return null
+
+  // Only the version travels to the renderer. The page it opens is a constant in the main
+  // process, so the renderer never gets to choose a URL for shell.openExternal.
+  return { version: latest }
+}
+
+/**
+ * Result of a check the user asked for, as opposed to the silent one at launch.
+ *
+ * The launch check collapses "no update" and "could not reach GitHub" into the same `null`,
+ * because both mean the same thing there: show no banner. A check the user pressed a button
+ * for must tell those apart — reporting "you are up to date" when the request actually failed
+ * is worse than saying nothing, since it converts an unknown into a false reassurance.
+ */
+export type ManualCheckResult =
+  | { state: 'update-available'; current: string; latest: string }
+  | { state: 'up-to-date'; current: string }
+  | { state: 'check-failed'; current: string }
+
+/** Always talks to GitHub — deliberately bypasses the per-launch cache. */
+export async function checkNow(): Promise<ManualCheckResult> {
+  const current = app.getVersion()
+  const latest = await fetchLatestVersion()
+  if (latest === null) return { state: 'check-failed', current }
+  return compareVersions(latest, current) > 0
+    ? { state: 'update-available', current, latest }
+    : { state: 'up-to-date', current }
 }
 
 let cached: Promise<UpdateInfo | null> | null = null

@@ -36,6 +36,16 @@ export interface CourseNameResult {
   message?: string
 }
 
+/**
+ * Outcome of a check the user asked for. 'check-failed' is kept distinct from 'up-to-date'
+ * on purpose: telling someone they are current when the request never reached GitHub turns
+ * an unknown into a false reassurance.
+ */
+export type ManualCheckResult =
+  | { state: 'update-available'; current: string; latest: string }
+  | { state: 'up-to-date'; current: string }
+  | { state: 'check-failed'; current: string }
+
 // Typed window.api bridge (mirrors preload.ts)
 declare global {
   interface Window {
@@ -44,6 +54,8 @@ declare global {
         version(): Promise<string>
         /** Resolves to null when up to date, offline, or the check fails. */
         checkUpdate(): Promise<{ version: string } | null>
+        /** User-initiated check. Always hits the network, and distinguishes a failed check. */
+        checkUpdateNow(): Promise<ManualCheckResult>
         openReleases(): Promise<void>
         getZoom(): Promise<{ level: number; min: number; max: number }>
         stepZoom(delta: number): Promise<number>

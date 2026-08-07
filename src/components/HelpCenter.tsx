@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react'
-import { X, ShieldCheck, ExternalLink } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { X, ShieldCheck, ExternalLink, RefreshCw } from 'lucide-react'
+import type { ManualCheckResult } from '../types'
 
 interface Props {
   isOpen: boolean
@@ -34,6 +35,23 @@ const ResourceLink: React.FC<{ label: string; href: string }> = ({ label, href }
 export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props) {
   const panelRef = useRef<HTMLElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+
+  const [checking, setChecking] = useState(false)
+  const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null)
+
+  async function runCheck() {
+    setChecking(true)
+    setCheckResult(null)
+    try {
+      setCheckResult(await window.api.app.checkUpdateNow())
+    } catch {
+      // checkNow resolves rather than rejects for network trouble, so reaching here means
+      // something unexpected — report it the same way, since the user's next step is identical.
+      setCheckResult({ state: 'check-failed', current: appVersion ?? '' })
+    } finally {
+      setChecking(false)
+    }
+  }
 
   /**
    * The panel stays mounted so it can slide in and out, which means that when it is closed
@@ -211,6 +229,16 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
           {/* Resources & Training */}
           <section>
             <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">Resources &amp; training</h3>
+
+            <h4 className="text-sm font-black text-gray-900 mb-2">Resources</h4>
+            <div className="space-y-3">
+              <ResourceLink
+                label="Canvas Extractor Tools KB Article"
+                href="https://docs.google.com/document/d/1h9eFqxroCyIkHov5Dk4jmISU0qg33p5sOMUW6zaReOI/edit?tab=t.dt1zwyxe9p6f#heading=h.3ilum53tbdk5"
+              />
+            </div>
+
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Training</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Rubric Example Point Ranges (MS Word version)"
@@ -311,14 +339,50 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 If your network blocks GitHub the check cannot run, and no bar appears — which
                 looks the same as being up to date. To be sure, check the releases page.
               </p>
-              <button
-                onClick={() => void window.api.app.openReleases()}
-                className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
-              >
-                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-                View all versions on GitHub
-                <span className="sr-only">(opens in your browser)</span>
-              </button>
+              <div className="flex flex-col items-start gap-2 pt-1">
+                <button
+                  onClick={runCheck}
+                  disabled={checking}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#0033a0] px-3 py-1.5 text-sm font-bold text-white hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-1"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${checking ? 'animate-spin' : ''}`}
+                    aria-hidden="true"
+                  />
+                  {checking ? 'Checking…' : 'Check for updates'}
+                </button>
+
+                <button
+                  onClick={() => void window.api.app.openReleases()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                  View all versions on GitHub
+                  <span className="sr-only">(opens in your browser)</span>
+                </button>
+              </div>
+
+              {/* Mounted always so the result is announced when it arrives, rather than the
+                  region appearing with its text already in place. */}
+              <div role="status" aria-live="polite" className={checkResult ? 'pt-1' : 'sr-only'}>
+                {checkResult?.state === 'up-to-date' && (
+                  <p className="text-sm font-bold text-green-800">
+                    You're up to date — v{checkResult.current} is the latest version.
+                  </p>
+                )}
+                {checkResult?.state === 'update-available' && (
+                  <p className="text-sm font-bold text-blue-900">
+                    Version {checkResult.latest} is available. You're running v
+                    {checkResult.current} — use the button below to download it.
+                  </p>
+                )}
+                {checkResult?.state === 'check-failed' && (
+                  <p className="text-sm font-bold text-amber-900">
+                    Couldn't reach GitHub, so this could not be checked. You may be on the
+                    latest version or you may not — try again, or check the releases page.
+                  </p>
+                )}
+              </div>
             </div>
           </section>
 

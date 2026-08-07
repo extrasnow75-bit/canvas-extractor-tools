@@ -18,7 +18,7 @@ import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
 import { applyDueHeaderBorders } from './ipc/googleDocs'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
-import { checkForUpdate, RELEASES_PAGE } from './ipc/updateCheck'
+import { checkForUpdate, checkNow, RELEASES_PAGE } from './ipc/updateCheck'
 import { rememberSavePath } from './ipc/savePaths'
 import {
   applyZoomLevel,
@@ -179,6 +179,10 @@ ipcMain.handle('dialog:saveFile', async (_e, opts: { defaultName: string; ext: s
 
 ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('app:checkUpdate', () => checkForUpdate())
+
+// The user-initiated check. Unlike app:checkUpdate it hits the network every time and
+// reports whether the check itself failed, rather than folding that into "no update".
+ipcMain.handle('app:checkUpdateNow', () => checkNow())
 
 // Takes no URL on purpose: the destination is a constant here, so the renderer cannot use
 // this as a general "open any link in the browser" capability.
