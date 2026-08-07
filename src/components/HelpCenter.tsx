@@ -336,21 +336,28 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
             </div>
           </Section>
 
-          {/* "Guides" rather than "training": next to the AI section above, "training
-              documents" reads as model training to anyone primed for it, which is the
-              opposite of what that section says. These are templates and formatting
-              standards, so "guides" is also just more accurate. */}
-          {/* Plain "&" — this is a string prop, not JSX text, so an entity would render raw. */}
-          <Section id="resources-guides" title="Guides & templates">
-            <h4 className="text-sm font-black text-gray-900 mb-2">Resources</h4>
+          {/* The KB article is documentation for the app itself, not a formatting standard
+              for course content, so it gets its own section rather than sitting among the
+              export references. */}
+          <Section id="kb-article" title="KB article">
             <div className="space-y-3">
               <ResourceLink
                 label="Canvas Extractor Tools KB Article"
                 href="https://docs.google.com/document/d/1h9eFqxroCyIkHov5Dk4jmISU0qg33p5sOMUW6zaReOI/edit?tab=t.dt1zwyxe9p6f#heading=h.3ilum53tbdk5"
               />
+              <p className="text-xs text-gray-600 px-1">
+                Currently a Google Doc. This will move to a Confluence page when the app is
+                officially launched.
+              </p>
             </div>
+          </Section>
 
-            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Content export guides</h4>
+          {/* Not "training": next to the AI section above, "training documents" reads as
+              model training to anyone primed for it, which is the opposite of what that
+              section says. These are style and formatting references. */}
+          {/* Plain "&" — this is a string prop, not JSX text, so an entity would render raw. */}
+          <Section id="resources-references" title="Style & formatting references">
+            <h4 className="text-sm font-black text-gray-900 mb-2">Content export</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Template Blueprint 5.0"
@@ -358,7 +365,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               />
             </div>
 
-            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Quiz export guides</h4>
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Quiz export</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Quiz Questions Extraction Template"
@@ -370,7 +377,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               />
             </div>
 
-            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Rubric export guides</h4>
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Rubric export</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Rubric Example Point Ranges (MS Word version)"
@@ -397,36 +404,25 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
           </Section>
 
           <Section id="why-desktop" title="Why a desktop app?">
+            {/* Deliberately does not argue that "browsers have vulnerabilities": this app is
+                Electron, i.e. Chromium, so that claim invites an obvious retort. The honest
+                distinction is what else shares a browser profile with the token. */}
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
               <p className="text-sm text-gray-600">
-                Earlier versions of this tool were a web app and, before that, a Colab
-                notebook. Both worked, and both had the same problem: your Canvas access token
-                had to leave your computer.
+                A Canvas access token works as your Canvas ID and password rolled into one
+                string of numbers and letters. Anything you can do in Canvas, it can do.
               </p>
-              <p className="text-sm font-black text-gray-900 pt-1">What a Canvas token is</p>
               <p className="text-sm text-gray-600">
-                A Canvas access token acts as you. Anything you can see or change in Canvas —
-                every course you teach, every student record you can reach — it can too. It is
-                closer to a password than to a setting, and unlike a password it does not
-                prompt anyone for a second factor.
-              </p>
-              <p className="text-sm font-black text-gray-900 pt-1">Why a browser is a poor place for one</p>
-              <p className="text-sm text-gray-600">
-                A web app has to put that token somewhere: on a server you have to trust, or in
-                browser storage. Browser storage is readable by any script running on the page
-                and by extensions with permission to read it, and it survives in a profile that
-                syncs between machines. A Colab notebook is worse still — the token is typed
-                into a document that runs on someone else's computer and is easy to share by
-                accident, output and all.
+                If a tool like this app runs in a web browser, your token is stored in the
+                browser — alongside everything else that lives there. Browser extensions can
+                read what's stored there, a bad script on any page you have open can try to
+                reach it, and the whole profile often syncs to your other devices.
               </p>
               <p className="text-sm font-black text-gray-900 pt-1">What this app does instead</p>
               <p className="text-sm text-gray-600">
-                There is no server. Your token is stored encrypted by Windows or macOS itself,
-                tied to your account on this computer, and is only ever sent to Canvas. Nobody
-                operating this tool — including whoever maintains it — can see it, because
-                there is nowhere for it to be collected. Copying the file to another machine
-                does not work either: the operating system will not decrypt it for a different
-                user.
+                With this app, your token is not stored in a browser or on a server. It's
+                stored encrypted by Windows or macOS itself, tied to your account on this
+                computer, and is only ever sent to Canvas.
               </p>
             </div>
           </Section>
