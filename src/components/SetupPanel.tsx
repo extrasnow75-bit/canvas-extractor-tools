@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Eye, EyeOff, LogOut, SlidersHorizontal, ChevronDown, KeyRound, Shield } from 'lucide-react'
 import type { GoogleStatus } from '../types'
 
@@ -97,6 +97,24 @@ export function SetupPanel({
     if (tokenExpired) setIsOpen(true)
   }, [tokenPresent, tokenExpired])
 
+  // Same reasoning for a dropped Google sign-in: the "Sign in with Google" button is in
+  // here, so collapsing the panel would hide the only way to act on the error. App renders
+  // the message itself, above this panel, where it is visible either way.
+  useEffect(() => {
+    if (googleError) setIsOpen(true)
+  }, [googleError])
+
+  // Removing the token unmounts the button that was focused, which would otherwise drop
+  // focus to <body>. Send it to the field the user now has to fill.
+  const tokenInputRef = useRef<HTMLInputElement>(null)
+  const [returnFocusToInput, setReturnFocusToInput] = useState(false)
+  useEffect(() => {
+    if (returnFocusToInput && !tokenPresent) {
+      tokenInputRef.current?.focus()
+      setReturnFocusToInput(false)
+    }
+  }, [returnFocusToInput, tokenPresent])
+
   const statusText = tokenExpired
     ? 'Action needed'
     : tokenPresent
@@ -105,6 +123,12 @@ export function SetupPanel({
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm">
+      {/* Mounted always, so the announcement fires when the text arrives rather than
+          depending on a region that appears already populated. */}
+      <div role="alert" className="sr-only">
+        {tokenExpired ? 'Canvas token expired. Initial setup needs attention.' : ''}
+      </div>
+
       <button
         onClick={() => setIsOpen((v) => !v)}
         aria-expanded={isOpen}
@@ -148,7 +172,8 @@ export function SetupPanel({
             <div className="flex items-center gap-2 mb-2">
               <KeyRound className="w-4 h-4 text-red-600 flex-shrink-0" aria-hidden="true" />
               <span className="font-black text-[15px]">
-                Canvas API token <span className="text-red-500">*</span>
+                Canvas API token <span className="text-red-700" aria-hidden="true">*</span>
+                <span className="sr-only">(required)</span>
               </span>
             </div>
 
@@ -181,7 +206,7 @@ export function SetupPanel({
                 </div>
 
                 {tokenExpired && (
-                  <p className="text-xs text-amber-900 mb-2" role="alert">
+                  <p className="text-xs text-amber-900 mb-2">
                     Canvas is no longer accepting this token. Generate a new one in Canvas under{' '}
                     <span className="font-bold">Account → Settings → New Access Token</span>, then
                     remove this one and paste the new one in.
@@ -192,7 +217,10 @@ export function SetupPanel({
                   {canvasToken.slice(0, 8)}··············{canvasToken.slice(-4)}
                 </p>
                 <button
-                  onClick={onRemoveToken}
+                  onClick={() => {
+                    setReturnFocusToInput(true)
+                    onRemoveToken()
+                  }}
                   className="w-full text-sm font-bold text-gray-700 border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition flex items-center justify-center gap-2"
                 >
                   <LogOut className="w-4 h-4" aria-hidden="true" /> Remove token
@@ -200,7 +228,7 @@ export function SetupPanel({
               </div>
             ) : (
               <div>
-                <p className="text-[13px] text-gray-600 mb-2.5">
+                <p id="canvas-token-help" className="text-[13px] text-gray-600 mb-2.5">
                   Paste your Canvas token here. It's stored encrypted on this computer only.
                 </p>
                 <div className="relative mb-2.5">
@@ -209,13 +237,18 @@ export function SetupPanel({
                   </label>
                   <input
                     id="canvas-token"
+                    ref={tokenInputRef}
                     type={showToken ? 'text' : 'password'}
                     value={tokenInput}
                     onChange={(e) => setTokenInput(e.target.value)}
                     placeholder="Paste your Canvas API token"
                     autoComplete="off"
                     spellCheck={false}
-                    className="w-full border-2 border-gray-200 rounded-xl px-3.5 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200 transition"
+                    aria-required="true"
+                    aria-describedby="canvas-token-help"
+                    /* border-gray-500 rather than -200: the border is the only thing marking
+                       this out as a field, and 1.4.11 wants 3:1 for that. */
+                    className="w-full border-2 border-gray-500 rounded-xl px-3.5 py-2.5 pr-10 text-sm font-mono focus:outline-none focus:border-[#0033a0] focus:ring-2 focus:ring-blue-200 transition"
                   />
                   {/* Previously tabIndex={-1}, which left keyboard-only users unable to check
                       what they had pasted into a masked field. */}
@@ -241,7 +274,9 @@ export function SetupPanel({
                     }
                   }}
                   disabled={!tokenInput.trim()}
-                  className="w-full py-2.5 bg-[#0033a0] text-white rounded-xl text-sm font-black hover:bg-[#002d8f] disabled:opacity-40 transition"
+                  /* An explicit disabled palette rather than opacity: opacity-40 over this
+                     blue lands at 2.25:1, which is unreadable even as an inactive control. */
+                  className="w-full py-2.5 bg-[#0033a0] text-white rounded-xl text-sm font-black hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 transition"
                 >
                   Save token
                 </button>
@@ -288,11 +323,10 @@ export function SetupPanel({
               <button
                 onClick={() => onGoogleSignIn(true)}
                 disabled={googleBusy}
-                className="mt-2.5 text-[12.5px] font-bold text-blue-600 hover:underline disabled:opacity-50"
+                className="mt-2.5 text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
               >
                 {googleBusy ? 'Opening Google…' : 'Use a different account'}
               </button>
-              {googleError && <p role="alert" className="text-xs text-red-700 mt-2">{googleError}</p>}
               </div>
             ) : (
               <div>
@@ -303,18 +337,17 @@ export function SetupPanel({
                 <button
                   onClick={() => onGoogleSignIn(false)}
                   disabled={googleBusy}
-                  className="w-full flex items-center justify-center gap-2 border-2 border-blue-400 text-blue-600 rounded-xl py-2.5 font-black text-sm hover:bg-blue-50 disabled:opacity-50 transition"
+                  className="w-full flex items-center justify-center gap-2 border-2 border-blue-400 text-blue-600 rounded-xl py-2.5 font-black text-sm hover:bg-blue-50 disabled:text-gray-600 disabled:no-underline transition"
                 >
                   {googleBusy ? 'Signing in…' : (<><GoogleIcon /> Sign in with Google</>)}
                 </button>
                 <button
                   onClick={() => onGoogleSignIn(true)}
                   disabled={googleBusy}
-                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline disabled:opacity-50"
+                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
                 >
                   Use a different account
                 </button>
-                {googleError && <p role="alert" className="text-xs text-red-700 mt-2">{googleError}</p>}
               </div>
             )}
           </div>

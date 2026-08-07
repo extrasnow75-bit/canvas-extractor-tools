@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
   Download,
@@ -25,7 +25,7 @@ interface Props {
   onStatusChange?(tool: Tool, status: Status): void
 }
 
-type Status = 'idle' | 'running' | 'success' | 'error'
+type Status = 'idle' | 'running' | 'success' | 'error' | 'cancelled'
 
 /** "1:05" / "12s" — compact, for elapsed and remaining times. */
 function formatDuration(seconds: number): string {
@@ -205,7 +205,9 @@ export function ToolTile({
         setWebViewLink(result.webViewLink ?? null)
         setPickerOpen(false)
       } else {
-        setStatus(result.cancelled ? 'idle' : 'error')
+        // Cancelling used to drop straight back to 'idle', which reverted the UI with no
+        // confirmation — indistinguishable from a crash, for everyone.
+        setStatus(result.cancelled ? 'cancelled' : 'error')
         setMessage(result.cancelled ? '' : result.message)
       }
     } catch (err) {
@@ -244,7 +246,7 @@ export function ToolTile({
     try {
       const result = await LOCAL_HANDLERS[tool]({ courseUrl, token, savePath, selectedIds, jobId: id })
       if (result.cancelled) {
-        setStatus('idle')
+        setStatus('cancelled')
         setMessage('')
       } else {
         setStatus(result.ok ? 'success' : 'error')
@@ -261,6 +263,35 @@ export function ToolTile({
   }
 
   const busy = status === 'running'
+
+  /**
+   * One permanently-mounted announcer per tile, rather than `role="status"` on the result
+   * blocks. Those mount with their text already in place, which screen readers announce
+   * unreliably; this element never moves and only its contents change. It also covers the
+   * two moments that had no announcement at all: pressing Stop, and the export ending.
+   */
+  const announcement =
+    status === 'running'
+      ? stopping
+        ? `Stopping ${label}…`
+        : ''
+      : status === 'cancelled'
+        ? `${label} stopped. Nothing was saved.`
+        : status === 'success'
+          ? `${label} done. ${message}`
+          : status === 'error'
+            ? `${label} failed. ${message}`
+            : ''
+
+  // An export runs for minutes; when it ends, the control that was focused (Stop) unmounts
+  // and focus would fall to <body>. Send it to the result instead.
+  const resultRef = useRef<HTMLDivElement>(null)
+  const prevStatus = useRef<Status>('idle')
+  useEffect(() => {
+    const was = prevStatus.current
+    prevStatus.current = status
+    if (was === 'running' && status !== 'running') resultRef.current?.focus()
+  }, [status])
 
   // Once the picker has loaded, the main button follows the selection: it exports exactly
   // what is ticked. Without this the label could read "Export all" while items were
@@ -292,16 +323,18 @@ export function ToolTile({
       {busy ? (
         <>
           <div className="flex gap-2 mt-3.5">
-            <div className="flex-1 rounded-xl bg-[#6b83b8] text-white font-black text-[13px] py-2.5 flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
+            {/* #4f68a4 rather than #6b83b8: this sits on screen for the whole export, and
+                the old value carried white 13px bold at 3.77:1. */}
+            <div className="flex-1 rounded-xl bg-[#4f68a4] text-white font-black text-[13px] py-2.5 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               {stopping ? 'Stopping…' : 'Exporting…'}
             </div>
             <button
               onClick={stopExport}
               disabled={stopping}
-              className="flex-shrink-0 px-4 rounded-xl border-2 border-red-500 text-red-600 font-black text-[13px] hover:bg-red-50 disabled:opacity-50 transition flex items-center gap-1.5"
+              className="flex-shrink-0 px-4 rounded-xl border-2 border-red-500 text-red-600 font-black text-[13px] hover:bg-red-50 disabled:border-gray-300 disabled:text-gray-600 disabled:hover:bg-transparent transition flex items-center gap-1.5"
             >
-              <Square className="w-3.5 h-3.5 fill-current" />
+              <Square className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
               Stop
             </button>
           </div>
@@ -343,11 +376,21 @@ export function ToolTile({
       ) : (
         <>
           <div className="flex gap-[2px] mt-3.5">
+            {/* aria-disabled rather than disabled. A `disabled` button is not focusable, so
+                its `title` — which held the only explanation of how to recover — could never
+                be read by keyboard or screen reader. This stays reachable and announces its
+                own state, and the reason is rendered as real text below. */}
             <button
-              onClick={() => runDriveExport(selectionArgs)}
-              disabled={nothingSelected}
-              title={nothingSelected ? 'Select at least one item to export' : undefined}
-              className="flex-1 rounded-l-xl bg-[#0033a0] hover:bg-[#002d8f] disabled:opacity-40 disabled:hover:bg-[#0033a0] text-white font-black text-[13px] py-2.5 flex items-center justify-center gap-2 transition"
+              onClick={() => {
+                if (!nothingSelected) runDriveExport(selectionArgs)
+              }}
+              aria-disabled={nothingSelected}
+              aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
+              className={`flex-1 rounded-l-xl font-black text-[13px] py-2.5 flex items-center justify-center gap-2 transition ${
+                nothingSelected
+                  ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
+                  : 'bg-[#0033a0] hover:bg-[#002d8f] text-white'
+              }`}
             >
               <Download className="w-4 h-4" aria-hidden="true" />
               {nothingSelected ? 'Nothing selected' : exportLabel}
@@ -366,10 +409,21 @@ export function ToolTile({
             </button>
           </div>
 
+          {nothingSelected && (
+            <p id={`${tool}-nothing-selected`} className="text-xs text-gray-700 mt-2 text-center">
+              Select at least one item below to export.
+            </p>
+          )}
+
           <button
-            onClick={() => runLocalSave(selectionArgs)}
-            disabled={nothingSelected}
-            className="w-full text-center text-xs font-bold text-gray-600 hover:text-gray-900 mt-2 disabled:opacity-50"
+            onClick={() => {
+              if (!nothingSelected) runLocalSave(selectionArgs)
+            }}
+            aria-disabled={nothingSelected}
+            aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
+            className={`w-full text-center text-xs font-bold mt-2 ${
+              nothingSelected ? 'text-gray-600 cursor-not-allowed' : 'text-gray-600 hover:text-gray-900'
+            }`}
           >
             or save a local copy (.html)
           </button>
@@ -422,7 +476,7 @@ export function ToolTile({
               <button
                 onClick={() => runDriveExport(Array.from(selected))}
                 disabled={busy || selected.size === 0}
-                className="w-full mt-2.5 py-2 rounded-lg bg-[#0033a0] hover:bg-[#002d8f] disabled:opacity-40 text-white font-black text-xs transition"
+                className="w-full mt-2.5 py-2 rounded-lg bg-[#0033a0] hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 text-white font-black text-xs transition"
               >
                 Export selected as a Google Doc
               </button>
@@ -431,12 +485,25 @@ export function ToolTile({
         </div>
       )}
 
-      {/* An export runs for minutes, so its outcome must be announced — a sighted user sees
-          this block appear, a screen reader user otherwise gets nothing at all. */}
+      {/* The tile's announcer. Never unmounts; only its text changes. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </div>
+
+      {/* Focus lands here when an export ends, so the result is where the user already is. */}
+      <div ref={resultRef} tabIndex={-1} className="focus:outline-none">
+      {status === 'cancelled' && (
+        <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-gray-50 border border-gray-200 rounded-xl text-[12.5px] text-gray-800">
+          <Square className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-600" aria-hidden="true" />
+          <div>
+            <p className="font-black">{label} stopped</p>
+            <p className="text-gray-700 mt-0.5">Nothing was saved.</p>
+          </div>
+        </div>
+      )}
+
       {status === 'success' && (
         <div
-          role="status"
-          aria-live="polite"
           className="mt-2.5 flex items-start gap-2.5 p-3 bg-green-50 border border-green-200 rounded-xl text-[12.5px] text-green-800"
         >
           <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600" aria-hidden="true" />
@@ -456,12 +523,8 @@ export function ToolTile({
         </div>
       )}
 
-      {/* role="alert" rather than status: a failure should interrupt, not queue politely. */}
       {status === 'error' && (
-        <div
-          role="alert"
-          className="mt-2.5 flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800"
-        >
+        <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" aria-hidden="true" />
           <div>
             <p className="font-black">{label} failed</p>
@@ -469,6 +532,7 @@ export function ToolTile({
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

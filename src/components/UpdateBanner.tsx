@@ -19,11 +19,10 @@ interface UpdateBannerProps {
  */
 export function UpdateBanner({ version, currentVersion, onDismiss }: UpdateBannerProps) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex items-center justify-between gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200 flex-shrink-0"
-    >
+    /* No role="status" here: this whole bar mounts at once with its text already present,
+       which announces unreliably. App keeps a permanent announcer that carries the message
+       instead, so this is the visual half only. */
+    <div className="flex items-center justify-between gap-3 px-4 py-2 bg-blue-50 border-b border-blue-200 flex-shrink-0">
       <p className="text-xs text-blue-900">
         <span className="font-bold">Version {version} is available.</span>{' '}
         {currentVersion && <>You&apos;re running {currentVersion}.</>}

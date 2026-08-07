@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { HelpCircle } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { HelpCircle, AlertCircle } from 'lucide-react'
 import { SetupPanel } from './components/SetupPanel'
 import { ToolPanel } from './components/ToolPanel'
 import { HelpCenter } from './components/HelpCenter'
@@ -10,6 +10,7 @@ export default function App() {
   const [canvasToken, setCanvasToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [helpOpen, setHelpOpen] = useState(false)
+  const helpButtonRef = useRef<HTMLButtonElement>(null)
 
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus>({ signedIn: false })
   const [googleBusy, setGoogleBusy] = useState(false)
@@ -78,58 +79,89 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
-      {/* Draggable title bar */}
-      <div
-        className="flex items-center justify-between px-4 bg-[#0033a0] text-white flex-shrink-0"
-        style={{ height: 36, WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        <span className="text-sm font-black tracking-wide">Canvas Extractor Tools</span>
-      </div>
-
-      {/* Ribbon */}
-      <div
-        className="flex items-center justify-between px-4 h-11 bg-white border-b border-gray-200 flex-shrink-0"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        <span className="text-xs text-gray-600">
-          Export Canvas course content, quizzes, and rubrics
-        </span>
-        <button
-          onClick={() => setHelpOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition"
+      {/* Everything except the Help drawer, so the drawer can mark it inert while open. */}
+      <div id="app-shell" className="flex flex-col flex-1 min-h-0">
+        {/* Draggable title bar */}
+        <header
+          className="flex items-center justify-between px-4 bg-[#0033a0] text-white flex-shrink-0"
+          style={{ height: 36, WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
-          <HelpCircle className="w-3.5 h-3.5" /> Help Center &amp; More
-        </button>
-      </div>
+          <h1 className="text-sm font-black tracking-wide">Canvas Extractor Tools</h1>
+        </header>
 
-      {update && !updateDismissed && (
-        <UpdateBanner
-          version={update.version}
-          currentVersion={appVersion}
-          onDismiss={() => setUpdateDismissed(true)}
-        />
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-2xl mx-auto pt-4 px-6">
-          <SetupPanel
-            canvasToken={canvasToken}
-            onSaveToken={saveToken}
-            onRemoveToken={removeToken}
-            googleStatus={googleStatus}
-            onGoogleSignIn={googleSignIn}
-            onGoogleSignOut={googleSignOut}
-            googleBusy={googleBusy}
-            googleError={googleError}
-            onOpenHelp={() => setHelpOpen(true)}
-          />
+        {/* Ribbon */}
+        <div
+          className="flex items-center justify-between px-4 h-11 bg-white border-b border-gray-200 flex-shrink-0"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <span className="text-xs text-gray-600">
+            Export Canvas course content, quizzes, and rubrics
+          </span>
+          <button
+            ref={helpButtonRef}
+            onClick={() => setHelpOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition"
+          >
+            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" /> Help Center &amp; More
+          </button>
         </div>
 
-        {canvasToken && <ToolPanel token={canvasToken} />}
+        {/* Announcers, mounted for the life of the app. A live region that enters the DOM
+            already holding its text is announced unreliably across screen readers, so these
+            stay put and only their contents change. */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {update && !updateDismissed ? `Version ${update.version} is available.` : ''}
+        </div>
+
+        {update && !updateDismissed && (
+          <UpdateBanner
+            version={update.version}
+            currentVersion={appVersion}
+            onDismiss={() => setUpdateDismissed(true)}
+          />
+        )}
+
+        {/* A dropped Google sign-in is reported here rather than inside SetupPanel, which
+            collapses itself as soon as a working Canvas token exists — the normal state. The
+            message rendered there could never be seen: not by a screen reader, and not by
+            anyone else either. */}
+        <div role="alert" className={googleError ? 'px-6 pt-3' : 'sr-only'}>
+          {googleError && (
+            <div className="max-w-2xl mx-auto flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">
+              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-700" aria-hidden="true" />
+              <p>
+                {googleError} Open <span className="font-bold">Initial setup</span> below to sign
+                in again.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-2xl mx-auto pt-4 px-6">
+            <SetupPanel
+              canvasToken={canvasToken}
+              onSaveToken={saveToken}
+              onRemoveToken={removeToken}
+              googleStatus={googleStatus}
+              onGoogleSignIn={googleSignIn}
+              onGoogleSignOut={googleSignOut}
+              googleBusy={googleBusy}
+              googleError={googleError}
+              onOpenHelp={() => setHelpOpen(true)}
+            />
+          </div>
+
+          {canvasToken && <ToolPanel token={canvasToken} />}
+        </main>
       </div>
 
-      <HelpCenter isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+      <HelpCenter
+        isOpen={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        returnFocusTo={helpButtonRef}
+      />
     </div>
   )
 }

@@ -4,7 +4,12 @@ import { X, ShieldCheck } from 'lucide-react'
 interface Props {
   isOpen: boolean
   onClose(): void
+  /** Control to hand focus back to on close — normally the button that opened the drawer. */
+  returnFocusTo?: React.RefObject<HTMLElement>
 }
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 const PlaceholderLink: React.FC<{ label: string }> = ({ label }) => (
   <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl">
@@ -13,7 +18,7 @@ const PlaceholderLink: React.FC<{ label: string }> = ({ label }) => (
   </div>
 )
 
-export function HelpCenter({ isOpen, onClose }: Props) {
+export function HelpCenter({ isOpen, onClose, returnFocusTo }: Props) {
   const panelRef = useRef<HTMLElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -30,21 +35,63 @@ export function HelpCenter({ isOpen, onClose }: Props) {
     else el.setAttribute('inert', '')
   }, [isOpen])
 
-  // Move focus into the panel when it opens, and let Escape close it, as a dialog should.
+  /**
+   * The rest of the app is marked inert while the drawer is open. `aria-modal="true"` already
+   * tells assistive tech that everything outside is unavailable; without a matching change to
+   * real focus, the AT's virtual cursor and the focus ring end up in different places, and
+   * Tab from the last link walks straight out into content the user was told is hidden.
+   */
+  useEffect(() => {
+    const shell = document.getElementById('app-shell')
+    if (!shell) return
+    if (isOpen) shell.setAttribute('inert', '')
+    else shell.removeAttribute('inert')
+    return () => shell.removeAttribute('inert')
+  }, [isOpen])
+
+  // Move focus into the panel when it opens, keep Tab inside it, let Escape close it, and
+  // hand focus back to whatever opened it — otherwise closing drops focus to <body>.
   useEffect(() => {
     if (!isOpen) return
     closeRef.current?.focus()
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || !panel.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [isOpen, onClose])
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      returnFocusTo?.current?.focus()
+    }
+  }, [isOpen, onClose, returnFocusTo])
 
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]" onClick={onClose} />
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]"
+          onClick={onClose}
+          aria-hidden="true"
+        />
       )}
 
       <aside

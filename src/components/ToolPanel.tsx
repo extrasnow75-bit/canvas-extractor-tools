@@ -197,13 +197,18 @@ export function ToolPanel({ token }: Props) {
               if (e.key === 'Enter') void validateCourse()
             }}
             placeholder="https://boisestatecanvas.instructure.com/courses/12345"
-            aria-describedby={courseUrl && !urlValid ? 'course-url-hint' : undefined}
-            className="flex-1 min-w-0 border-2 border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-[#0033a0] focus:ring-2 focus:ring-blue-200 transition"
+            aria-invalid={!!nameError || !!(courseUrl && !urlValid)}
+            aria-describedby={
+              [courseUrl && !urlValid ? 'course-url-hint' : null, nameError ? 'course-url-error' : null]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+            className="flex-1 min-w-0 border-2 border-gray-500 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-[#0033a0] focus:ring-2 focus:ring-blue-200 transition"
           />
           <button
             onClick={validateCourse}
             disabled={!urlValid || validating}
-            className="flex-shrink-0 px-4 rounded-xl border-2 border-[#0033a0] text-[#0033a0] font-black text-sm hover:bg-blue-50 disabled:opacity-40 disabled:hover:bg-transparent transition flex items-center gap-1.5"
+            className="flex-shrink-0 px-4 rounded-xl border-2 border-[#0033a0] text-[#0033a0] font-black text-sm hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-600 disabled:hover:bg-transparent transition flex items-center gap-1.5"
           >
             {validating && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
             {validating ? 'Checking…' : 'Validate'}
@@ -218,21 +223,31 @@ export function ToolPanel({ token }: Props) {
         )}
         {/* The looked-up course name arrives asynchronously, so announce it rather than
             letting it appear silently for anyone not watching the card. */}
-        {(courseName || nameError) && (
-          <div className="mt-2.5 flex items-center gap-2 min-h-[1.25rem]" role="status" aria-live="polite">
-            {courseName ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" aria-hidden="true" />
-                <span className="text-sm font-black text-green-700">
-                  <span className="sr-only">Course found: </span>
-                  {courseName}
-                </span>
-              </>
-            ) : (
-              <span className="text-xs text-red-700">{nameError}</span>
-            )}
-          </div>
-        )}
+        {/* Mounted unconditionally — a live region that appears with its text already in it
+            is announced unreliably. Collapsed to sr-only rather than removed when empty. */}
+        <div
+          className={
+            courseName || nameError
+              ? 'mt-2.5 flex items-center gap-2 min-h-[1.25rem]'
+              : 'sr-only'
+          }
+          role="status"
+          aria-live="polite"
+        >
+          {courseName ? (
+            <>
+              <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" aria-hidden="true" />
+              <span className="text-sm font-black text-green-700">
+                <span className="sr-only">Course found: </span>
+                {courseName}
+              </span>
+            </>
+          ) : nameError ? (
+            <span id="course-url-error" className="text-xs text-red-700">
+              {nameError}
+            </span>
+          ) : null}
+        </div>
 
         {/* Appears only once an export has finished. White on green-800 (#166534) measures
             6.6:1, comfortably past the 4.5:1 needed for normal text — green-600 and
