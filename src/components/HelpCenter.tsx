@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { X, ShieldCheck } from 'lucide-react'
+import { X, ShieldCheck, ExternalLink } from 'lucide-react'
 
 interface Props {
   isOpen: boolean
@@ -11,11 +11,22 @@ interface Props {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-const PlaceholderLink: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-    <span className="text-sm font-bold text-gray-600">{label}</span>
-    <span className="text-[10px] font-black text-amber-700 uppercase tracking-wide">Coming soon</span>
-  </div>
+/**
+ * A link out to a Google Doc. Opens in the user's real browser rather than in the app:
+ * the window's setWindowOpenHandler denies the navigation and hands the URL to
+ * openExternalSafely, which only permits http(s).
+ */
+const ResourceLink: React.FC<{ label: string; href: string }> = ({ label, href }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center justify-between gap-3 p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 hover:border-gray-300 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+  >
+    <span className="text-sm font-bold text-gray-700">{label}</span>
+    <ExternalLink className="w-4 h-4 text-gray-600 flex-shrink-0" aria-hidden="true" />
+    <span className="sr-only">(opens in your browser)</span>
+  </a>
 )
 
 export function HelpCenter({ isOpen, onClose, returnFocusTo }: Props) {
@@ -150,7 +161,22 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo }: Props) {
           <section>
             <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">Resources &amp; training</h3>
             <div className="space-y-3">
-              <PlaceholderLink label="Selected training documents" />
+              <ResourceLink
+                label="Rubric Example Point Ranges (MS Word version)"
+                href="https://docs.google.com/document/d/1YAs6TdSfRIpRXyKyQWSFc-VtgZ39gbYgnWdVtHZBDT4/edit?tab=t.0#heading=h.4v5p1vp9zrcz"
+              />
+              <ResourceLink
+                label="Template Blueprint 5.0"
+                href="https://docs.google.com/document/d/1FONxZaZr2HEIM3sc7GNBcLtsB6U-KtCVJ5S2K3uiEtE/edit?usp=drivesdk"
+              />
+              <ResourceLink
+                label="Quiz Questions Extraction Template"
+                href="https://docs.google.com/document/d/1zm9yRGtg4u9C3ddOVX7iNGrGp8gxDCrj9rbFY4GUtDM/edit?tab=t.0#heading=h.qet84pprm5t9"
+              />
+              <ResourceLink
+                label="Required Formatting for Quiz Questions"
+                href="https://docs.google.com/document/d/1SrLp9OKCKJJm86jJEFGnClhvS86MI6qp1YqhI1jHA4M/edit?usp=drivesdk"
+              />
             </div>
           </section>
 
@@ -159,7 +185,10 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo }: Props) {
             <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">
               Find bugs? Have improvement requests?
             </h3>
-            <PlaceholderLink label="App Suggestions document" />
+            <ResourceLink
+              label="Canvas Extractor Tools: App Suggestions Document"
+              href="https://docs.google.com/document/d/1-ib0yAB_88SBk2aWnOflGNH8OFe3LQefaHYJSKjea0E/edit?tab=t.0#heading=h.bz7nzkw7vn22"
+            />
           </section>
 
           {/* Security & privacy */}
