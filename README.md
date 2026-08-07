@@ -49,9 +49,16 @@ archive without its `darwin/` tree into
 and the React renderer (`src/`).
 
 Every Canvas and Google network call happens in the **main process**. The renderer is
-sandboxed and reaches it only through the narrow API exposed in `electron/preload.ts`, so
-no credential is ever present in renderer code. The Canvas token and the Google OAuth
-tokens are stored with Electron's `safeStorage`, which uses the OS keychain.
+sandboxed and reaches it only through the narrow API exposed in `electron/preload.ts`. The
+Canvas token and the Google OAuth tokens are stored with Electron's `safeStorage`, which
+uses the OS keychain.
+
+The two credentials are not equally contained, and the difference is deliberate. The
+**Google** tokens never leave the main process — no IPC handler returns one, and
+`getAccessToken()` has no caller outside `electron/ipc/`. The **Canvas** token does reach
+the renderer: `credentials:load` returns it and the UI passes it back on each export call.
+So a renderer compromise would expose the Canvas token but not the Google session. Treat
+that asymmetry as intentional and keep the Google side of it intact.
 
 Google sign-in is OAuth 2.0 with PKCE per RFC 8252 — the system browser plus a short-lived
 `127.0.0.1` listener. The only scope requested is `drive.file`, so the app can touch only
@@ -78,3 +85,13 @@ only the Python standard library. Edit the SVG, then re-run the script.
 - Exports are sequential — one Canvas request per module item — so a large course takes
   minutes. The Stop button cancels between items.
 - Builds are unsigned, so Windows SmartScreen warns on first run: **More info → Run anyway**.
+
+## Documentation
+
+`docs/confluence-draft.md` is the user-facing article — how to get a Canvas token, install,
+run each export, and troubleshoot — followed by a maintainer section covering the security
+boundary, the OAuth consent-screen constraints, the release process, and the open items.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
