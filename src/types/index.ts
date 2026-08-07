@@ -45,6 +45,10 @@ declare global {
         /** Resolves to null when up to date, offline, or the check fails. */
         checkUpdate(): Promise<{ version: string } | null>
         openReleases(): Promise<void>
+        getZoom(): Promise<{ level: number; min: number; max: number }>
+        stepZoom(delta: number): Promise<number>
+        resetZoom(): Promise<number>
+        onZoomChanged(callback: (level: number) => void): () => void
       }
       credentials: {
         save(creds: Record<string, string>): Promise<void>

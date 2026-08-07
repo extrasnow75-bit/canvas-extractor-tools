@@ -20,6 +20,14 @@ import { applyDueHeaderBorders } from './ipc/googleDocs'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, RELEASES_PAGE } from './ipc/updateCheck'
 import { rememberSavePath } from './ipc/savePaths'
+import {
+  applyZoomLevel,
+  getSavedZoomLevel,
+  registerZoomShortcuts,
+  stepZoom,
+  MIN_ZOOM_LEVEL,
+  MAX_ZOOM_LEVEL,
+} from './ipc/zoom'
 
 const CREDS_PATH = join(app.getPath('userData'), 'credentials.enc')
 
@@ -105,6 +113,14 @@ function createWindow(): BrowserWindow {
     void openExternalSafely(url)
   })
 
+  registerZoomShortcuts(win)
+
+  // Restore the saved zoom once the page exists. Setting it earlier has no effect: Electron
+  // resets the zoom level for each new document.
+  win.webContents.on('did-finish-load', () => {
+    applyZoomLevel(win, getSavedZoomLevel())
+  })
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -112,6 +128,11 @@ function createWindow(): BrowserWindow {
   }
 
   return win
+}
+
+/** The window a renderer message came from, so zoom applies to the right one. */
+function windowFor(e: { sender: Electron.WebContents }): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(e.sender)
 }
 
 // ─── Credential storage (safeStorage = Windows Credential Manager) ────────────
@@ -162,6 +183,28 @@ ipcMain.handle('app:checkUpdate', () => checkForUpdate())
 // Takes no URL on purpose: the destination is a constant here, so the renderer cannot use
 // this as a general "open any link in the browser" capability.
 ipcMain.handle('app:openReleases', () => shell.openExternal(RELEASES_PAGE))
+
+// ─── Interface zoom ───────────────────────────────────────────────────────────
+
+ipcMain.handle('app:getZoom', (e) => {
+  const win = windowFor(e)
+  return {
+    level: win ? win.webContents.getZoomLevel() : 0,
+    min: MIN_ZOOM_LEVEL,
+    max: MAX_ZOOM_LEVEL,
+  }
+})
+
+ipcMain.handle('app:stepZoom', (e, delta: number) => {
+  const win = windowFor(e)
+  // Only ever ±1 from the renderer; the size of a step is not the renderer's decision.
+  return win ? stepZoom(win, delta > 0 ? 1 : -1) : 0
+})
+
+ipcMain.handle('app:resetZoom', (e) => {
+  const win = windowFor(e)
+  return win ? applyZoomLevel(win, 0) : 0
+})
 
 // ─── Canvas feature handlers ──────────────────────────────────────────────────
 

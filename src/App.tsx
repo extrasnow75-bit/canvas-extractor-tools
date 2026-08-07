@@ -4,6 +4,7 @@ import { SetupPanel } from './components/SetupPanel'
 import { ToolPanel } from './components/ToolPanel'
 import { HelpCenter } from './components/HelpCenter'
 import { UpdateBanner } from './components/UpdateBanner'
+import { ZoomControl } from './components/ZoomControl'
 import type { GoogleStatus } from './types'
 
 export default function App() {
@@ -94,16 +95,19 @@ export default function App() {
           className="flex items-center justify-between px-4 h-11 bg-white border-b border-gray-200 flex-shrink-0"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-gray-600 truncate">
             Export Canvas course content, quizzes, and rubrics
           </span>
-          <button
-            ref={helpButtonRef}
-            onClick={() => setHelpOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition"
-          >
-            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" /> Help Center &amp; More
-          </button>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <ZoomControl />
+            <button
+              ref={helpButtonRef}
+              onClick={() => setHelpOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition"
+            >
+              <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" /> Help Center &amp; More
+            </button>
+          </div>
         </div>
 
         {/* Announcers, mounted for the life of the app. A live region that enters the DOM

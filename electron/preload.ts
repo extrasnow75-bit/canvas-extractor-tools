@@ -7,6 +7,18 @@ contextBridge.exposeInMainWorld('api', {
     /** Resolves to null when up to date, offline, or the check fails. */
     checkUpdate: (): Promise<{ version: string } | null> => ipcRenderer.invoke('app:checkUpdate'),
     openReleases: (): Promise<void> => ipcRenderer.invoke('app:openReleases'),
+    /** Current interface zoom, plus the range the controls should stop at. */
+    getZoom: (): Promise<{ level: number; min: number; max: number }> =>
+      ipcRenderer.invoke('app:getZoom'),
+    /** One step larger (delta > 0) or smaller. Resolves to the new level. */
+    stepZoom: (delta: number): Promise<number> => ipcRenderer.invoke('app:stepZoom', delta),
+    resetZoom: (): Promise<number> => ipcRenderer.invoke('app:resetZoom'),
+    /** Fires when zoom changes by any route, including the keyboard shortcuts. */
+    onZoomChanged: (callback: (level: number) => void): (() => void) => {
+      const listener = (_e: unknown, level: number) => callback(level)
+      ipcRenderer.on('app:zoomChanged', listener)
+      return () => ipcRenderer.removeListener('app:zoomChanged', listener)
+    },
   },
   credentials: {
     save: (creds: Record<string, string>) => ipcRenderer.invoke('credentials:save', creds),
