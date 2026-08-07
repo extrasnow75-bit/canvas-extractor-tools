@@ -28,6 +28,7 @@ import {
   isDueHeader,
   dueHeader,
   subHeader,
+  safeLinkHref,
 } from './blueprintFormat'
 
 interface ExportContentArgs {
@@ -162,16 +163,25 @@ async function renderModuleItem(
     }
     case 'File':
       return { parts: [itemTitle(item.title), toolLabel('File')] }
-    case 'ExternalUrl':
+    case 'ExternalUrl': {
+      // The URL is whatever a course author typed into Canvas, so the scheme is checked
+      // rather than assumed. Escaping alone would not help: it stops an attribute breakout,
+      // not a `javascript:` or `file:` target. Google Docs sanitises links on import, but the
+      // local .html export is opened straight from the filesystem, where a javascript: link
+      // would run in the file:// origin.
+      const url = safeLinkHref(item.external_url)
       return {
         parts: [
           itemTitle(
-            `<a href="${escapeHtml(item.external_url ?? '')}">${escapeHtml(item.title)}</a>`,
+            url
+              ? `<a href="${escapeHtml(url)}">${escapeHtml(item.title)}</a>`
+              : escapeHtml(item.title),
             false,
           ),
           toolLabel('External Link'),
         ],
       }
+    }
     case 'SubHeader':
       return isDueHeader(item.title)
         ? { parts: [dueHeader(item.title, cssBorders)], isDueHeader: true }

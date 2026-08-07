@@ -33,6 +33,24 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * Return `url` if it is safe to put in an href, or null if it is not.
+ *
+ * Only http and https survive. Course authors control these values, and the exported .html
+ * is opened directly from disk — a `javascript:` URL there executes in the file:// origin,
+ * and `file:` targets local content. Relative URLs are rejected too: the document has no
+ * meaningful base, so they cannot resolve to anything useful.
+ */
+export function safeLinkHref(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? url : null
+  } catch {
+    return null
+  }
+}
+
 /** Wrap body parts in a complete HTML document (opens cleanly in Google Docs / Word). */
 export function htmlDocument(title: string, bodyParts: string[]): string {
   return [
