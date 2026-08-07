@@ -117,7 +117,9 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo }: Props) {
         <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <div>
             <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase">Help Center</h2>
-            <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">eCampus</p>
+            <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">
+              Canvas Extractor Tools
+            </p>
           </div>
           <button
             ref={closeRef}
@@ -154,6 +156,53 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo }: Props) {
                   How do I manage API access tokens in my user account?
                 </a>
               </p>
+            </div>
+
+            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <p className="text-sm font-black text-gray-900">How to find your course URL</p>
+              <p className="text-sm text-gray-600">
+                Navigate to your Canvas course, then copy the URL from your browser's address
+                bar. It should look like:
+              </p>
+              <p className="text-xs font-mono text-gray-700 break-all bg-white border border-gray-200 rounded-lg px-2.5 py-2">
+                https://yourschool.instructure.com/courses/12345
+              </p>
+            </div>
+          </section>
+
+          {/* Quiz extraction */}
+          <section>
+            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">
+              Quiz extraction
+            </h3>
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
+              <div>
+                <p className="text-sm font-black text-gray-900 mb-2">Supported question types</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                  <li>Multiple Choice</li>
+                  <li>Multiple Answer (select all that apply)</li>
+                  <li>True / False</li>
+                  <li>Essay</li>
+                  <li>Short Answer</li>
+                  <li>Fill in Multiple Blanks</li>
+                  <li>Matching</li>
+                  <li>Numerical</li>
+                </ul>
+                <p className="text-sm text-gray-600 mt-2">
+                  All other question types are skipped, and a note at the end of each quiz says
+                  how many were left out.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-gray-200">
+                <p className="text-sm font-black text-gray-900 mb-1">New Quizzes</p>
+                <p className="text-sm text-gray-600">
+                  Quizzes built with Canvas's New Quizzes engine cannot be extracted — Canvas
+                  provides no public API for their question content. These quizzes still appear
+                  in the document, flagged as unsupported, so nothing goes missing without
+                  saying so.
+                </p>
+              </div>
             </div>
           </section>
 
