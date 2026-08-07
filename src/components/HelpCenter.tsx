@@ -293,6 +293,35 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
             </div>
           </section>
 
+          {/* Updates */}
+          <section className="pt-4">
+            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">
+              Updates
+            </h3>
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <p className="text-sm text-gray-600">
+                The app checks for a newer version each time it starts, and shows a bar at the
+                top of the window if one exists. Updates are never installed automatically — you
+                download and run them yourself.
+              </p>
+              {/* The automatic check goes quiet when it cannot reach GitHub — a blocked
+                  network, a rate limit, no connection. That looks exactly like being up to
+                  date, so there needs to be a way to go and see for yourself. */}
+              <p className="text-sm text-gray-600">
+                If your network blocks GitHub the check cannot run, and no bar appears — which
+                looks the same as being up to date. To be sure, check the releases page.
+              </p>
+              <button
+                onClick={() => void window.api.app.openReleases()}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-100 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+              >
+                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                View all versions on GitHub
+                <span className="sr-only">(opens in your browser)</span>
+              </button>
+            </div>
+          </section>
+
           {/* Build identity. Worth having somewhere a user can read it out: the first useful
               question about any bug report is which version it came from. */}
           <section className="pt-2 pb-2 text-center">
