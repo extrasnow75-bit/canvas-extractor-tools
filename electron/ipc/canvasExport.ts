@@ -1,5 +1,6 @@
 import { IpcMainInvokeEvent } from 'electron'
 import { writeFileSync } from 'fs'
+import { consumeSavePath } from './savePaths'
 import {
   parseCourseUrl,
   canvasGet,
@@ -338,7 +339,7 @@ export async function handleCanvasExport(
       cancel,
       makeProgressReporter(event, args.jobId),
     )
-    writeFileSync(args.savePath, html, 'utf-8')
+    writeFileSync(consumeSavePath(args.savePath), html, 'utf-8')
     return {
       ok: true,
       message: `Exported "${courseName}" — ${moduleCount} module${moduleCount === 1 ? '' : 's'}.`,

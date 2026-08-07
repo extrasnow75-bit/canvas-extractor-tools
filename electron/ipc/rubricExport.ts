@@ -17,6 +17,7 @@ import {
 } from './canvasUtils'
 import { FONT, htmlDocument, escapeHtml } from './blueprintFormat'
 import { makeProgressReporter } from './canvasExport'
+import { consumeSavePath } from './savePaths'
 
 interface RubricExportArgs {
   courseUrl: string
@@ -218,7 +219,7 @@ export async function handleRubricExport(
     )
     if (!result) return { ok: false, message: 'No rubrics found in this course.' }
 
-    writeFileSync(args.savePath, result.html, 'utf-8')
+    writeFileSync(consumeSavePath(args.savePath), result.html, 'utf-8')
     return {
       ok: true,
       message: `Exported ${result.count} rubric${result.count !== 1 ? 's' : ''} from "${result.courseName}".`,

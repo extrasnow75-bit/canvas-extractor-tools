@@ -19,8 +19,55 @@ import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
 import { applyDueHeaderBorders } from './ipc/googleDocs'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, RELEASES_PAGE } from './ipc/updateCheck'
+import { rememberSavePath } from './ipc/savePaths'
 
 const CREDS_PATH = join(app.getPath('userData'), 'credentials.enc')
+
+/**
+ * True only for a navigation back to the page this window already shows.
+ *
+ * Deliberately not an origin comparison. Every `file://` URL has the origin `"null"`, so in
+ * the packaged build — which loads the UI with `loadFile` — comparing origins matches *any*
+ * local file and waves it through. That would let a navigation to, say, a downloaded HTML
+ * file run inside this window, where the preload bridge is attached and hands it the whole
+ * `window.api` surface. Under `file://` we therefore require the exact same document, and
+ * only the dev server (a real http origin, which reloads itself for HMR) gets origin
+ * treatment.
+ */
+function isOwnPage(win: BrowserWindow, url: string): boolean {
+  const current = win.webContents.getURL()
+  if (!current) return false
+  try {
+    const target = new URL(url)
+    const here = new URL(current)
+    if (here.origin === 'null' || target.origin === 'null') {
+      return target.protocol === here.protocol && target.pathname === here.pathname
+    }
+    return target.origin === here.origin
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Hand a URL to the OS browser — but only if it is one the OS should treat as a web page.
+ *
+ * `shell.openExternal` launches whatever the platform has registered for the scheme, so an
+ * unfiltered call is a general "run something" primitive: `file://` opens a local (or UNC)
+ * executable, and Windows protocol handlers have a long history of turning this into remote
+ * code execution. Everything this app legitimately opens — the Google consent screen, the
+ * finished Doc, the releases page, Canvas help — is http(s).
+ */
+async function openExternalSafely(url: string): Promise<void> {
+  let scheme: string
+  try {
+    scheme = new URL(url).protocol
+  } catch {
+    return
+  }
+  if (scheme !== 'http:' && scheme !== 'https:') return
+  await shell.openExternal(url)
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -48,16 +95,14 @@ function createWindow(): BrowserWindow {
   // via shell.openExternal. So refuse both routes by which remote content could end up
   // rendering inside the app instead: window.open, and navigation away from our own page.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    void openExternalSafely(url)
     return { action: 'deny' }
   })
 
   win.webContents.on('will-navigate', (event, url) => {
-    const current = win.webContents.getURL()
-    // Vite's dev server issues same-origin reloads for HMR; anything else is not ours.
-    if (current && new URL(url).origin === new URL(current).origin) return
+    if (isOwnPage(win, url)) return
     event.preventDefault()
-    void shell.openExternal(url)
+    void openExternalSafely(url)
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -103,7 +148,10 @@ ipcMain.handle('dialog:saveFile', async (_e, opts: { defaultName: string; ext: s
     defaultPath: opts.defaultName,
     filters: [{ name: opts.label, extensions: [opts.ext] }],
   })
-  return filePath ?? null
+  if (!filePath) return null
+  // The export handlers will only write to a path this dialog issued; see savePaths.ts.
+  rememberSavePath(filePath)
+  return filePath
 })
 
 // ─── Update check ─────────────────────────────────────────────────────────────
