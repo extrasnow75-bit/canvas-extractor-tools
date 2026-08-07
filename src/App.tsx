@@ -165,6 +165,7 @@ export default function App() {
         isOpen={helpOpen}
         onClose={() => setHelpOpen(false)}
         returnFocusTo={helpButtonRef}
+        appVersion={appVersion}
       />
     </div>
   )
