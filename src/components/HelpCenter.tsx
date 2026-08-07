@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { X, ShieldCheck, ExternalLink, RefreshCw } from 'lucide-react'
+import { X, ShieldCheck, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react'
 import type { ManualCheckResult } from '../types'
 
 interface Props {
@@ -31,6 +31,54 @@ const ResourceLink: React.FC<{ label: string; href: string }> = ({ label, href }
     <span className="sr-only">(opens in your browser)</span>
   </a>
 )
+
+/**
+ * A collapsible section, so the drawer opens as a short menu rather than a long scroll.
+ *
+ * The content stays in the DOM and is hidden with the `hidden` attribute rather than being
+ * unmounted, so `aria-controls` always points at an element that exists. (A previous version
+ * of this pattern in the app pointed at an id that only existed while expanded, which is an
+ * invalid reference.) `hidden` also takes the subtree out of the tab order and the
+ * accessibility tree, so collapsed content cannot be tabbed into.
+ *
+ * The button is wrapped in a heading, which is what lets screen-reader users jump between
+ * sections by heading rather than tabbing through every control.
+ */
+const Section: React.FC<{
+  id: string
+  title: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}> = ({ id, title, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section className="border-b border-gray-100">
+      <h3>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={`${id}-content`}
+          className="w-full flex items-center justify-between gap-3 py-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] rounded-lg"
+        >
+          <span className="text-xs font-black text-gray-700 uppercase tracking-[0.2em]">
+            {title}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 text-gray-600 flex-shrink-0 transition-transform ${
+              open ? 'rotate-180' : ''
+            }`}
+            aria-hidden="true"
+          />
+        </button>
+      </h3>
+      {/* No display-setting class here: `hidden` must be free to do its job. */}
+      <div id={`${id}-content`} hidden={!open} className="pb-5">
+        {children}
+      </div>
+    </section>
+  )
+}
 
 export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props) {
   const panelRef = useRef<HTMLElement>(null)
@@ -94,7 +142,12 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
       if (e.key !== 'Tab') return
       const panel = panelRef.current
       if (!panel) return
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE))
+      // Collapsed sections still match the selector, so filter to what is actually on
+      // screen — otherwise the trap's "last element" could be inside a closed section and
+      // focusing it would silently do nothing.
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.getClientRects().length > 0,
+      )
       if (focusable.length === 0) return
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
@@ -151,193 +204,22 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
           </button>
         </div>
 
-        <div className="p-6 space-y-8">
-          {/* Canvas setup */}
-          <section>
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">Canvas setup</h3>
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
-              <p className="text-sm font-black text-gray-900">How to generate a Canvas access token</p>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-                <li>Log into Canvas.</li>
-                <li>Go to <span className="font-bold">Account → Settings</span>.</li>
-                <li>Scroll to <span className="font-bold">Approved Integrations</span>.</li>
-                <li>Click <span className="font-bold">+ New Access Token</span>.</li>
-                <li>Give it a name (and an expiry), then click <span className="font-bold">Generate Token</span>.</li>
-                <li>Copy the token and paste it into the app.</li>
-              </ol>
-              <p className="text-xs text-gray-600">
-                Source:{' '}
-                <a
-                  href="https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  How do I manage API access tokens in my user account?
-                </a>
-              </p>
-            </div>
-
-            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
-              <p className="text-sm font-black text-gray-900">How to find your course URL</p>
-              <p className="text-sm text-gray-600">
-                Navigate to your Canvas course, then copy the URL from your browser's address
-                bar. It should look like:
-              </p>
-              <p className="text-xs font-mono text-gray-700 break-all bg-white border border-gray-200 rounded-lg px-2.5 py-2">
-                https://yourschool.instructure.com/courses/12345
-              </p>
-            </div>
-          </section>
-
-          {/* Quiz extraction */}
-          <section>
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">
-              Quiz extraction
-            </h3>
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
-              <div>
-                <p className="text-sm font-black text-gray-900 mb-2">Supported question types</p>
-                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                  <li>Multiple Choice</li>
-                  <li>Multiple Answer (select all that apply)</li>
-                  <li>True / False</li>
-                  <li>Essay</li>
-                  <li>Short Answer</li>
-                  <li>Fill in Multiple Blanks</li>
-                  <li>Matching</li>
-                  <li>Numerical</li>
-                </ul>
-                <p className="text-sm text-gray-600 mt-2">
-                  All other question types are skipped, and a note at the end of each quiz says
-                  how many were left out.
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-gray-200">
-                <p className="text-sm font-black text-gray-900 mb-1">New Quizzes</p>
-                <p className="text-sm text-gray-600">
-                  Quizzes built with Canvas's New Quizzes engine cannot be extracted — Canvas
-                  provides no public API for their question content. These quizzes still appear
-                  in the document, flagged as unsupported, so nothing goes missing without
-                  saying so.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Resources & Training */}
-          <section>
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">Resources &amp; training</h3>
-
-            <h4 className="text-sm font-black text-gray-900 mb-2">Resources</h4>
-            <div className="space-y-3">
-              <ResourceLink
-                label="Canvas Extractor Tools KB Article"
-                href="https://docs.google.com/document/d/1h9eFqxroCyIkHov5Dk4jmISU0qg33p5sOMUW6zaReOI/edit?tab=t.dt1zwyxe9p6f#heading=h.3ilum53tbdk5"
-              />
-            </div>
-
-            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Training</h4>
-            <div className="space-y-3">
-              <ResourceLink
-                label="Rubric Example Point Ranges (MS Word version)"
-                href="https://docs.google.com/document/d/1YAs6TdSfRIpRXyKyQWSFc-VtgZ39gbYgnWdVtHZBDT4/edit?tab=t.0#heading=h.4v5p1vp9zrcz"
-              />
-              <ResourceLink
-                label="Template Blueprint 5.0"
-                href="https://docs.google.com/document/d/1FONxZaZr2HEIM3sc7GNBcLtsB6U-KtCVJ5S2K3uiEtE/edit?usp=drivesdk"
-              />
-              <ResourceLink
-                label="Quiz Questions Extraction Template"
-                href="https://docs.google.com/document/d/1zm9yRGtg4u9C3ddOVX7iNGrGp8gxDCrj9rbFY4GUtDM/edit?tab=t.0#heading=h.qet84pprm5t9"
-              />
-              <ResourceLink
-                label="Required Formatting for Quiz Questions"
-                href="https://docs.google.com/document/d/1SrLp9OKCKJJm86jJEFGnClhvS86MI6qp1YqhI1jHA4M/edit?usp=drivesdk"
-              />
-            </div>
-          </section>
-
-          {/* App Suggestions */}
-          <section className="pt-8 border-t border-gray-100">
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-4">
-              Find bugs? Have improvement requests?
-            </h3>
-            <ResourceLink
-              label="Canvas Extractor Tools: App Suggestions Document"
-              href="https://docs.google.com/document/d/1-ib0yAB_88SBk2aWnOflGNH8OFe3LQefaHYJSKjea0E/edit?tab=t.0#heading=h.bz7nzkw7vn22"
-            />
-          </section>
-
-          {/* AI use */}
-          <section className="pt-4">
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">
-              Google Gemini &amp; AI use
-            </h3>
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
-              <p className="text-sm font-black text-gray-900">This app does not use AI.</p>
-              <p className="text-sm text-gray-600">
-                No part of your course content is sent to Gemini, ChatGPT, or any other AI
-                service. Nothing is analysed, summarised, or generated by a model. The app reads
-                your course through Canvas's own API and rewrites it into Blueprint formatting
-                with ordinary code — the same output every time, for the same course.
-              </p>
-              <p className="text-sm text-gray-600">
-                It is written in <span className="font-bold">TypeScript</span> and runs on
-                Electron, the same engine behind apps like Slack and VS Code. (A small
-                <span className="font-bold"> Python</span> script generates the app icon during
-                development; it is not part of the installed app.)
-              </p>
-            </div>
-          </section>
-
-          {/* Security & privacy */}
-          <section className="pt-4">
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-              <p className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
-                <ShieldCheck className="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
-                Security &amp; privacy
-              </p>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li>
-                  <span className="font-bold text-gray-700">Canvas token</span> — stored encrypted in your
-                  OS keychain, on this computer only. Used solely to call Canvas over HTTPS; never sent
-                  anywhere else.
-                </li>
-                <li>
-                  <span className="font-bold text-gray-700">Google access</span> — least-privilege: the app
-                  can only see files it creates, never the rest of your Drive.
-                </li>
-                <li>
-                  <span className="font-bold text-gray-700">Set an expiry</span> on your Canvas token when
-                  you generate it, so a lost token can't live forever.
-                </li>
-                <li>
-                  <span className="font-bold text-gray-700">Revoke anytime</span> in Canvas → Account →
-                  Settings → Approved Integrations. "Remove token" in the app clears the local copy.
-                </li>
-              </ul>
-            </div>
-          </section>
-
-          {/* Updates */}
-          <section className="pt-4">
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-[0.2em] mb-3">
-              Updates
-            </h3>
+        <div className="px-6 pb-6">
+          {/* Updates — first, so the question "am I on the current version?" is answerable
+              without reading past anything else. */}
+          <Section id="updates" title="Updates">
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
               <p className="text-sm text-gray-600">
                 The app checks for a newer version each time it starts, and shows a bar at the
                 top of the window if one exists. Updates are never installed automatically — you
                 download and run them yourself.
               </p>
-              {/* The automatic check goes quiet when it cannot reach GitHub — a blocked
-                  network, a rate limit, no connection. That looks exactly like being up to
-                  date, so there needs to be a way to go and see for yourself. */}
+              {/* The automatic check can still come up empty — offline, a rate limit, GitHub
+                  itself down — and silence looks identical to being up to date. The button
+                  below is the way to ask directly; it reports a failed check as a failure
+                  rather than as good news. */}
               <p className="text-sm text-gray-600">
-                If your network blocks GitHub the check cannot run, and no bar appears — which
-                looks the same as being up to date. To be sure, check the releases page.
+                You can also check at any time:
               </p>
               <div className="flex flex-col items-start gap-2 pt-1">
                 <button
@@ -373,7 +255,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 {checkResult?.state === 'update-available' && (
                   <p className="text-sm font-bold text-blue-900">
                     Version {checkResult.latest} is available. You're running v
-                    {checkResult.current} — use the button below to download it.
+                    {checkResult.current} — use the button above to download it.
                   </p>
                 )}
                 {checkResult?.state === 'check-failed' && (
@@ -384,11 +266,210 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 )}
               </div>
             </div>
-          </section>
+          </Section>
 
-          {/* Build identity. Worth having somewhere a user can read it out: the first useful
-              question about any bug report is which version it came from. */}
-          <section className="pt-2 pb-2 text-center">
+          <Section id="canvas-setup" title="Canvas setup">
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
+              <p className="text-sm font-black text-gray-900">How to generate a Canvas access token</p>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>Log into Canvas.</li>
+                <li>Go to <span className="font-bold">Account → Settings</span>.</li>
+                <li>Scroll to <span className="font-bold">Approved Integrations</span>.</li>
+                <li>Click <span className="font-bold">+ New Access Token</span>.</li>
+                <li>Give it a name (and an expiry), then click <span className="font-bold">Generate Token</span>.</li>
+                <li>Copy the token and paste it into the app.</li>
+              </ol>
+              <p className="text-xs text-gray-600">
+                Source:{' '}
+                <a
+                  href="https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  How do I manage API access tokens in my user account?
+                </a>
+              </p>
+            </div>
+
+            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <p className="text-sm font-black text-gray-900">How to find your course URL</p>
+              <p className="text-sm text-gray-600">
+                Navigate to your Canvas course, then copy the URL from your browser's address
+                bar. It should look like:
+              </p>
+              <p className="text-xs font-mono text-gray-700 break-all bg-white border border-gray-200 rounded-lg px-2.5 py-2">
+                https://yourschool.instructure.com/courses/12345
+              </p>
+            </div>
+          </Section>
+
+          <Section id="quiz-extraction" title="Quiz extraction">
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
+              <div>
+                <p className="text-sm font-black text-gray-900 mb-2">Supported question types</p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                  <li>Multiple Choice</li>
+                  <li>Multiple Answer (select all that apply)</li>
+                  <li>True / False</li>
+                  <li>Essay</li>
+                  <li>Short Answer</li>
+                  <li>Fill in Multiple Blanks</li>
+                  <li>Matching</li>
+                  <li>Numerical</li>
+                </ul>
+                <p className="text-sm text-gray-600 mt-2">
+                  All other question types are skipped, and a note at the end of each quiz says
+                  how many were left out.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-gray-200">
+                <p className="text-sm font-black text-gray-900 mb-1">New Quizzes</p>
+                <p className="text-sm text-gray-600">
+                  Quizzes built with Canvas's New Quizzes engine cannot be extracted — Canvas
+                  provides no public API for their question content. These quizzes still appear
+                  in the document, flagged as unsupported, so nothing goes missing without
+                  saying so.
+                </p>
+              </div>
+            </div>
+          </Section>
+
+          {/* "Guides" rather than "training": next to the AI section above, "training
+              documents" reads as model training to anyone primed for it, which is the
+              opposite of what that section says. These are templates and formatting
+              standards, so "guides" is also just more accurate. */}
+          {/* Plain "&" — this is a string prop, not JSX text, so an entity would render raw. */}
+          <Section id="resources-guides" title="Guides & templates">
+            <h4 className="text-sm font-black text-gray-900 mb-2">Resources</h4>
+            <div className="space-y-3">
+              <ResourceLink
+                label="Canvas Extractor Tools KB Article"
+                href="https://docs.google.com/document/d/1h9eFqxroCyIkHov5Dk4jmISU0qg33p5sOMUW6zaReOI/edit?tab=t.dt1zwyxe9p6f#heading=h.3ilum53tbdk5"
+              />
+            </div>
+
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Content export guides</h4>
+            <div className="space-y-3">
+              <ResourceLink
+                label="Template Blueprint 5.0"
+                href="https://docs.google.com/document/d/1FONxZaZr2HEIM3sc7GNBcLtsB6U-KtCVJ5S2K3uiEtE/edit?usp=drivesdk"
+              />
+            </div>
+
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Quiz export guides</h4>
+            <div className="space-y-3">
+              <ResourceLink
+                label="Quiz Questions Extraction Template"
+                href="https://docs.google.com/document/d/1zm9yRGtg4u9C3ddOVX7iNGrGp8gxDCrj9rbFY4GUtDM/edit?tab=t.0#heading=h.qet84pprm5t9"
+              />
+              <ResourceLink
+                label="Required Formatting for Quiz Questions"
+                href="https://docs.google.com/document/d/1SrLp9OKCKJJm86jJEFGnClhvS86MI6qp1YqhI1jHA4M/edit?usp=drivesdk"
+              />
+            </div>
+
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Rubric export guides</h4>
+            <div className="space-y-3">
+              <ResourceLink
+                label="Rubric Example Point Ranges (MS Word version)"
+                href="https://docs.google.com/document/d/1YAs6TdSfRIpRXyKyQWSFc-VtgZ39gbYgnWdVtHZBDT4/edit?tab=t.0#heading=h.4v5p1vp9zrcz"
+              />
+            </div>
+          </Section>
+
+          <Section id="ai-use" title="Google Gemini & AI use">
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <p className="text-sm font-black text-gray-900">This app does not use AI.</p>
+              <p className="text-sm text-gray-600">
+                No part of your course content is sent to Gemini, ChatGPT, or any other AI
+                service. Nothing is analysed, summarised, or generated by a model. The app reads
+                your course through Canvas's own API and rewrites it into Blueprint formatting
+                with ordinary code — the same output every time, for the same course.
+              </p>
+              <p className="text-sm text-gray-600">
+                It is written in <span className="font-bold">TypeScript</span> and runs on
+                Electron. (A small <span className="font-bold">Python</span> script generates
+                the app icon during development; it is not part of the installed app.)
+              </p>
+            </div>
+          </Section>
+
+          <Section id="why-desktop" title="Why a desktop app?">
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <p className="text-sm text-gray-600">
+                Earlier versions of this tool were a web app and, before that, a Colab
+                notebook. Both worked, and both had the same problem: your Canvas access token
+                had to leave your computer.
+              </p>
+              <p className="text-sm font-black text-gray-900 pt-1">What a Canvas token is</p>
+              <p className="text-sm text-gray-600">
+                A Canvas access token acts as you. Anything you can see or change in Canvas —
+                every course you teach, every student record you can reach — it can too. It is
+                closer to a password than to a setting, and unlike a password it does not
+                prompt anyone for a second factor.
+              </p>
+              <p className="text-sm font-black text-gray-900 pt-1">Why a browser is a poor place for one</p>
+              <p className="text-sm text-gray-600">
+                A web app has to put that token somewhere: on a server you have to trust, or in
+                browser storage. Browser storage is readable by any script running on the page
+                and by extensions with permission to read it, and it survives in a profile that
+                syncs between machines. A Colab notebook is worse still — the token is typed
+                into a document that runs on someone else's computer and is easy to share by
+                accident, output and all.
+              </p>
+              <p className="text-sm font-black text-gray-900 pt-1">What this app does instead</p>
+              <p className="text-sm text-gray-600">
+                There is no server. Your token is stored encrypted by Windows or macOS itself,
+                tied to your account on this computer, and is only ever sent to Canvas. Nobody
+                operating this tool — including whoever maintains it — can see it, because
+                there is nowhere for it to be collected. Copying the file to another machine
+                does not work either: the operating system will not decrypt it for a different
+                user.
+              </p>
+            </div>
+          </Section>
+
+          <Section id="security" title="Security & privacy">
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+              <p className="text-sm font-black text-gray-900 flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-4 h-4 text-gray-600 shrink-0" aria-hidden="true" />
+                Your credentials stay on this computer
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>
+                  <span className="font-bold text-gray-700">Canvas token</span> — stored encrypted in your
+                  OS keychain, on this computer only. Used solely to call Canvas over HTTPS; never sent
+                  anywhere else.
+                </li>
+                <li>
+                  <span className="font-bold text-gray-700">Google access</span> — least-privilege: the app
+                  can only see files it creates, never the rest of your Drive.
+                </li>
+                <li>
+                  <span className="font-bold text-gray-700">Set an expiry</span> on your Canvas token when
+                  you generate it, so a lost token can't live forever.
+                </li>
+                <li>
+                  <span className="font-bold text-gray-700">Revoke anytime</span> in Canvas → Account →
+                  Settings → Approved Integrations. "Remove token" in the app clears the local copy.
+                </li>
+              </ul>
+            </div>
+          </Section>
+
+          <Section id="suggestions" title="Find bugs? Have improvement requests?">
+            <ResourceLink
+              label="Canvas Extractor Tools: App Suggestions Document"
+              href="https://docs.google.com/document/d/1-ib0yAB_88SBk2aWnOflGNH8OFe3LQefaHYJSKjea0E/edit?tab=t.0#heading=h.bz7nzkw7vn22"
+            />
+          </Section>
+
+          {/* Build identity, deliberately outside the collapsible sections: the first useful
+              question about any bug report is which version it came from, and it should not
+              be behind a click. */}
+          <div className="pt-5 text-center">
             <p className="text-xs text-gray-600">
               Canvas Extractor Tools{' '}
               <span className="font-bold tabular-nums">
@@ -396,7 +477,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               </span>
             </p>
             <p className="text-[11px] text-gray-600 mt-0.5">Boise State University eCampus Center</p>
-          </section>
+          </div>
         </div>
       </aside>
     </>
