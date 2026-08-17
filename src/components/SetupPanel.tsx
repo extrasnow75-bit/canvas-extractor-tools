@@ -168,7 +168,10 @@ export function SetupPanel({
       ? 'Checking…'
       : remaining === 0
         ? 'Complete'
-        : `${remaining} required item${remaining === 1 ? '' : 's'}`
+        : // "incomplete" rather than "required": Google sign-in is genuinely optional — the
+          // app works without it via the local .html route — so calling it required
+          // overstated the case for the one item people were most likely to skip.
+          `${remaining} item${remaining === 1 ? '' : 's'} incomplete`
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm">
@@ -187,8 +190,8 @@ export function SetupPanel({
           ? ''
           : setupComplete
             ? 'Initial setup complete.'
-            : `Initial setup still needs ${[
-                tokenValid ? null : 'a valid Canvas token',
+            : `Initial setup incomplete: ${[
+                tokenValid ? null : 'Canvas token',
                 googleResolved ? null : 'Google sign-in',
               ]
                 .filter(Boolean)
@@ -254,10 +257,10 @@ export function SetupPanel({
           <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
               <GoogleIcon />
-              <span className="font-black text-[15px]">
-                Google sign-in <span className="text-red-700" aria-hidden="true">*</span>
-                <span className="sr-only">(required)</span>
-              </span>
+              {/* No required marker. The Canvas token genuinely is required; this is not,
+                  and the asterisk contradicted both the header wording and the "continue
+                  without" choice offered below. */}
+              <span className="font-black text-[15px]">Google sign-in</span>
             </div>
 
             <p className="text-[13px] text-gray-600 mb-2.5">
