@@ -12,35 +12,11 @@
  * feel even. Levels are clamped so the UI cannot be shrunk into illegibility or blown up
  * until the layout breaks.
  */
-import { app, BrowserWindow } from 'electron'
-import { join } from 'path'
-import { readFileSync, writeFileSync } from 'fs'
-
-const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json')
+import { BrowserWindow } from 'electron'
+import { readSettings, updateSettings } from './settings'
 
 export const MIN_ZOOM_LEVEL = -2
 export const MAX_ZOOM_LEVEL = 5
-
-/** Plain preferences — no credentials here, so this is ordinary JSON, not safeStorage. */
-interface Settings {
-  zoomLevel?: number
-}
-
-function readSettings(): Settings {
-  try {
-    return JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) as Settings
-  } catch {
-    return {}
-  }
-}
-
-function writeSettings(settings: Settings): void {
-  try {
-    writeFileSync(SETTINGS_PATH, JSON.stringify(settings), 'utf-8')
-  } catch {
-    // A preference that cannot be saved is not worth failing a launch over.
-  }
-}
 
 function clamp(level: number): number {
   return Math.min(MAX_ZOOM_LEVEL, Math.max(MIN_ZOOM_LEVEL, level))
@@ -55,7 +31,7 @@ export function getSavedZoomLevel(): number {
 export function applyZoomLevel(win: BrowserWindow, level: number): number {
   const next = clamp(level)
   win.webContents.setZoomLevel(next)
-  writeSettings({ ...readSettings(), zoomLevel: next })
+  updateSettings({ zoomLevel: next })
   win.webContents.send('app:zoomChanged', next)
   return next
 }

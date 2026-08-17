@@ -459,6 +459,13 @@ export async function handleCanvasExport(
       selectedIds,
       cancel,
       makeProgressReporter(event, args.jobId),
+      // Written for Google Docs, because that is where a locally saved export goes: the
+      // people using this route cannot sign in, so they upload the file and open it with
+      // Docs by hand. Leaving the CSS rules in makes the importer draw a grey line above
+      // and below every due header — worse than no line at all. Neither route can give
+      // them the blue rules; only the Docs API can, and that needs the sign-in they lack.
+      // The UI says so before the file is written, and the Help Center repeats it.
+      false,
     )
     writeFileSync(consumeSavePath(args.savePath), html, 'utf-8')
     return {

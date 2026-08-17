@@ -20,6 +20,7 @@ import { applyDueHeaderBorders } from './ipc/googleDocs'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, checkNow, RELEASES_PAGE } from './ipc/updateCheck'
 import { rememberSavePath } from './ipc/savePaths'
+import { readSettings, updateSettings } from './ipc/settings'
 import {
   applyZoomLevel,
   getSavedZoomLevel,
@@ -187,6 +188,13 @@ ipcMain.handle('app:checkUpdateNow', () => checkNow())
 // Takes no URL on purpose: the destination is a constant here, so the renderer cannot use
 // this as a general "open any link in the browser" capability.
 ipcMain.handle('app:openReleases', () => shell.openExternal(RELEASES_PAGE))
+
+// Whether the local-save notice has been dismissed for good. A display preference, so it
+// lives in settings.json rather than the keychain.
+ipcMain.handle('app:getHideLocalSaveNotice', () => readSettings().hideLocalSaveNotice === true)
+ipcMain.handle('app:setHideLocalSaveNotice', (_e, hide: boolean) => {
+  updateSettings({ hideLocalSaveNotice: hide === true })
+})
 
 // ─── Interface zoom ───────────────────────────────────────────────────────────
 

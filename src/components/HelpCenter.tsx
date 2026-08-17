@@ -316,6 +316,88 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
             </div>
           </Section>
 
+          <Section id="without-google" title="How to use this app without Google sign-in">
+            <p className="text-sm text-gray-600 mb-3">
+              Google sign-in only decides whether an export lands in your Drive automatically.
+              Everything the app extracts works without it — you save the file yourself and
+              upload it. It takes about a minute more per export.
+            </p>
+
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <h4 className="text-sm font-black text-gray-900">1. Save the export to your computer</h4>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>Paste your course URL and pick your export as usual.</li>
+                <li>
+                  Instead of the blue <span className="font-bold">Export all as a Google Doc</span>{' '}
+                  button, click <span className="font-bold">or save a local copy (.html)</span> just
+                  beneath it.
+                </li>
+                <li>Choose where to save it. Your Downloads folder is fine.</li>
+                <li>
+                  Wait for it to finish — the progress bar and <span className="font-bold">Stop</span>{' '}
+                  button work exactly the same way.
+                </li>
+              </ol>
+            </div>
+
+            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <h4 className="text-sm font-black text-gray-900">2. Upload the file to Google Drive</h4>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>
+                  Go to{' '}
+                  <a
+                    href="https://drive.google.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    drive.google.com
+                  </a>{' '}
+                  and open the folder you want the file in.
+                </li>
+                <li>
+                  Click <span className="font-bold">New → File upload</span>, or drag the .html file
+                  straight into the browser window.
+                </li>
+                <li>
+                  Wait for the upload to finish. The file shows an HTML icon rather than a Google Docs
+                  one — that is expected.
+                </li>
+              </ol>
+            </div>
+
+            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <h4 className="text-sm font-black text-gray-900">3. Open it as a Google Doc</h4>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>Right-click the uploaded .html file.</li>
+                <li>
+                  Choose <span className="font-bold">Open with → Google Docs</span>.
+                </li>
+                <li>
+                  Google converts it and opens a new document. Headings, colours, and the red tool
+                  labels all carry across.
+                </li>
+                <li>
+                  The Google Doc is a separate file from the .html. Once you are happy with it, you can
+                  delete the .html.
+                </li>
+              </ol>
+            </div>
+
+            <div className="mt-3 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl">
+              <h4 className="text-sm font-black text-gray-900 mb-1">
+                One difference: the blue due-date lines
+              </h4>
+              <p className="text-sm text-gray-700">
+                A document made this way will not have the blue lines above and below each{' '}
+                <span className="font-bold">Due by</span> heading. Those are drawn in Google Docs
+                itself after an export is uploaded, which the app can only do when it is signed in.
+                The headings are still blue and bold, and everything else — modules, activity titles,
+                the red tool labels, the heading tags — is identical either way.
+              </p>
+            </div>
+          </Section>
+
           <Section id="quiz-extraction" title="Quiz extraction">
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-3">
               <div>

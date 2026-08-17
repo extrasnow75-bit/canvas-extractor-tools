@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('api', {
       | { state: 'check-failed'; current: string }
     > => ipcRenderer.invoke('app:checkUpdateNow'),
     openReleases: (): Promise<void> => ipcRenderer.invoke('app:openReleases'),
+    /** "Don't show this again" on the notice shown before a local .html save. */
+    getHideLocalSaveNotice: (): Promise<boolean> =>
+      ipcRenderer.invoke('app:getHideLocalSaveNotice'),
+    setHideLocalSaveNotice: (hide: boolean): Promise<void> =>
+      ipcRenderer.invoke('app:setHideLocalSaveNotice', hide),
     /** Current interface zoom, plus the range the controls should stop at. */
     getZoom: (): Promise<{ level: number; min: number; max: number }> =>
       ipcRenderer.invoke('app:getZoom'),

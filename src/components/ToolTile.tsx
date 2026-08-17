@@ -227,6 +227,41 @@ export function ToolTile({
     await window.api.canvas.cancelExport(jobId)
   }
 
+  /**
+   * Shown once before the first local save of a content export.
+   *
+   * The file is written for Google Docs, since that is where it is going — so the blue
+   * due-header rules are absent, and someone comparing this against a Drive export needs to
+   * know that before they spend minutes on it rather than after. Only the content export
+   * has due headers, so quizzes and rubrics save straight away.
+   */
+  const [localNoticeOpen, setLocalNoticeOpen] = useState(false)
+  const [dontAskAgain, setDontAskAgain] = useState(false)
+  const pendingLocalSave = useRef<string[] | undefined>(undefined)
+  const noticeApplies = tool === 'content'
+
+  // The notice appears below the button that was just pressed, so focus has to be moved into
+  // it — otherwise it is silent to a screen reader and easy to miss with the keyboard.
+  const noticeConfirmRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (localNoticeOpen) noticeConfirmRef.current?.focus()
+  }, [localNoticeOpen])
+
+  async function requestLocalSave(selectedIds?: string[]) {
+    if (!noticeApplies || (await window.api.app.getHideLocalSaveNotice().catch(() => false))) {
+      return runLocalSave(selectedIds)
+    }
+    pendingLocalSave.current = selectedIds
+    setDontAskAgain(false)
+    setLocalNoticeOpen(true)
+  }
+
+  async function confirmLocalSave() {
+    setLocalNoticeOpen(false)
+    if (dontAskAgain) await window.api.app.setHideLocalSaveNotice(true).catch(() => undefined)
+    await runLocalSave(pendingLocalSave.current)
+  }
+
   async function runLocalSave(selectedIds?: string[]) {
     const savePath = await window.api.dialog.saveFile({
       defaultName: LOCAL_FILE_NAMES[tool],
@@ -419,7 +454,7 @@ export function ToolTile({
 
           <button
             onClick={() => {
-              if (!nothingSelected) runLocalSave(selectionArgs)
+              if (!nothingSelected) void requestLocalSave(selectionArgs)
             }}
             aria-disabled={nothingSelected}
             aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
@@ -429,6 +464,65 @@ export function ToolTile({
           >
             or save a local copy (.html)
           </button>
+
+          {localNoticeOpen && (
+            <div
+              role="group"
+              aria-labelledby={`${tool}-local-notice-heading`}
+              className="mt-2.5 p-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle
+                  className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-700"
+                  aria-hidden="true"
+                />
+                <div className="flex-1 min-w-0">
+                  <p
+                    id={`${tool}-local-notice-heading`}
+                    className="font-black text-[13px] text-gray-900"
+                  >
+                    Saving a local copy? One difference to expect
+                  </p>
+                  <p className="text-[12.5px] text-gray-700 mt-1">
+                    A local file will not have the blue lines above and below each{' '}
+                    <span className="font-bold">Due by</span> heading. Everything else — the
+                    headings, the red tool labels, the colours — comes across as normal.
+                  </p>
+                  <p className="text-[12.5px] text-gray-700 mt-1.5">
+                    To use it: upload the .html file to Google Drive, then right-click it and
+                    choose <span className="font-bold">Open with → Google Docs</span>. There
+                    are fuller instructions in the Help Center.
+                  </p>
+
+                  <label className="flex items-center gap-2 mt-2.5 text-[12.5px] text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={dontAskAgain}
+                      onChange={(e) => setDontAskAgain(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-[#0033a0]"
+                    />
+                    Don&apos;t show this again
+                  </label>
+
+                  <div className="flex gap-2 mt-2.5">
+                    <button
+                      ref={noticeConfirmRef}
+                      onClick={() => void confirmLocalSave()}
+                      className="flex-1 py-2 rounded-lg bg-[#0033a0] hover:bg-[#002d8f] text-white font-black text-xs transition"
+                    >
+                      Save the file
+                    </button>
+                    <button
+                      onClick={() => setLocalNoticeOpen(false)}
+                      className="flex-shrink-0 px-4 py-2 rounded-lg border border-gray-400 text-gray-800 font-bold text-xs hover:bg-white transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

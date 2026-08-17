@@ -57,6 +57,8 @@ declare global {
         /** User-initiated check. Always hits the network, and distinguishes a failed check. */
         checkUpdateNow(): Promise<ManualCheckResult>
         openReleases(): Promise<void>
+        getHideLocalSaveNotice(): Promise<boolean>
+        setHideLocalSaveNotice(hide: boolean): Promise<void>
         getZoom(): Promise<{ level: number; min: number; max: number }>
         stepZoom(delta: number): Promise<number>
         resetZoom(): Promise<number>
