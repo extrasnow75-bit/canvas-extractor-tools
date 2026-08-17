@@ -9,6 +9,7 @@ import {
   Square,
 } from 'lucide-react'
 import type { PickerItem, Tool } from '../types'
+import { ErrorText, cleanErrorMessage } from './ErrorText'
 
 interface Props {
   tool: Tool
@@ -280,7 +281,8 @@ export function ToolTile({
         : status === 'success'
           ? `${label} done. ${message}`
           : status === 'error'
-            ? `${label} failed. ${message}`
+            ? // Announced as plain text, so it needs the same tidying the visible copy gets.
+              `${label} failed. ${cleanErrorMessage(message)}`
             : ''
 
   // An export runs for minutes; when it ends, the control that was focused (Stop) unmounts
@@ -528,7 +530,9 @@ export function ToolTile({
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" aria-hidden="true" />
           <div>
             <p className="font-black">{label} failed</p>
-            <p className="text-gray-700 mt-0.5">{message}</p>
+            <p className="text-gray-700 mt-0.5">
+              <ErrorText message={message} />
+            </p>
           </div>
         </div>
       )}

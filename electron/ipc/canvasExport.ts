@@ -29,6 +29,7 @@ import {
   dueHeader,
   subHeader,
   safeLinkHref,
+  collectImageFileIds,
 } from './blueprintFormat'
 
 interface ExportContentArgs {
@@ -90,6 +91,90 @@ interface CanvasQuiz {
   description?: string
 }
 
+interface CanvasFile {
+  display_name?: string
+  filename?: string
+}
+
+/**
+ * Canvas file id → display name, for the whole export.
+ *
+ * Needed because Canvas embeds images with no name in the markup at all: the `src` is
+ * `/files/6932907/preview` and the `alt` is empty, so the only way to tell an icon from a
+ * photograph is to ask Canvas what the file is called. The Blueprint icons repeat on nearly
+ * every page, so caching turns that from one request per image into one per distinct file —
+ * roughly a dozen for a whole course.
+ *
+ * Promises rather than names, so that concurrent items asking for the same id share one
+ * request instead of racing to make their own.
+ */
+type FileNameCache = Map<string, Promise<string | null>>
+
+function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promise<string | null> {
+  let pending = cache.get(id)
+  if (!pending) {
+    pending = canvasGetOne<CanvasFile>(`/files/${id}`, ref)
+      .then((file) => file.display_name ?? file.filename ?? null)
+      .catch((err) => {
+        // Stop must not be absorbed here. Cancellation reaches this as a thrown error like
+        // any other, and swallowing it left the export running until the next checkpoint.
+        if (isCancellation(err)) throw err
+        // Anything else — deleted file, locked folder, a hotlink from another course, a
+        // rate-limit that outlasted its retries — leaves the image as an image rather than
+        // failing a multi-minute export over an icon. The entry is dropped rather than
+        // cached, so a transient failure does not follow the file for the whole run.
+        cache.delete(id)
+        return null
+      })
+    cache.set(id, pending)
+  }
+  return pending
+}
+
+/**
+ * Seed the cache with every file in the course, in one paginated call.
+ *
+ * Without this each embedded image costs its own `GET /files/:id`, including the photographs
+ * and diagrams whose names will never match an icon — on an image-heavy course that nearly
+ * doubled the export's Canvas traffic. Courses where the token cannot list files fall back
+ * to the per-id path, which is why a failure here is swallowed rather than raised.
+ */
+async function seedFileNames(ref: CourseRef, cache: FileNameCache): Promise<void> {
+  try {
+    const files = await canvasGet<CanvasFile & { id?: number }>(
+      `/courses/${ref.courseId}/files`,
+      ref,
+    )
+    for (const file of files) {
+      const name = file.display_name ?? file.filename
+      if (file.id != null && name) cache.set(String(file.id), Promise.resolve(name))
+    }
+  } catch (err) {
+    if (isCancellation(err)) throw err
+    // No file list — every id falls through to its own lookup, as before.
+  }
+}
+
+/** Format a Canvas body, having first looked up the names of the files it embeds. */
+async function formatBody(
+  html: string | null | undefined,
+  ref: CourseRef,
+  cache: FileNameCache,
+): Promise<string> {
+  if (!html) return formatCanvasBody(html, ref.baseUrl)
+
+  // Bounded like every other Canvas call. The id count comes from author-controlled HTML,
+  // so an unbounded fan-out here would put an arbitrary number of authenticated requests in
+  // flight at once and drain the account's rate-limit bucket from inside a single slot.
+  const ids = collectImageFileIds(html)
+  const names = new Map<string, string>()
+  await mapWithConcurrency(ids.length, CANVAS_CONCURRENCY, async (i) => {
+    const name = await fetchFileName(ids[i], ref, cache)
+    if (name) names.set(ids[i], name)
+  })
+  return formatCanvasBody(html, ref.baseUrl, names)
+}
+
 /** Stable key for a module item, used by the "choose specific items" picker. */
 function itemKey(item: CanvasModuleItem): string {
   return `mi-${item.id}`
@@ -115,6 +200,7 @@ async function renderModuleItem(
   item: CanvasModuleItem,
   ref: CourseRef,
   cssBorders: boolean,
+  files: FileNameCache,
 ): Promise<RenderedItem> {
   switch (item.type) {
     case 'Page': {
@@ -122,7 +208,13 @@ async function renderModuleItem(
         `/courses/${ref.courseId}/pages/${item.page_url}`,
         ref,
       )
-      return { parts: [itemTitle(page.title), toolLabel('Page'), formatCanvasBody(page.body)] }
+      return {
+        parts: [
+          itemTitle(page.title),
+          toolLabel('Page'),
+          await formatBody(page.body, ref, files),
+        ],
+      }
     }
     case 'Assignment': {
       const asgn = await canvasGetOne<CanvasAssignment>(
@@ -136,7 +228,7 @@ async function renderModuleItem(
           // on the Modules page, and the tool label is the cue QA reads, so match Canvas
           // rather than the underlying object type.
           toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment'),
-          formatCanvasBody(asgn.description),
+          await formatBody(asgn.description, ref, files),
         ],
       }
     }
@@ -146,7 +238,11 @@ async function renderModuleItem(
         ref,
       )
       return {
-        parts: [itemTitle(disc.title), toolLabel('Discussion'), formatCanvasBody(disc.message)],
+        parts: [
+          itemTitle(disc.title),
+          toolLabel('Discussion'),
+          await formatBody(disc.message, ref, files),
+        ],
       }
     }
     case 'Quiz': {
@@ -158,7 +254,11 @@ async function renderModuleItem(
         ref,
       )
       return {
-        parts: [itemTitle(quiz.title), toolLabel('Quiz'), formatCanvasBody(quiz.description)],
+        parts: [
+          itemTitle(quiz.title),
+          toolLabel('Quiz'),
+          await formatBody(quiz.description, ref, files),
+        ],
       }
     }
     case 'File':
@@ -245,20 +345,23 @@ export async function buildContentHtml(
   // Positions of the due-date headers, so the bodies on either side can have a colliding
   // template divider trimmed once the document is assembled.
   const dueHeaderIndices: number[] = []
+  // One cache for the whole export, so an icon used on twenty pages is fetched once.
+  const files: FileNameCache = new Map()
+  await seedFileNames(ref, files)
   parts.push(`<h1 style="font-family:${FONT};">${escapeHtml(course.name)}</h1>`)
 
   // Front page (home)
   parts.push(`<h2 style="font-family:${FONT};">Home Page</h2>`)
   try {
     const fp = await canvasGetOne<CanvasPage>(`/courses/${ref.courseId}/front_page`, ref)
-    parts.push(formatCanvasBody(fp.body))
+    parts.push(await formatBody(fp.body, ref, files))
   } catch {
     parts.push('<p>No front page found.</p>')
   }
 
   // Syllabus
   parts.push(`<h2 style="font-family:${FONT};">Syllabus</h2>`)
-  parts.push(formatCanvasBody(course.syllabus_body ?? '<p>No syllabus found.</p>'))
+  parts.push(await formatBody(course.syllabus_body ?? '<p>No syllabus found.</p>', ref, files))
 
   // Modules, in module-page order
   const modules = await canvasGet<CanvasModule>(`/courses/${ref.courseId}/modules`, ref)
@@ -293,7 +396,7 @@ export async function buildContentHtml(
     // Checked per item rather than per batch, so Stop takes effect within one request rather
     // than after the whole in-flight group drains.
     throwIfCancelled(cancel)
-    const result = await renderModuleItem(flatItems[i], ref, cssBorders)
+    const result = await renderModuleItem(flatItems[i], ref, cssBorders, files)
     done++
     progress?.(done, total)
     return result

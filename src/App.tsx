@@ -5,6 +5,7 @@ import { ToolPanel } from './components/ToolPanel'
 import { HelpCenter } from './components/HelpCenter'
 import { UpdateBanner } from './components/UpdateBanner'
 import { ZoomControl } from './components/ZoomControl'
+import { cleanErrorMessage } from './components/ErrorText'
 import type { GoogleStatus } from './types'
 
 export default function App() {
@@ -32,11 +33,20 @@ export default function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false)
 
   useEffect(() => {
-    window.api.credentials.load().then((raw) => {
-      setCanvasToken(raw.canvasToken ?? null)
-      setLoading(false)
-    })
-    window.api.google.status().then(setGoogleStatus)
+    // Both resolved before the first render of SetupPanel: it decides whether to open
+    // itself from the pair, and learning about the Google sign-in a beat later would make
+    // an already-configured user watch the panel open and then shut again. The status call
+    // is defended so a failure there cannot strand the app on "Loading…".
+    Promise.all([
+      window.api.credentials.load().catch(() => ({}) as { canvasToken?: string }),
+      window.api.google.status().catch(() => ({ signedIn: false }) as GoogleStatus),
+    ])
+      .then(([raw, status]) => {
+        setCanvasToken(raw.canvasToken ?? null)
+        setGoogleStatus(status)
+      })
+      // Whatever happens, the loading screen has to end — it has no way out of itself.
+      .finally(() => setLoading(false))
 
     // Both resolve quietly when offline; a failed update check must never block startup or
     // surface an error, so nothing here rejects into the UI.
@@ -48,7 +58,9 @@ export default function App() {
     // mid-export, stop showing the user as signed in.
     return window.api.google.onSignedOut(() => {
       setGoogleStatus({ signedIn: false })
-      setGoogleError('Your Google sign-in expired. Please sign in again.')
+      // No "please sign in again" here — the banner below already says where to do that,
+      // and carrying it in both halves made the sentence say it twice.
+      setGoogleError('Your Google sign-in has expired.')
     })
   }, [])
 
@@ -69,7 +81,8 @@ export default function App() {
       const status = await window.api.google.signIn({ useAnotherAccount })
       setGoogleStatus(status)
     } catch (err) {
-      setGoogleError(err instanceof Error ? err.message : 'Google sign-in failed.')
+      // Same Electron IPC wrapper as the export errors — strip it before it is shown.
+      setGoogleError(err instanceof Error ? cleanErrorMessage(err.message) : 'Google sign-in failed.')
     } finally {
       setGoogleBusy(false)
     }
@@ -136,9 +149,9 @@ export default function App() {
         )}
 
         {/* A dropped Google sign-in is reported here rather than inside SetupPanel, which
-            collapses itself as soon as a working Canvas token exists — the normal state. The
-            message rendered there could never be seen: not by a screen reader, and not by
-            anyone else either. */}
+            collapses itself once setup is complete — the normal state. The message rendered
+            there could never be seen: not by a screen reader, and not by anyone else
+            either. */}
         <div role="alert" className={googleError ? 'px-6 pt-3' : 'sr-only'}>
           {googleError && (
             <div className="max-w-2xl mx-auto flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">

@@ -63,7 +63,9 @@ export function SetupPanel({
   onOpenHelp,
 }: Props) {
   const tokenPresent = !!canvasToken
-  const [isOpen, setIsOpen] = useState(!tokenPresent)
+  // Open on launch unless setup is already done. App resolves the Google status before it
+  // renders this, so the initial value is the real one and the panel does not flick shut.
+  const [isOpen, setIsOpen] = useState(!(tokenPresent && googleStatus.signedIn))
   const [tokenInput, setTokenInput] = useState('')
   const [showToken, setShowToken] = useState(false)
 
@@ -80,9 +82,14 @@ export function SetupPanel({
     }
     let cancelled = false
     setTokenState('checking')
-    window.api.canvas.verifyToken({ token: canvasToken }).then((state) => {
-      if (!cancelled) setTokenState(state)
-    })
+    window.api.canvas
+      .verifyToken({ token: canvasToken })
+      // A rejection would leave this on 'checking' forever, which now also means the panel
+      // never resolves its open/closed state and the header reads "Checking…" for good.
+      .catch(() => 'unknown' as const)
+      .then((state) => {
+        if (!cancelled) setTokenState(state)
+      })
     return () => {
       cancelled = true
     }
@@ -90,12 +97,41 @@ export function SetupPanel({
 
   const tokenExpired = tokenPresent && tokenState === 'expired'
 
-  // Auto-collapse once the required item is set — but not when the token turns out to be
-  // dead, since the fix for that lives inside this panel.
+  /**
+   * Setup is complete only when Canvas has confirmed the token *and* Google is signed in.
+   *
+   * "Valid" is deliberately stricter than "saved": `tokenState` is 'valid' only when Canvas
+   * answered for it. A token that is merely present might be revoked, and a panel that
+   * collapses on a dead credential hides the one place it can be replaced.
+   */
+  const tokenValid = tokenPresent && tokenState === 'valid'
+  const setupComplete = tokenValid && googleStatus.signedIn
+
+  /**
+   * Nothing is decided while the token check is still in flight. Acting on 'checking' would
+   * open the panel for the moment the request takes and then shut it again, which reads as
+   * a glitch on every launch for a user whose setup is fine.
+   */
+  const tokenChecked = !tokenPresent || tokenState !== 'checking'
+
+  const headerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Collapse when both items are done; open whenever they are not. Only fires when
+  // completeness actually changes, so the header button still works as a manual toggle.
+  //
+  // Completing Google sign-in is what closes this, and the button that was pressed to start
+  // it lives inside the part being unmounted — so focus has to be moved somewhere sensible
+  // first. Chromium has usually already dropped it to <body> by then, because the button is
+  // disabled while the sign-in is in flight; both cases are covered.
   useEffect(() => {
-    if (tokenPresent && !tokenExpired) setIsOpen(false)
-    if (tokenExpired) setIsOpen(true)
-  }, [tokenPresent, tokenExpired])
+    if (!tokenChecked) return
+    const focusWasInside =
+      document.activeElement === document.body ||
+      !!panelRef.current?.contains(document.activeElement)
+    setIsOpen(!setupComplete)
+    if (setupComplete && focusWasInside) headerRef.current?.focus()
+  }, [tokenChecked, setupComplete])
 
   // Same reasoning for a dropped Google sign-in: the "Sign in with Google" button is in
   // here, so collapsing the panel would hide the only way to act on the error. App renders
@@ -115,11 +151,16 @@ export function SetupPanel({
     }
   }, [returnFocusToInput, tokenPresent])
 
+  // Counts the same two things the collapse rule does, so the header can never read
+  // "Complete" over a panel that has stayed open.
+  const remaining = (tokenValid ? 0 : 1) + (googleStatus.signedIn ? 0 : 1)
   const statusText = tokenExpired
     ? 'Action needed'
-    : tokenPresent
-      ? 'Complete'
-      : '1 required item'
+    : !tokenChecked
+      ? 'Checking…'
+      : remaining === 0
+        ? 'Complete'
+        : `${remaining} required item${remaining === 1 ? '' : 's'}`
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm">
@@ -129,7 +170,25 @@ export function SetupPanel({
         {tokenExpired ? 'Canvas token expired. Initial setup needs attention.' : ''}
       </div>
 
+      {/* The header's status text sits inside the button, so it is only ever read when that
+          button has focus — which it does not after "Save token" unmounts itself. This says
+          which item is outstanding rather than how many, since the count alone leaves a
+          screen reader user to work out which of the two it means. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {!tokenChecked
+          ? ''
+          : setupComplete
+            ? 'Initial setup complete.'
+            : `Initial setup still needs ${[
+                tokenValid ? null : 'a valid Canvas token',
+                googleStatus.signedIn ? null : 'Google sign-in',
+              ]
+                .filter(Boolean)
+                .join(' and ')}.`}
+      </div>
+
       <button
+        ref={headerRef}
         onClick={() => setIsOpen((v) => !v)}
         aria-expanded={isOpen}
         aria-controls="initial-setup-panel"
@@ -140,17 +199,30 @@ export function SetupPanel({
         <div className="ml-auto flex items-center gap-3">
           {/* The dots carry state by colour alone, so each pairs with visually hidden text. */}
           <div className="flex items-center gap-1.5">
+            {/* Green means confirmed by Canvas, matching the collapse rule — a token that is
+                only saved stays neutral rather than claiming to be working. */}
             <span
               className={`w-2 h-2 rounded-full ${
-                tokenExpired ? 'bg-amber-300' : tokenPresent ? 'bg-green-400' : 'bg-white/30'
+                tokenExpired ? 'bg-amber-300' : tokenValid ? 'bg-green-400' : 'bg-white/70'
               }`}
               aria-hidden="true"
             />
             <span className="sr-only">
-              Canvas token {tokenExpired ? 'expired' : tokenPresent ? 'saved' : 'not set'}.
+              {/* "saved" alone contradicted the header, which counts an unverified token as
+                  still outstanding — Canvas being unreachable is not the same as a token
+                  that works. */}
+              Canvas token{' '}
+              {tokenExpired
+                ? 'expired'
+                : tokenValid
+                  ? 'valid'
+                  : tokenPresent
+                    ? 'saved but not verified'
+                    : 'not set'}
+              .
             </span>
             <span
-              className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/30'}`}
+              className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/70'}`}
               aria-hidden="true"
             />
             {/* Matches what sighted users see: the "Optional" badge was removed from the card,
@@ -168,7 +240,7 @@ export function SetupPanel({
       </button>
 
       {isOpen && (
-        <div id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
+        <div ref={panelRef} id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
           {/* Canvas token */}
           <div className={`rounded-2xl border-2 p-4 ${tokenExpired ? 'border-amber-300 shadow-[0_0_0_3px_rgba(255,251,235,1)]' : tokenPresent ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
@@ -303,7 +375,12 @@ export function SetupPanel({
           <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
               <GoogleIcon />
-              <span className="font-black text-[15px]">Google sign-in</span>
+              {/* Marked required to match the header count, which now waits on this card
+                  before it reports setup complete. */}
+              <span className="font-black text-[15px]">
+                Google sign-in <span className="text-red-700" aria-hidden="true">*</span>
+                <span className="sr-only">(required)</span>
+              </span>
             </div>
 
             <p className="text-[13px] text-gray-600 mb-2.5">

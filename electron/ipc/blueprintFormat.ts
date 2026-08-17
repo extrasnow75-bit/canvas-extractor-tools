@@ -173,17 +173,268 @@ export function subHeader(title: string): string {
 }
 
 /**
+ * Canvas' Rich Content Editor has a "Decorative Image" checkbox. Ticking it blanks the alt
+ * text and stamps the tag with `data-decorative`, `role="presentation"` and/or
+ * `aria-hidden` — and course authors tick it for virtually every icon, since that is what
+ * the box is for. Consumers of the exported HTML read those markers as permission to drop
+ * the image (Google Docs' importer among them), so the exported document loses exactly the
+ * icons a course reviewer is looking at.
+ *
+ * A course-review document has to show every image regardless of how it was tagged, so the
+ * decorative markers are stripped outright and the tag is given real alt text.
+ *
+ * Relative `src` values are resolved against the Canvas host at the same time. The API
+ * returns some file URLs host-relative, and neither a document opened from file:// nor
+ * Google's server-side importer has a base to resolve those against — a second, quieter
+ * way for an image to vanish from the export.
+ *
+ * Quote-aware on purpose. `<img\b[^>]*>` stops at the first `>` even when that `>` sits
+ * inside a quoted attribute value, where a browser treats it as ordinary text — so a tag
+ * like `<img alt="><script>…">` would be matched only as far as the `>` inside `alt`, and
+ * replacing that fragment with an icon marker would promote the rest of the attribute to
+ * live markup in a document the reviewer opens from file://. Matching whole tags is what
+ * prevents that. The three alternatives begin with distinct characters, so the engine has
+ * nothing to backtrack through; a tag with an unbalanced quote simply does not match and
+ * is passed through untouched, which is the safe outcome.
+ */
+const IMG_TAG_RE = /<img\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi
+
+/**
+ * Attribute patterns, all non-global: `.test()` on a /g regex advances lastIndex between
+ * calls, and an <img> carries each of these at most once anyway.
+ *
+ * Two rules keep the strippers from corrupting a tag. Every pattern ends at a real
+ * attribute boundary, so `role=presentationfoo=bar` is not read as `role=presentation`
+ * with `foo=bar` fused onto the tag name. And no unquoted branch may begin with a quote
+ * character, so a stripper can never consume a lone `"` and shift every attribute boundary
+ * after it — which turned inert text into a live `onerror=` handler.
+ */
+const ATTR_END = '(?=[\\s>/])'
+const UNQUOTED = '[^\\s>"\']*'
+const DATA_DECORATIVE_RE = new RegExp(
+  `\\sdata-decorative(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|${UNQUOTED}))?${ATTR_END}`,
+  'i',
+)
+const ROLE_PRESENTATION_RE = new RegExp(
+  `\\srole\\s*=\\s*(?:"\\s*(?:presentation|none)\\s*"|'\\s*(?:presentation|none)\\s*'` +
+    `|presentation|none)${ATTR_END}`,
+  'i',
+)
+// Value optional so `<img aria-hidden>` is caught, but `aria-hidden="false"` is not: the
+// optional group fails to match "false", and the boundary check then fails on the `=`.
+const ARIA_HIDDEN_RE = new RegExp(
+  `\\saria-hidden(?:\\s*=\\s*(?:"\\s*true\\s*"|'\\s*true\\s*'|true))?${ATTR_END}`,
+  'i',
+)
+const ALT_RE = new RegExp(`\\salt\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(${UNQUOTED}))`, 'i')
+const SRC_RE = /\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i
+const SRC_ANY_RE = new RegExp(`\\ssrc\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(${UNQUOTED}))`, 'i')
+const TITLE_RE = /\stitle\s*=\s*(?:"([^"]*)"|'([^']*)')/i
+
+/**
+ * The Blueprint icon set. In the export these are replaced by a red text marker rather than
+ * the image itself: a reviewer needs to know *which* icon the author used, and a picture of
+ * it says less than its name — especially once the image has been through Google Docs' HTML
+ * importer, which is where they have been going missing.
+ */
+const ICON_NAMES = [
+  'Attention',
+  'Audio',
+  'Computer',
+  'Document',
+  'Discussion',
+  'List',
+  'Looking Ahead',
+  'Policies',
+  'Reading',
+  'Schedule',
+  'Syllabus',
+  'Task',
+  'Tip',
+  'Upload',
+  'Video',
+  'Warning',
+]
+
+const ICON_LABELS = new Map(
+  ICON_NAMES.map((name) => [name.toLowerCase().replace(/[^a-z]/g, ''), `[${name} Icon]`]),
+)
+
+function attrValue(tag: string, re: RegExp): string {
+  const m = re.exec(tag)
+  return m ? (m[1] ?? m[2] ?? m[3] ?? '') : ''
+}
+
+/**
+ * Reduce a file name to a comparison key: drop the folder, the extension, and the "-1"
+ * Canvas appends when the same file is uploaded twice. `attention-1.svg` and `Attention.SVG`
+ * both come out as `attention`.
+ */
+function fileNameKey(name: string): string {
+  const base = name.split(/[/\\]/).pop() ?? name
+  return base
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/-\d+$/, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+}
+
+/**
+ * Which Blueprint icon a file name refers to, or null for an ordinary image.
+ *
+ * Matched whole, not by substring. In the real courses these are named exactly for the icon
+ * — `attention.svg`, `video.svg`, `discussion.svg` — so an exact key is enough, and it is
+ * what keeps a photograph called `video-lecture.jpg` from being mistaken for the Video icon
+ * and thrown away. Files outside the set (`AI Allowed.svg`) stay images.
+ */
+export function matchIconLabelFromFileName(fileName: string): string | null {
+  return ICON_LABELS.get(fileNameKey(fileName)) ?? null
+}
+
+/**
+ * The Canvas file id an <img> points at, or null if it is not a Canvas file.
+ *
+ * Canvas embeds these with no name at all — `src` is `/files/6932907/preview` and `alt` is
+ * empty — so the id is the only handle on the tag, and the name has to be fetched with it.
+ * `data-api-endpoint` is preferred because Canvas puts the canonical URL there.
+ */
+const API_ENDPOINT_FILE_RE = /\sdata-api-endpoint\s*=\s*(?:"|')[^"']*\/files\/(\d+)/i
+const SRC_FILE_RE = /\ssrc\s*=\s*(?:"|')[^"']*\/files\/(\d+)/i
+
+function canvasFileId(tag: string): string | null {
+  return (API_ENDPOINT_FILE_RE.exec(tag) ?? SRC_FILE_RE.exec(tag))?.[1] ?? null
+}
+
+/** Every Canvas file id referenced by an <img> in this body, de-duplicated. */
+export function collectImageFileIds(html: string): string[] {
+  if (html.length > MAX_SCANNED_BODY_BYTES) return []
+  const ids = new Set<string>()
+  for (const tag of html.match(IMG_TAG_RE) ?? []) {
+    const id = canvasFileId(tag)
+    if (id) ids.add(id)
+  }
+  return Array.from(ids)
+}
+
+/**
+ * Which icon this <img> is, using the fetched file names where available and falling back
+ * to whatever the tag itself carries. The fallback matters for bodies whose images were
+ * embedded by URL rather than uploaded, where the name is in the `src` path.
+ */
+function matchIconLabel(tag: string, fileNames?: Map<string, string>): string | null {
+  const id = canvasFileId(tag)
+  const fetched = id ? fileNames?.get(id) : undefined
+  if (fetched) return matchIconLabelFromFileName(fetched)
+
+  for (const value of [attrValue(tag, SRC_ANY_RE), attrValue(tag, ALT_RE), attrValue(tag, TITLE_RE)]) {
+    if (!value) continue
+    const label = matchIconLabelFromFileName(value.split('?')[0])
+    if (label) return label
+  }
+  return null
+}
+
+/**
+ * Blueprint icon marker — Arial 11pt bold red, in square brackets.
+ *
+ * Trailing space because the image it replaces was doing that job: Canvas writes
+ * `<img …>Learning Objectives` with nothing between them, and without it the marker runs
+ * straight into the heading text.
+ */
+function iconMarker(label: string): string {
+  return (
+    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">` +
+    `${escapeHtml(label)}</span> `
+  )
+}
+
+/**
+ * Above this, the per-tag scanning below is skipped and the body is passed through as-is.
+ *
+ * `<img\b…>` restarts its scan at every `<img` and runs to the end of the string when no
+ * closing `>` follows, so a body consisting of unterminated `<img ` tags costs quadratic
+ * time — and this runs synchronously in the main process, where it would freeze the window
+ * with the Stop button on it. Real Canvas bodies are a few tens of KB; nothing legitimate
+ * comes close to this ceiling.
+ */
+const MAX_SCANNED_BODY_BYTES = 2_000_000
+
+function normalizeCanvasImages(
+  html: string,
+  baseUrl?: string,
+  fileNames?: Map<string, string>,
+): string {
+  if (html.length > MAX_SCANNED_BODY_BYTES) return html
+  return html.replace(IMG_TAG_RE, (tag) => {
+    // A recognised icon becomes text and the image is dropped; everything below applies to
+    // the ordinary images that remain.
+    const iconLabel = matchIconLabel(tag, fileNames)
+    if (iconLabel) return iconMarker(iconLabel)
+
+    const wasDecorative =
+      DATA_DECORATIVE_RE.test(tag) || ROLE_PRESENTATION_RE.test(tag) || ARIA_HIDDEN_RE.test(tag)
+
+    let out = tag
+      .replace(DATA_DECORATIVE_RE, '')
+      .replace(ROLE_PRESENTATION_RE, '')
+      .replace(ARIA_HIDDEN_RE, '')
+
+    // Empty alt is the other half of the decorative marking, and on its own it is enough
+    // for an importer to treat the image as skippable. Naming why it is empty is also
+    // useful to the reviewer, who is often assessing the course's accessibility.
+    const altMatch = ALT_RE.exec(out)
+    const altText = (altMatch?.[1] ?? altMatch?.[2] ?? altMatch?.[3] ?? '').trim()
+    if (!altText) {
+      const alt = ` alt="${
+        wasDecorative ? 'Image (marked decorative in Canvas)' : 'Image (no alt text in Canvas)'
+      }"`
+      out = altMatch ? out.replace(ALT_RE, alt) : out.replace(/^<img\b/i, `<img${alt}`)
+    }
+
+    if (baseUrl) {
+      out = out.replace(SRC_RE, (whole, doubleQuoted?: string, singleQuoted?: string) => {
+        const src = doubleQuoted ?? singleQuoted ?? ''
+        // A single leading slash only. `//host/path` and `/\host/path` both resolve to a
+        // foreign origin, and rewriting one would turn a src that fails harmlessly in a
+        // file:// document into a working request to whatever host the author named.
+        if (!/^\/[^/\\]/.test(src)) return whole
+        try {
+          // Prefixed rather than run through escapeHtml: the captured text came out of an
+          // HTML attribute and is already escaped, so escaping it again turned `&amp;` into
+          // `&amp;amp;` and corrupted every Canvas URL carrying more than one query
+          // parameter — which is all of the ones with a `verifier` token.
+          return ` src="${new URL(baseUrl).origin}${src}"`
+        } catch {
+          return whole
+        }
+      })
+    }
+
+    return out
+  })
+}
+
+/**
  * Convert heading tags inside a Canvas HTML body to Blueprint style: an 11pt Arial
  * paragraph whose text is bold black, followed by a bold red "(H1)…(H6)" level tag.
  * The rest of the body is Canvas-authored HTML and passes through unchanged — including
  * <hr> dividers, which authors insert deliberately via the Rich Content Editor. Only the
  * rules that collide with a due-date header are removed; see `stripEdgeRules`.
+ *
+ * `baseUrl` is the Canvas host, used to resolve host-relative image sources. Omitting it
+ * only means those images keep the src Canvas gave them. `fileNames` maps Canvas file ids
+ * to their display names, which is how icons are recognised; without it only images whose
+ * name is visible in the tag can be matched.
  */
-export function formatCanvasBody(html: string | null | undefined): string {
+export function formatCanvasBody(
+  html: string | null | undefined,
+  baseUrl?: string,
+  fileNames?: Map<string, string>,
+): string {
   if (!html) {
     return '<p style="color:purple;font-weight:bold;">This item had no text — it may be unparseable by the API or empty by design. Please check manually.</p>'
   }
-  let out = html
+  let out = normalizeCanvasImages(html, baseUrl, fileNames)
   for (let level = 1; level <= 6; level++) {
     out = out.replace(
       new RegExp(`<h${level}[^>]*>([\\s\\S]*?)</h${level}>`, 'gi'),

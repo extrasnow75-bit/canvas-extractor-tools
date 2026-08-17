@@ -58,9 +58,9 @@ verified. The local `.html` export needs no Google account at all.
 
    | Your computer | Download |
    | --- | --- |
-   | Windows | `Canvas-Extractor-Tools-WINDOWS-<version>.exe` |
-   | Mac with Apple silicon (M1/M2/M3/M4) | `Canvas-Extractor-Tools-MAC-Apple-Silicon-<version>.dmg` |
-   | Older Intel Mac | `Canvas-Extractor-Tools-MAC-Intel-<version>.dmg` |
+   | Windows | `1-Canvas-Extractor-Tools-WINDOWS-<version>.exe` |
+   | Mac with Apple silicon (M1/M2/M3/M4) | `2-Canvas-Extractor-Tools-MAC-Apple-Silicon-<version>.dmg` |
+   | Older Intel Mac | `3-Canvas-Extractor-Tools-MAC-Intel-<version>.dmg` |
 
    Not sure which Mac you have? Click the Apple menu → **About This Mac**. If the Chip line
    says "Apple", take the Apple Silicon file.
@@ -138,6 +138,15 @@ The app checks for a newer version when it starts, and shows a blue bar at the t
 exists. Click **Download** and it opens the releases page — then install it the same way you
 installed the first one, over the top of the old version. There is no automatic install; you
 are always the one who decides.
+
+Do not uninstall the old version first. The installer finds the existing copy and replaces
+it, keeping your Canvas token and Google sign-in. Two things to watch:
+
+- **Accept the install folder the installer offers.** It lets you change it, and choosing a
+  different folder installs a second copy alongside the first rather than replacing it.
+- **Close the app before installing**, or Windows reports files in use.
+
+On a Mac, drag the app onto Applications and choose **Replace**, not **Keep Both**.
 
 ---
 

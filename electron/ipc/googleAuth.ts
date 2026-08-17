@@ -93,6 +93,44 @@ export function getStatus(): GoogleStatus {
 }
 
 /**
+ * The page the browser lands on once Google redirects back to the loopback listener.
+ *
+ * It asks the tab to close itself. Browsers only honour `window.close()` for windows a
+ * script opened, and this tab was opened by the OS handing a URL to the browser — so on
+ * Chrome and Firefox the call is ignored and nothing happens. It costs nothing to try, it
+ * does work in some browsers and configurations, and the visible text falls back to the
+ * close-it-yourself wording a moment later so the page never sits there claiming it is
+ * about to disappear.
+ *
+ * `focusAppWindow()` below is the part that reliably fixes the underlying annoyance: the
+ * app pulls itself back to the front rather than waiting behind the browser.
+ */
+const COMPLETION_PAGE =
+  '<!doctype html><meta charset="utf-8"><title>Canvas Extractor Tools</title>' +
+  '<body style="font-family:sans-serif;text-align:center;padding-top:60px">' +
+  '<h2>Canvas Extractor Tools</h2>' +
+  '<p id="msg">Sign-in complete — returning you to the app…</p>' +
+  '<script>' +
+  'function bye(){try{window.close()}catch(e){}}' +
+  'bye();' +
+  'setTimeout(function(){bye();' +
+  "document.getElementById('msg').textContent=" +
+  "'Sign-in complete — you can close this tab and return to the app.'},1200);" +
+  '</script></body>'
+
+/**
+ * Bring the app forward once the browser hands sign-in back. Without it the user is left
+ * looking at a browser tab and has to hunt for the window they started in.
+ */
+function focusAppWindow(): void {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win || win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
+
+/**
  * Interactive sign-in via the system browser + PKCE + a short-lived loopback listener.
  * The listener runs only for the duration of the auth window, then shuts down.
  */
@@ -135,11 +173,9 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
         }
 
         res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.end(
-          '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;text-align:center;padding-top:60px">' +
-            '<h2>Canvas Extractor Tools</h2><p>Sign-in complete — you can close this tab and return to the app.</p></body>',
-        )
+        res.end(COMPLETION_PAGE)
         server.close()
+        focusAppWindow()
 
         if (error) return finish(() => reject(new Error(`Google sign-in was cancelled (${error}).`)))
         if (returnedState !== state) {
@@ -245,10 +281,22 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
   return { signedIn: true, email: tokens.email, name: tokens.name, picture: tokens.picture }
 }
 
+/**
+ * What the user is told when the export cannot reach their Drive.
+ *
+ * Both routes here — never signed in, and a sign-in that has since died — leave them in the
+ * same place and needing the same action, and the difference between the two is the app's
+ * problem rather than theirs. So one sentence, naming what to do and why it is worth doing,
+ * with no status code and no mention of tokens. The renderer italicises "Initial setup"
+ * because it names a panel on screen.
+ */
+const SIGN_IN_REQUIRED =
+  'Sign in to Google in the Initial setup section above so the file can open in your Google Drive.'
+
 /** Return a valid access token, refreshing it if it has expired (or is about to). */
 export async function getAccessToken(): Promise<string> {
   const t = loadTokens()
-  if (!t?.refreshToken) throw new Error('Not signed in to Google.')
+  if (!t?.refreshToken) throw new Error(SIGN_IN_REQUIRED)
   if (t.accessToken && Date.now() < t.expiry - 60_000) return t.accessToken
 
   const res = await fetch(TOKEN_ENDPOINT, {
@@ -273,9 +321,7 @@ export async function getAccessToken(): Promise<string> {
       clearTokens()
       notifySignedOut()
     }
-    throw new Error(
-      `Google sign-in has expired (${res.status}). Please sign in again in Initial setup.`,
-    )
+    throw new Error(SIGN_IN_REQUIRED)
   }
 
   const data = (await res.json()) as TokenResponse

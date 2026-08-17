@@ -89,14 +89,22 @@ jobs:
         # the reader to know what arm64 means. The people installing this are course staff,
         # not developers, so the filename itself should say which machine it is for.
         # The glob is expanded once, before any renaming, so this cannot reprocess its output.
+        #
+        # The leading 1-/2-/3- exists to control the order of the Assets list on the release
+        # page. GitHub offers no way to order those: it sorts them by filename, ignoring case
+        # and ignoring the order they were uploaded in (verified against published releases —
+        # the asset ids there do not follow the displayed order). Without a prefix, "MAC…"
+        # sorts above "WINDOWS…" and nearly every user, who is on Windows, has to read past
+        # two Mac files to reach theirs. The digits match the order of the table in the
+        # release notes below, so the two read the same way.
         run: |
           ver="${GITHUB_REF_NAME#v}"
           cd artifacts
           for f in *; do
             case "$f" in
-              *arm64*.dmg) mv -- "$f" "Canvas-Extractor-Tools-MAC-Apple-Silicon-$ver.dmg" ;;
-              *.dmg)       mv -- "$f" "Canvas-Extractor-Tools-MAC-Intel-$ver.dmg" ;;
-              *.exe)       mv -- "$f" "Canvas-Extractor-Tools-WINDOWS-$ver.exe" ;;
+              *arm64*.dmg) mv -- "$f" "2-Canvas-Extractor-Tools-MAC-Apple-Silicon-$ver.dmg" ;;
+              *.dmg)       mv -- "$f" "3-Canvas-Extractor-Tools-MAC-Intel-$ver.dmg" ;;
+              *.exe)       mv -- "$f" "1-Canvas-Extractor-Tools-WINDOWS-$ver.exe" ;;
             esac
           done
           ls -1
@@ -114,9 +122,9 @@ jobs:
 
           | If you have | Download this |
           | --- | --- |
-          | **A Windows PC** | `Canvas-Extractor-Tools-WINDOWS-__VER__.exe` |
-          | **A Mac from late 2020 or newer** (Apple silicon) | `Canvas-Extractor-Tools-MAC-Apple-Silicon-__VER__.dmg` |
-          | **An older Intel Mac** | `Canvas-Extractor-Tools-MAC-Intel-__VER__.dmg` |
+          | **A Windows PC** | `1-Canvas-Extractor-Tools-WINDOWS-__VER__.exe` |
+          | **A Mac from late 2020 or newer** (Apple silicon) | `2-Canvas-Extractor-Tools-MAC-Apple-Silicon-__VER__.dmg` |
+          | **An older Intel Mac** | `3-Canvas-Extractor-Tools-MAC-Intel-__VER__.dmg` |
 
           Not sure which Mac you have? Click the  menu in the top-left corner and choose
           **About This Mac**. If you see **Chip: Apple M1** (or M2, M3, M4), take the Apple
