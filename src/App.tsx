@@ -27,6 +27,14 @@ export default function App() {
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus>({ signedIn: false })
   const [googleBusy, setGoogleBusy] = useState(false)
   const [googleError, setGoogleError] = useState<string | null>(null)
+  /**
+   * The user was asked whether to work without Drive and said yes.
+   *
+   * Deliberately not persisted: it is a decision about this session's work, and asking once
+   * per launch is a light enough nudge that someone who meant to sign in gets another
+   * chance without being nagged mid-export.
+   */
+  const [skippedGoogle, setSkippedGoogle] = useState(false)
 
   const [appVersion, setAppVersion] = useState('')
   const [update, setUpdate] = useState<{ version: string } | null>(null)
@@ -176,11 +184,18 @@ export default function App() {
               onGoogleSignOut={googleSignOut}
               googleBusy={googleBusy}
               googleError={googleError}
+              skippedGoogle={skippedGoogle}
+              onSkipGoogle={() => setSkippedGoogle(true)}
               onOpenHelp={() => setHelpOpen(true)}
             />
           </div>
 
-          {canvasToken && <ToolPanel token={canvasToken} />}
+          {/* Held back until the Google question has an answer. Revealing the export tools
+              the moment a token was saved is what pulled attention past the sign-in card —
+              the panel stayed open, but nobody was looking at it any more. */}
+          {canvasToken && (googleStatus.signedIn || skippedGoogle) && (
+            <ToolPanel token={canvasToken} />
+          )}
         </main>
       </div>
 

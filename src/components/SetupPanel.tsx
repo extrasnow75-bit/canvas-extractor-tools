@@ -11,6 +11,9 @@ interface Props {
   onGoogleSignOut(): void
   googleBusy: boolean
   googleError: string | null
+  /** The user chose to work without Drive. Not persisted — asked again next launch. */
+  skippedGoogle: boolean
+  onSkipGoogle(): void
   onOpenHelp(): void
 }
 
@@ -60,6 +63,8 @@ export function SetupPanel({
   onGoogleSignOut,
   googleBusy,
   googleError,
+  skippedGoogle,
+  onSkipGoogle,
   onOpenHelp,
 }: Props) {
   const tokenPresent = !!canvasToken
@@ -105,7 +110,10 @@ export function SetupPanel({
    * collapses on a dead credential hides the one place it can be replaced.
    */
   const tokenValid = tokenPresent && tokenState === 'valid'
-  const setupComplete = tokenValid && googleStatus.signedIn
+  // Signed in, or asked and declined. Either way the Google question has an answer and the
+  // panel has nothing further to hold the user for.
+  const googleResolved = googleStatus.signedIn || skippedGoogle
+  const setupComplete = tokenValid && googleResolved
 
   /**
    * Nothing is decided while the token check is still in flight. Acting on 'checking' would
@@ -153,7 +161,7 @@ export function SetupPanel({
 
   // Counts the same two things the collapse rule does, so the header can never read
   // "Complete" over a panel that has stayed open.
-  const remaining = (tokenValid ? 0 : 1) + (googleStatus.signedIn ? 0 : 1)
+  const remaining = (tokenValid ? 0 : 1) + (googleResolved ? 0 : 1)
   const statusText = tokenExpired
     ? 'Action needed'
     : !tokenChecked
@@ -181,7 +189,7 @@ export function SetupPanel({
             ? 'Initial setup complete.'
             : `Initial setup still needs ${[
                 tokenValid ? null : 'a valid Canvas token',
-                googleStatus.signedIn ? null : 'Google sign-in',
+                googleResolved ? null : 'Google sign-in',
               ]
                 .filter(Boolean)
                 .join(' and ')}.`}
@@ -225,10 +233,9 @@ export function SetupPanel({
               className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/70'}`}
               aria-hidden="true"
             />
-            {/* Matches what sighted users see: the "Optional" badge was removed from the card,
-                so it should not be announced here either. */}
             <span className="sr-only">
-              Google sign-in {googleStatus.signedIn ? 'complete' : 'not signed in'}.
+              Google sign-in{' '}
+              {googleStatus.signedIn ? 'complete' : skippedGoogle ? 'skipped' : 'not signed in'}.
             </span>
           </div>
           <span className="text-[11px] font-bold">{statusText}</span>
@@ -241,6 +248,105 @@ export function SetupPanel({
 
       {isOpen && (
         <div ref={panelRef} id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
+          {/* Google sign-in — first, because it is the step people were skipping. With the
+              Canvas token above it, saving the token revealed the export tools further down
+              the page and pulled attention past this card entirely. */}
+          <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <GoogleIcon />
+              <span className="font-black text-[15px]">
+                Google sign-in <span className="text-red-700" aria-hidden="true">*</span>
+                <span className="sr-only">(required)</span>
+              </span>
+            </div>
+
+            <p className="text-[13px] text-gray-600 mb-2.5">
+              This allows the export files to open in your Google Drive.
+            </p>
+
+            {googleStatus.signedIn ? (
+              <div>
+              <div className="flex items-center gap-3">
+                <Avatar
+                  key={googleStatus.picture ?? 'no-picture'}
+                  picture={googleStatus.picture}
+                  name={googleStatus.name}
+                  email={googleStatus.email}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm truncate">{googleStatus.name ?? googleStatus.email}</p>
+                  {googleStatus.email && <p className="text-xs text-gray-600 truncate">{googleStatus.email}</p>}
+                </div>
+                <button
+                  onClick={onGoogleSignOut}
+                  className="text-xs font-bold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition flex-shrink-0"
+                >
+                  Sign out
+                </button>
+              </div>
+              <button
+                onClick={() => onGoogleSignIn(true)}
+                disabled={googleBusy}
+                className="mt-2.5 text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
+              >
+                {googleBusy ? 'Opening Google…' : 'Use a different account'}
+              </button>
+              </div>
+            ) : (
+              <div>
+                {/* The purpose line above already says what signing in is for, so this keeps
+                    only the part it does not cover. */}
+                <p className="text-[13px] text-gray-600 mb-2.5">
+                  The app can only see files it creates — never the rest of your Drive.
+                </p>
+                <button
+                  onClick={() => onGoogleSignIn(false)}
+                  disabled={googleBusy}
+                  className="w-full flex items-center justify-center gap-2 border-2 border-blue-400 text-blue-600 rounded-xl py-2.5 font-black text-sm hover:bg-blue-50 disabled:text-gray-600 disabled:no-underline transition"
+                >
+                  {googleBusy ? 'Signing in…' : (<><GoogleIcon /> Sign in with Google</>)}
+                </button>
+                <button
+                  onClick={() => onGoogleSignIn(true)}
+                  disabled={googleBusy}
+                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
+                >
+                  Use a different account
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Asked only once the token is in and Google is not: at that point the app is
+              usable for local .html exports, so skipping is a legitimate choice — but it has
+              to be a choice, rather than something the user drifts past without noticing. */}
+          {tokenPresent && !googleStatus.signedIn && !skippedGoogle && (
+            <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+              <p className="font-black text-[13.5px] text-gray-900 mb-1">
+                Continue without signing in to Google?
+              </p>
+              <p className="text-[12.5px] text-gray-700 mb-3">
+                Exports will be saved as .html files on this computer instead of opening as
+                Google Docs in your Drive. You can sign in later at any time.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onGoogleSignIn(false)}
+                  disabled={googleBusy}
+                  className="flex-1 flex items-center justify-center gap-2 bg-[#0033a0] hover:bg-[#002d8f] text-white rounded-xl py-2.5 font-black text-[13px] disabled:bg-gray-200 disabled:text-gray-700 transition"
+                >
+                  {googleBusy ? 'Signing in…' : 'Sign in with Google'}
+                </button>
+                <button
+                  onClick={onSkipGoogle}
+                  className="flex-shrink-0 px-4 rounded-xl border border-gray-400 text-gray-800 font-bold text-[13px] hover:bg-white transition"
+                >
+                  Continue without
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Canvas token */}
           <div className={`rounded-2xl border-2 p-4 ${tokenExpired ? 'border-amber-300 shadow-[0_0_0_3px_rgba(255,251,235,1)]' : tokenPresent ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
@@ -366,75 +472,6 @@ export function SetupPanel({
                   className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline"
                 >
                   How do I get a Canvas token?
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Google sign-in */}
-          <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <GoogleIcon />
-              {/* Marked required to match the header count, which now waits on this card
-                  before it reports setup complete. */}
-              <span className="font-black text-[15px]">
-                Google sign-in <span className="text-red-700" aria-hidden="true">*</span>
-                <span className="sr-only">(required)</span>
-              </span>
-            </div>
-
-            <p className="text-[13px] text-gray-600 mb-2.5">
-              This allows the export files to open in your Google Drive.
-            </p>
-
-            {googleStatus.signedIn ? (
-              <div>
-              <div className="flex items-center gap-3">
-                <Avatar
-                  key={googleStatus.picture ?? 'no-picture'}
-                  picture={googleStatus.picture}
-                  name={googleStatus.name}
-                  email={googleStatus.email}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-black text-sm truncate">{googleStatus.name ?? googleStatus.email}</p>
-                  {googleStatus.email && <p className="text-xs text-gray-600 truncate">{googleStatus.email}</p>}
-                </div>
-                <button
-                  onClick={onGoogleSignOut}
-                  className="text-xs font-bold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition flex-shrink-0"
-                >
-                  Sign out
-                </button>
-              </div>
-              <button
-                onClick={() => onGoogleSignIn(true)}
-                disabled={googleBusy}
-                className="mt-2.5 text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
-              >
-                {googleBusy ? 'Opening Google…' : 'Use a different account'}
-              </button>
-              </div>
-            ) : (
-              <div>
-                {/* The purpose line above already says what signing in is for, so this keeps
-                    only the part it does not cover. */}
-                <p className="text-[13px] text-gray-600 mb-2.5">
-                  The app can only see files it creates — never the rest of your Drive.
-                </p>
-                <button
-                  onClick={() => onGoogleSignIn(false)}
-                  disabled={googleBusy}
-                  className="w-full flex items-center justify-center gap-2 border-2 border-blue-400 text-blue-600 rounded-xl py-2.5 font-black text-sm hover:bg-blue-50 disabled:text-gray-600 disabled:no-underline transition"
-                >
-                  {googleBusy ? 'Signing in…' : (<><GoogleIcon /> Sign in with Google</>)}
-                </button>
-                <button
-                  onClick={() => onGoogleSignIn(true)}
-                  disabled={googleBusy}
-                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
-                >
-                  Use a different account
                 </button>
               </div>
             )}
