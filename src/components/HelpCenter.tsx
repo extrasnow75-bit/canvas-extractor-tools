@@ -229,7 +229,9 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 <button
                   onClick={runCheck}
                   aria-disabled={checking}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-1 ${
+                  /* ring-offset-2: the ring matches the fill, so the white gap is what makes
+                     it visible as a ring at all. */
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-2 ${
                     checking
                       ? 'bg-gray-200 text-gray-700 cursor-wait'
                       : 'bg-[#0033a0] text-white hover:bg-[#002d8f]'
@@ -297,7 +299,9 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                   href="https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  /* Underlined at rest, not only on hover — see the note on the drive.google.com
+                     link below: inline links in body copy cannot be marked by colour alone. */
+                  className="text-blue-600 underline hover:text-blue-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
                 >
                   How do I manage API access tokens in my user account?
                 </a>
@@ -349,7 +353,10 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                     href="https://drive.google.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
+                    /* Underlined at rest, not only on hover. These sit inside a paragraph of
+                       gray-600 body copy, where the colour difference alone measures 1.46:1 —
+                       far under the 3:1 that 1.4.1 asks for when colour is the only cue. */
+                    className="text-blue-600 underline hover:text-blue-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
                   >
                     drive.google.com
                   </a>{' '}

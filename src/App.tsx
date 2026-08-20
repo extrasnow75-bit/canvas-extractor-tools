@@ -121,8 +121,11 @@ export default function App() {
           <h1 className="text-sm font-black tracking-wide">Canvas Extractor Tools</h1>
         </header>
 
-        {/* Ribbon */}
-        <div
+        {/* Ribbon. A labelled <nav>, not a bare <div>: the zoom buttons and the Help Center
+            are app-wide controls, and outside a landmark they belonged to nothing and were
+            skipped entirely by landmark navigation. */}
+        <nav
+          aria-label="App controls"
           className="flex items-center justify-between px-4 h-11 bg-white border-b border-gray-200 flex-shrink-0"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
@@ -131,15 +134,17 @@ export default function App() {
           </span>
           <div className="flex items-center gap-3 flex-shrink-0">
             <ZoomControl />
+            {/* border-gray-500, matching ZoomControl beside it: the border is what marks this
+                out as a control, and 1.4.11 wants 3:1 for that. gray-200 measured 1.24:1. */}
             <button
               ref={helpButtonRef}
               onClick={() => setHelpOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition"
+              className="flex items-center gap-1.5 text-xs font-bold text-gray-600 border border-gray-500 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
             >
               <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" /> Help Center &amp; More
             </button>
           </div>
-        </div>
+        </nav>
 
         {/* Announcers, mounted for the life of the app. A live region that enters the DOM
             already holding its text is announced unreliably across screen readers, so these

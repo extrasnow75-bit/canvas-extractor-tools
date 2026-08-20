@@ -176,7 +176,9 @@ export function ToolPanel({ token }: Props) {
       >
         <div className="flex items-center gap-2 mb-1">
           <Link2 className="w-4 h-4 text-[#0033a0] flex-shrink-0" aria-hidden="true" />
-          <span className="font-black text-[15px]">Canvas course</span>
+          {/* A real heading, so this card is a stop in heading navigation like the setup
+              panel and the tiles. It was a <span>. */}
+          <h2 className="font-black text-[15px] m-0">Canvas course</h2>
           {urlValid && courseName && (
             <CheckCircle2
               className="w-[17px] h-[17px] text-green-500 ml-auto flex-shrink-0"
@@ -213,10 +215,24 @@ export function ToolPanel({ token }: Props) {
             }
             className="flex-1 min-w-0 border-2 border-gray-500 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-[#0033a0] focus:ring-2 focus:ring-blue-200 transition"
           />
+          {/* aria-disabled, not disabled: pressing this made it disabled while `validating`,
+              which blurs it to <body> in Chromium — so the user lost their place for the whole
+              lookup. The reason it is unavailable when the URL is malformed lives in
+              course-url-hint, which this now points at; before, that hint was tied only to the
+              input and a keyboard user on this button had no way to reach it. */}
           <button
-            onClick={validateCourse}
-            disabled={!urlValid || validating}
-            className="flex-shrink-0 px-4 rounded-xl border-2 border-[#0033a0] text-[#0033a0] font-black text-sm hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-600 disabled:hover:bg-transparent transition flex items-center gap-1.5"
+            onClick={() => {
+              if (urlValid && !validating) void validateCourse()
+            }}
+            aria-disabled={!urlValid || validating}
+            /* Condition matches the hint's own render condition exactly, so this never points
+               at an element that is not there. */
+            aria-describedby={courseUrl && !urlValid ? 'course-url-hint' : undefined}
+            className={`flex-shrink-0 px-4 rounded-xl border-2 font-black text-sm transition flex items-center gap-1.5 ${
+              !urlValid || validating
+                ? 'border-gray-400 text-gray-600 cursor-not-allowed'
+                : 'border-[#0033a0] text-[#0033a0] hover:bg-blue-50'
+            }`}
           >
             {validating && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
             {validating ? 'Checking…' : 'Validate'}

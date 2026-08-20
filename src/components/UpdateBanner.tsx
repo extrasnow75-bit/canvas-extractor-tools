@@ -31,7 +31,10 @@ export function UpdateBanner({ version, currentVersion, onDismiss }: UpdateBanne
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={() => void window.api.app.openReleases()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0033a0] hover:bg-[#002a85] px-2.5 py-1 text-xs font-bold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-1"
+          /* ring-offset-2, not 1: the ring is the same blue as the fill, so the white gap
+             between them is the only thing that makes it read as a ring rather than a faint
+             halo. One pixel was not enough to see. */
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0033a0] hover:bg-[#002a85] px-2.5 py-1 text-xs font-bold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-2"
         >
           <Download className="w-3.5 h-3.5" aria-hidden="true" />
           Download

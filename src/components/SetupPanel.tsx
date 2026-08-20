@@ -129,9 +129,10 @@ export function SetupPanel({
   // completeness actually changes, so the header button still works as a manual toggle.
   //
   // Completing Google sign-in is what closes this, and the button that was pressed to start
-  // it lives inside the part being unmounted — so focus has to be moved somewhere sensible
-  // first. Chromium has usually already dropped it to <body> by then, because the button is
-  // disabled while the sign-in is in flight; both cases are covered.
+  // it lives inside the part being hidden — so focus has to be moved somewhere sensible
+  // first. Both cases are covered: focus still on that button (the usual one now that those
+  // buttons are aria-disabled rather than disabled, so pressing them no longer blurs), and
+  // focus already dropped to <body> by something else.
   useEffect(() => {
     if (!tokenChecked) return
     const focusWasInside =
@@ -198,6 +199,10 @@ export function SetupPanel({
                 .join(' and ')}.`}
       </div>
 
+      {/* The standard accordion shape — a heading wrapping the toggle — so this section is a
+          stop in heading navigation. The window previously exposed one h1 and one h2 between
+          them, which meant heading navigation skipped the entire working area. */}
+      <h2 className="m-0">
       <button
         ref={headerRef}
         onClick={() => setIsOpen((v) => !v)}
@@ -248,9 +253,18 @@ export function SetupPanel({
           />
         </div>
       </button>
+      </h2>
 
-      {isOpen && (
-        <div ref={panelRef} id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
+      {/* Kept mounted and hidden rather than unmounted, so the `aria-controls` on the header
+          button always resolves to a real element. Same pattern, and same reason, as the
+          collapsible sections in HelpCenter. */}
+      {
+        <div
+          ref={panelRef}
+          id="initial-setup-panel"
+          hidden={!isOpen}
+          className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3"
+        >
           {/* Google sign-in — first, because it is the step people were skipping. With the
               Canvas token above it, saving the token revealed the extraction tools further down
               the page and pulled attention past this card entirely. */}
@@ -288,9 +302,15 @@ export function SetupPanel({
                 </button>
               </div>
               <button
-                onClick={() => onGoogleSignIn(true)}
-                disabled={googleBusy}
-                className="mt-2.5 text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
+                onClick={() => {
+                  if (!googleBusy) onGoogleSignIn(true)
+                }}
+                aria-disabled={googleBusy}
+                className={`mt-2.5 text-[12.5px] font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] ${
+                  googleBusy
+                    ? 'text-gray-600 cursor-not-allowed'
+                    : 'text-blue-600 underline hover:text-blue-800'
+                }`}
               >
                 {googleBusy ? 'Opening Google…' : 'Use a different account'}
               </button>
@@ -302,17 +322,33 @@ export function SetupPanel({
                 <p className="text-[13px] text-gray-600 mb-2.5">
                   The app can only see files it creates — never the rest of your Drive.
                 </p>
+                {/* aria-disabled throughout, not disabled: pressing this opens the system
+                    browser for the OAuth round-trip, and a truly disabled button blurs the
+                    instant it flips — so the user came back from Google with focus on <body>.
+                    The label change to "Signing in…" is announced by the status line above. */}
                 <button
-                  onClick={() => onGoogleSignIn(false)}
-                  disabled={googleBusy}
-                  className="w-full flex items-center justify-center gap-2 border-2 border-blue-400 text-blue-600 rounded-xl py-2.5 font-black text-sm hover:bg-blue-50 disabled:text-gray-600 disabled:no-underline transition"
+                  onClick={() => {
+                    if (!googleBusy) onGoogleSignIn(false)
+                  }}
+                  aria-disabled={googleBusy}
+                  className={`w-full flex items-center justify-center gap-2 border-2 rounded-xl py-2.5 font-black text-sm transition ${
+                    googleBusy
+                      ? 'border-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'border-blue-400 text-blue-600 hover:bg-blue-50'
+                  }`}
                 >
                   {googleBusy ? 'Signing in…' : (<><GoogleIcon /> Sign in with Google</>)}
                 </button>
                 <button
-                  onClick={() => onGoogleSignIn(true)}
-                  disabled={googleBusy}
-                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline disabled:text-gray-600 disabled:no-underline"
+                  onClick={() => {
+                    if (!googleBusy) onGoogleSignIn(true)
+                  }}
+                  aria-disabled={googleBusy}
+                  className={`w-full mt-2 text-center text-[12.5px] font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] ${
+                    googleBusy
+                      ? 'text-gray-600 cursor-not-allowed'
+                      : 'text-blue-600 underline hover:text-blue-800'
+                  }`}
                 >
                   Use a different account
                 </button>
@@ -454,16 +490,20 @@ export function SetupPanel({
                       setTokenInput('')
                     }
                   }}
-                  disabled={!tokenInput.trim()}
-                  /* An explicit disabled palette rather than opacity: opacity-40 over this
-                     blue lands at 2.25:1, which is unreadable even as an inactive control. */
-                  className="w-full py-2.5 bg-[#0033a0] text-white rounded-xl text-sm font-black hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 transition"
+                  aria-disabled={!tokenInput.trim()}
+                  /* An explicit palette rather than opacity: opacity-40 over this blue lands
+                     at 2.25:1, which is unreadable even as an inactive control. */
+                  className={`w-full py-2.5 rounded-xl text-sm font-black transition ${
+                    tokenInput.trim()
+                      ? 'bg-[#0033a0] hover:bg-[#002d8f] text-white'
+                      : 'bg-gray-200 text-gray-700 cursor-not-allowed'
+                  }`}
                 >
                   Save token
                 </button>
                 <button
                   onClick={onOpenHelp}
-                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 hover:underline"
+                  className="w-full mt-2 text-center text-[12.5px] font-bold text-blue-600 underline hover:text-blue-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
                 >
                   How do I get a Canvas token?
                 </button>
@@ -479,7 +519,7 @@ export function SetupPanel({
             </span>
           </div>
         </div>
-      )}
+      }
     </div>
   )
 }

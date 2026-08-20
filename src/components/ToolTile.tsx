@@ -30,6 +30,11 @@ interface Props {
 
 type Status = 'idle' | 'running' | 'success' | 'error' | 'cancelled'
 
+/** Module name → id fragment, so a group heading can be referenced by `aria-labelledby`. */
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'group'
+}
+
 /** "1:05" / "12s" — compact, for elapsed and remaining times. */
 function formatDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds))
@@ -254,6 +259,8 @@ export function ToolTile({
    * to know that before they spend minutes on it rather than after. Only the content
    * extraction has due headers, so quizzes and rubrics save straight away.
    */
+  /** True only while the course code is being looked up to name the file; see runLocalSave. */
+  const [preparingSave, setPreparingSave] = useState(false)
   const [localNoticeOpen, setLocalNoticeOpen] = useState(false)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const pendingLocalSave = useRef<string[] | undefined>(undefined)
@@ -262,9 +269,23 @@ export function ToolTile({
   // The notice appears below the button that was just pressed, so focus has to be moved into
   // it — otherwise it is silent to a screen reader and easy to miss with the keyboard.
   const noticeConfirmRef = useRef<HTMLButtonElement>(null)
+  const localSaveRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (localNoticeOpen) noticeConfirmRef.current?.focus()
   }, [localNoticeOpen])
+
+  /**
+   * Dismissing put focus on <body>, because the element holding it unmounted with the notice.
+   * Send it back where it came from — the button that opened this — which is both where the
+   * user was and the thing they are most likely to press next.
+   *
+   * Confirming does not need the same treatment: it starts a run, and the status effect moves
+   * focus to Stop.
+   */
+  function cancelLocalNotice() {
+    setLocalNoticeOpen(false)
+    localSaveRef.current?.focus()
+  }
 
   async function requestLocalSave(selectedIds?: string[]) {
     if (!noticeApplies || (await window.api.app.getHideLocalSaveNotice().catch(() => false))) {
@@ -294,8 +315,16 @@ export function ToolTile({
   }
 
   async function runLocalSave(selectedIds?: string[]) {
+    // Naming the file can mean a Canvas round-trip when Validate was skipped, and until the
+    // save dialog appears there is nothing on screen at all — on a slow link the button looked
+    // like it had done nothing. Announced rather than shown: it is normally instant, and a
+    // spinner that flashes for 40ms is worse than none.
+    setPreparingSave(true)
+    const defaultName = localFileName(tool, await resolveCourseCode())
+    setPreparingSave(false)
+
     const savePath = await window.api.dialog.saveFile({
-      defaultName: localFileName(tool, await resolveCourseCode()),
+      defaultName,
       ext: 'html',
       label: 'HTML File',
     })
@@ -335,13 +364,20 @@ export function ToolTile({
    * One permanently-mounted announcer per tile, rather than `role="status"` on the result
    * blocks. Those mount with their text already in place, which screen readers announce
    * unreliably; this element never moves and only its contents change. It also covers the
-   * two moments that had no announcement at all: pressing Stop, and the extraction ending.
+   * moments that had no announcement at all: starting, pressing Stop, and the run ending.
+   *
+   * The start message names the Stop button because focus has just been moved onto it —
+   * hearing "Stop, button" with no explanation would otherwise be the first thing announced.
+   *
+   * Recomputed every second by the elapsed-time tick, but the string is identical each time,
+   * so React leaves the text node alone and nothing is re-announced.
    */
-  const announcement =
-    status === 'running'
+  const announcement = preparingSave
+    ? 'Preparing the file name…'
+    : status === 'running'
       ? stopping
         ? `Stopping ${label}…`
-        : ''
+        : `${label} started. Focus is on the Stop button.`
       : status === 'cancelled'
         ? `${label} stopped. Nothing was saved.`
         : status === 'success'
@@ -351,14 +387,28 @@ export function ToolTile({
               `${label} failed. ${cleanErrorMessage(message)}`
             : ''
 
-  // An extraction runs for minutes; when it ends, the control that was focused (Stop) unmounts
-  // and focus would fall to <body>. Send it to the result instead.
+  /**
+   * Both ends of a run replace the control the user was standing on, so focus has to be
+   * placed deliberately at each.
+   *
+   * Starting: the button that was just pressed unmounts when `busy` swaps the whole block for
+   * the progress pill, and focus falls to <body>. On a run that lasts minutes that means
+   * tabbing the entire app to reach Stop. Send it to Stop, which is the only thing there is
+   * to do next.
+   *
+   * Ending: Stop unmounts in its turn, so send focus to the result — where the outcome is.
+   */
   const resultRef = useRef<HTMLDivElement>(null)
+  const stopRef = useRef<HTMLButtonElement>(null)
   const prevStatus = useRef<Status>('idle')
   useEffect(() => {
     const was = prevStatus.current
     prevStatus.current = status
-    if (was === 'running' && status !== 'running') resultRef.current?.focus()
+    if (status === 'running') {
+      if (was !== 'running') stopRef.current?.focus()
+    } else if (was === 'running') {
+      resultRef.current?.focus()
+    }
   }, [status])
 
   // Once the picker has loaded, the main button follows the selection: it extracts exactly
@@ -371,7 +421,14 @@ export function ToolTile({
   const extractLabel = isSubset ? 'Extract selected to a Google Doc' : 'Extract all to a Google Doc'
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-4 hover:border-gray-300 hover:shadow-sm transition">
+    /* A section with its own heading, so each tile is a stop in heading navigation. The tile
+       titles were <p> elements, which left the whole working area of the window invisible to
+       the way screen-reader users actually move through a page: h1 in the title bar, one h2
+       for "Extraction tools", and then nothing. */
+    <section
+      aria-labelledby={`${tool}-tile-heading`}
+      className="bg-white border border-gray-200 rounded-2xl p-4 hover:border-gray-300 hover:shadow-sm transition"
+    >
       <div className="flex items-center gap-3">
         <div
           className="w-[42px] h-[42px] rounded-xl flex items-center justify-center flex-shrink-0 text-white"
@@ -380,7 +437,9 @@ export function ToolTile({
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-black text-[14.5px] text-gray-900">{label}</p>
+          <h3 id={`${tool}-tile-heading`} className="font-black text-[14.5px] text-gray-900">
+            {label}
+          </h3>
           <p className="text-xs text-gray-600 mt-0.5">{description}</p>
         </div>
         <span className="text-[10px] font-black tracking-wide px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
@@ -397,10 +456,21 @@ export function ToolTile({
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               {stopping ? 'Stopping…' : 'Extracting…'}
             </div>
+            {/* aria-disabled, not disabled: this is the element focus was just moved to, and
+                Chromium blurs a focused element the instant it becomes truly disabled — so
+                pressing Stop would drop focus to <body>, which is the problem the focus move
+                exists to solve. Staying focusable also lets it announce its own state. */}
             <button
-              onClick={stopExport}
-              disabled={stopping}
-              className="flex-shrink-0 px-4 rounded-xl border-2 border-red-500 text-red-600 font-black text-[13px] hover:bg-red-50 disabled:border-gray-300 disabled:text-gray-600 disabled:hover:bg-transparent transition flex items-center gap-1.5"
+              ref={stopRef}
+              onClick={() => {
+                if (!stopping) void stopExport()
+              }}
+              aria-disabled={stopping}
+              className={`flex-shrink-0 px-4 rounded-xl border-2 font-black text-[13px] transition flex items-center gap-1.5 ${
+                stopping
+                  ? 'border-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'border-red-500 text-red-600 hover:bg-red-50'
+              }`}
             >
               <Square className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
               Stop
@@ -483,23 +553,44 @@ export function ToolTile({
             </p>
           )}
 
+          {/* Both branches used to render text-gray-600 at the same weight, so the only
+              unavailable cue was `cursor: not-allowed` — hover-only, and therefore invisible
+              to touch and keyboard (1.4.1). The underline is what marks it as a control when
+              it is live, and dropping the underline plus lightening to gray-500 is what marks
+              it as unavailable; gray-500 is the permitted case for genuinely inactive UI. */}
           <button
+            ref={localSaveRef}
             onClick={() => {
               if (!nothingSelected) void requestLocalSave(selectionArgs)
             }}
             aria-disabled={nothingSelected}
             aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
-            className={`w-full text-center text-xs font-bold mt-2 ${
-              nothingSelected ? 'text-gray-600 cursor-not-allowed' : 'text-gray-600 hover:text-gray-900'
+            className={`w-full text-center text-xs font-bold mt-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] ${
+              nothingSelected
+                ? 'text-gray-500 cursor-not-allowed'
+                : 'text-gray-600 underline underline-offset-2 hover:text-gray-900'
             }`}
           >
             or save a local copy (.html)
           </button>
 
           {localNoticeOpen && (
+            /* role="dialog" rather than "group", and aria-describedby pointing at the body
+               text. Under "group" a screen reader announced the name and then "Save the file,
+               button" — the two paragraphs that are the entire point of the notice were never
+               spoken and had to be hunted for with a review cursor. Escape closes it, matching
+               the Help Center drawer and ordinary expectation for something asking a
+               question. */
             <div
-              role="group"
+              role="dialog"
               aria-labelledby={`${tool}-local-notice-heading`}
+              aria-describedby={`${tool}-local-notice-body`}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  cancelLocalNotice()
+                }
+              }}
               className="mt-2.5 p-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl"
             >
               <div className="flex items-start gap-2.5">
@@ -514,16 +605,18 @@ export function ToolTile({
                   >
                     Saving a local copy? One difference to expect
                   </p>
-                  <p className="text-[12.5px] text-gray-700 mt-1">
-                    A local file will not have the blue lines above and below each{' '}
-                    <span className="font-bold">Due by</span> heading. Everything else — the
-                    headings, the red tool labels, the colours — comes across as normal.
-                  </p>
-                  <p className="text-[12.5px] text-gray-700 mt-1.5">
-                    To use it: upload the .html file to Google Drive, then right-click it and
-                    choose <span className="font-bold">Open with → Google Docs</span>. There
-                    are fuller instructions in the Help Center.
-                  </p>
+                  <div id={`${tool}-local-notice-body`}>
+                    <p className="text-[12.5px] text-gray-700 mt-1">
+                      A local file will not have the blue lines above and below each{' '}
+                      <span className="font-bold">Due by</span> heading. Everything else — the
+                      headings, the red tool labels, the colours — comes across as normal.
+                    </p>
+                    <p className="text-[12.5px] text-gray-700 mt-1.5">
+                      To use it: upload the .html file to Google Drive, then right-click it and
+                      choose <span className="font-bold">Open with → Google Docs</span>. There
+                      are fuller instructions in the Help Center.
+                    </p>
+                  </div>
 
                   <label className="flex items-center gap-2 mt-2.5 text-[12.5px] text-gray-800 cursor-pointer">
                     <input
@@ -544,8 +637,8 @@ export function ToolTile({
                       Save the file
                     </button>
                     <button
-                      onClick={() => setLocalNoticeOpen(false)}
-                      className="flex-shrink-0 px-4 py-2 rounded-lg border border-gray-400 text-gray-800 font-bold text-xs hover:bg-white transition"
+                      onClick={cancelLocalNotice}
+                      className="flex-shrink-0 px-4 py-2 rounded-lg border border-gray-600 text-gray-800 font-bold text-xs hover:bg-white transition"
                     >
                       Cancel
                     </button>
@@ -557,60 +650,110 @@ export function ToolTile({
         </>
       )}
 
-      {pickerOpen && (
-        <div id={`${tool}-item-picker`} className="mt-2.5 border border-gray-200 rounded-xl p-3 bg-white">
+      {/* Kept mounted and hidden rather than unmounted, so the `aria-controls` on the caret
+          button above always resolves to a real element. Same pattern, and same reason, as
+          the collapsible sections in HelpCenter. */}
+      <div
+        id={`${tool}-item-picker`}
+        hidden={!pickerOpen}
+        className="mt-2.5 border border-gray-200 rounded-xl p-3 bg-white"
+      >
+        {/* Both of these are permanently mounted for the reason the tile announcer is: a
+            live region that mounts with its text already in place is announced unreliably,
+            so a failure to load the item list could go unannounced entirely. */}
+        <p
+          role="status"
+          className={`text-xs text-gray-600 items-center gap-2 ${loadingItems ? 'flex' : 'sr-only'}`}
+        >
           {loadingItems && (
-            <p className="text-xs text-gray-600 flex items-center gap-2" role="status">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Loading…
-            </p>
-          )}
-          {itemsError && <p role="alert" className="text-xs text-red-700">{itemsError}</p>}
-          {items && (
             <>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wide text-gray-600">
-                  Choose items to extract
-                </span>
-                <button onClick={toggleAll} className="text-xs font-bold text-blue-600 hover:underline">
-                  Toggle all
-                </button>
-              </div>
-              <div className="max-h-52 overflow-y-auto">
-                {grouped.map(({ group, rows }) => (
-                  <div key={group ?? '__flat__'}>
-                    {group && (
-                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-600 mt-2 mb-0.5 px-1">
-                        {group}
-                      </p>
-                    )}
-                    {rows.map((row) => (
-                      <label
-                        key={row.id}
-                        className="flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-gray-50 text-[13px] cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(row.id)}
-                          onChange={() => toggleOne(row.id)}
-                          className="w-3.5 h-3.5 accent-[#0033a0]"
-                        />
-                        <span className="truncate">{row.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => runDriveExport(Array.from(selected))}
-                disabled={busy || selected.size === 0}
-                className="w-full mt-2.5 py-2 rounded-lg bg-[#0033a0] hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 text-white font-black text-xs transition"
-              >
-                Extract selected to a Google Doc
-              </button>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Loading…
             </>
           )}
-        </div>
-      )}
+        </p>
+        <p role="alert" className={itemsError ? 'text-xs text-red-700' : 'sr-only'}>
+          {itemsError}
+        </p>
+        {items && (
+          <>
+            <div className="flex items-center justify-between mb-1.5">
+              <span
+                id={`${tool}-picker-label`}
+                className="text-[10px] font-black uppercase tracking-wide text-gray-600"
+              >
+                Choose items to extract
+              </span>
+              {/* Ticking a box, and above all "Toggle all", used to change nothing a screen
+                  reader could hear — while silently flipping the primary button to
+                  "Nothing selected". The count is the announcement, and it is worth having
+                  on screen regardless. */}
+              <span role="status" className="text-[11px] text-gray-600 tabular-nums ml-auto mr-2">
+                {selected.size} of {items.length} selected
+              </span>
+              <button
+                onClick={toggleAll}
+                className="text-xs font-bold text-blue-600 underline hover:text-blue-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+              >
+                Toggle all
+              </button>
+            </div>
+            {/* role="group" ties the label above to the checkboxes; without it the label was
+                merely adjacent text. Nested groups per module do the same for the module
+                headings, which were plain <p> elements with nothing pointing at them — so a
+                40-item list read as forty unrelated checkboxes with no module context. */}
+            <div role="group" aria-labelledby={`${tool}-picker-label`} className="max-h-52 overflow-y-auto">
+              {grouped.map(({ group, rows }) => (
+                <div
+                  key={group ?? '__flat__'}
+                  role={group ? 'group' : undefined}
+                  aria-labelledby={group ? `${tool}-grp-${slugify(group)}` : undefined}
+                >
+                  {group && (
+                    <p
+                      id={`${tool}-grp-${slugify(group)}`}
+                      className="text-[10px] font-black uppercase tracking-wide text-gray-600 mt-2 mb-0.5 px-1"
+                    >
+                      {group}
+                    </p>
+                  )}
+                  {rows.map((row) => (
+                    <label
+                      key={row.id}
+                      className="flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-gray-50 text-[13px] cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(row.id)}
+                        onChange={() => toggleOne(row.id)}
+                        className="w-3.5 h-3.5 accent-[#0033a0]"
+                      />
+                      <span className="truncate">{row.label}</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {/* aria-disabled, matching the primary button above it. This one had real
+                `disabled`, so with nothing ticked it left the tab order entirely — directly
+                beneath the checkboxes the user had just cleared — and carried no pointer to
+                the explanation of why. */}
+            <button
+              onClick={() => {
+                if (!busy && selected.size > 0) runDriveExport(Array.from(selected))
+              }}
+              aria-disabled={busy || selected.size === 0}
+              aria-describedby={!busy && selected.size === 0 ? `${tool}-nothing-selected` : undefined}
+              className={`w-full mt-2.5 py-2 rounded-lg font-black text-xs transition ${
+                busy || selected.size === 0
+                  ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
+                  : 'bg-[#0033a0] hover:bg-[#002d8f] text-white'
+              }`}
+            >
+              Extract selected to a Google Doc
+            </button>
+          </>
+        )}
+      </div>
 
       {/* The tile's announcer. Never unmounts; only its text changes. */}
       <div role="status" aria-live="polite" className="sr-only">
@@ -618,7 +761,15 @@ export function ToolTile({
       </div>
 
       {/* Focus lands here when an extraction ends, so the result is where the user already is. */}
-      <div ref={resultRef} tabIndex={-1} className="focus:outline-none">
+      {/* Not keyboard-reachable, so 2.4.7 does not strictly apply — but focus lands here when
+          a run ends, and `focus:outline-none` alone meant a sighted keyboard user watched the
+          caret vanish with nothing on screen saying where it went. A ring on the result block
+          answers that. */}
+      <div
+        ref={resultRef}
+        tabIndex={-1}
+        className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] focus-visible:ring-offset-2"
+      >
       {status === 'cancelled' && (
         <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-gray-50 border border-gray-200 rounded-xl text-[12.5px] text-gray-800">
           <Square className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-600" aria-hidden="true" />
@@ -662,6 +813,6 @@ export function ToolTile({
         </div>
       )}
       </div>
-    </div>
+    </section>
   )
 }
