@@ -46,14 +46,32 @@ export type MarkerRenderer = (label: string, inline: boolean) => string
 const MAX_SCANNED_BODY_BYTES = 100_000
 
 /**
- * Opening tags worth inspecting, matched whole.
+ * Every opening tag, matched whole — not just the ones carrying a signature.
  *
  * Quote-aware for the reason documented on IMG_TAG_RE: `<div[^>]*>` stops at the first `>`
  * even when that `>` is inside a quoted attribute value, so a tag carrying `title="a > b"`
- * would be matched only as far as the inner `>`. Everything here is read, never rewritten,
- * but a truncated match would also mean a truncated style attribute and a missed signature.
+ * would be matched only as far as the inner `>`, and a truncated match means a truncated
+ * style attribute and a missed signature.
+ *
+ * Matching *every* element rather than the seven interesting ones is what keeps a marker
+ * from being spliced into the middle of another tag. An earlier version listed only the tags
+ * it cared about, which meant a `<p …>` sitting inside some other element's attribute value
+ * was matched as though it were markup:
+ *
+ *   <a href="#" title="<p style=background:#0033a0>">link</a>
+ *
+ * The marker went in at that offset, and since the marker contains both `"` and `>` it
+ * terminated the `title=` attribute and closed the `<a>` early — turning the marker into live
+ * markup and the anchor's remaining attributes into visible text, in a document the reviewer
+ * opens from file://. Scanning all tags fixes it structurally: the enclosing `<a …>` is one
+ * match whose quoted run swallows the inner `<p`, the scan resumes past it, and the thing
+ * inside the attribute is never offered to `classify` at all. Uninteresting tags cost one
+ * name comparison.
  */
-const OPEN_TAG_RE = /<(div|table|details|figure|dl|ol|p|img)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi
+const OPEN_TAG_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/g
+
+/** Tags a signature can key on. Everything else is matched only to be skipped over. */
+const INTERESTING = new Set(['div', 'table', 'details', 'figure', 'dl', 'ol', 'p', 'img'])
 
 /** How far past a `<details>` or `<figure>` to look for the child that identifies it. */
 const LOOKAHEAD = 600
@@ -218,6 +236,10 @@ export function annotateStyledHtml(html: string, marker: MarkerRenderer): string
 
   return html.replace(OPEN_TAG_RE, (tag, rawName: string, offset: number) => {
     const name = rawName.toLowerCase()
+    // Every element is matched, so that an opening tag inside another tag's attribute value
+    // is consumed with its enclosing tag rather than treated as markup; the ones no signature
+    // keys on are handed straight back untouched.
+    if (!INTERESTING.has(name)) return tag
 
     if (name === 'p' && !footnoted && /^footnote-/i.test(attr(tag, ID_RE))) {
       footnoted = true
