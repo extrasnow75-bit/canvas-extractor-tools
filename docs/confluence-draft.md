@@ -54,30 +54,16 @@ verified. The local `.html` extraction needs no Google account at all.
 
 1. Go to the releases page:
    **https://github.com/extrasnow75-bit/canvas-extractor-tools/releases/latest**
-2. Under **Assets**, download the file for your computer:
-
-   | Your computer | Download |
-   | --- | --- |
-   | Windows | `1-Canvas-Extractor-Tools-WINDOWS-<version>.exe` |
-   | Mac with Apple silicon (M1/M2/M3/M4) | `2-Canvas-Extractor-Tools-MAC-Apple-Silicon-<version>.dmg` |
-   | Older Intel Mac | `3-Canvas-Extractor-Tools-MAC-Intel-<version>.dmg` |
-
-   Not sure which Mac you have? Click the Apple menu → **About This Mac**. If the Chip line
-   says "Apple", take the Apple Silicon file.
+2. Under **Assets**, download `Canvas-Extractor-Tools-WINDOWS-<version>.exe`.
 3. Open the downloaded file and follow the prompts.
 
-**You will see a warning the first time.** This app is distributed directly rather than
-through the Microsoft or Apple stores, so the operating system does not recognise the
-publisher yet. It is expected, and it goes away after the first launch.
+> **Windows only.** There is no Mac version of this app. If you work on a Mac, contact the
+> eCampus Center.
 
-- **Windows** — a blue box saying *"Windows protected your PC"*. Click **More info**, then
-  **Run anyway**.
-- **Mac** — a message that the app *"cannot be opened"*. Go to **System Settings → Privacy
-  & Security**, scroll down to the message about Canvas Extractor Tools, and click
-  **Open Anyway**.
-
-> Mac note: the Mac builds have not yet been tested on a real Mac. If you are the first
-> Mac user, please report what happens.
+**You will see a warning the first time** — a blue box saying *"Windows protected your PC"*.
+Click **More info**, then **Run anyway**. This app is distributed directly rather than
+through the Microsoft Store, so Windows does not recognise the publisher yet. It is expected,
+and it goes away after the first launch.
 
 ## Using it
 
@@ -145,8 +131,6 @@ it, keeping your Canvas token and Google sign-in. Two things to watch:
 - **Accept the install folder the installer offers.** It lets you change it, and choosing a
   different folder installs a second copy alongside the first rather than replacing it.
 - **Close the app before installing**, or Windows reports files in use.
-
-On a Mac, drag the app onto Applications and choose **Replace**, not **Keep Both**.
 
 ---
 
@@ -268,26 +252,27 @@ would give the app far more access than it needs.
 ## Releasing
 
 1. Bump `version` in `package.json`, commit, and tag `vX.Y.Z`.
-2. Push the tag. `.github/workflows/release.yml` builds Windows and macOS on a matrix,
-   renames the installers to the layperson-friendly names, generates release notes from a
-   template, and publishes.
-3. Check the release page — the notes lead with a "Which file do I download?" table, and
-   the install steps name the exact on-screen warning each OS shows.
+2. Push the tag. `.github/workflows/release.yml` builds the Windows installer, renames it to
+   the layperson-friendly name, generates release notes from a template, and publishes.
+3. Check the release page — the notes name the file to download, say plainly that the app is
+   Windows only, and name the exact on-screen warning Windows shows.
 
-If the release job stalls (it has), you can publish by hand: download the workflow
-artifacts, rename them by the same rules the workflow uses, create the release, and upload
-assets **one at a time** — uploading all three in a single `gh release create` has timed
-out and left a draft behind.
+If the release job stalls (it has), you can publish by hand: download the workflow artifact,
+rename it by the same rules the workflow uses, create the release, and upload the asset.
+Uploading all three of the old assets in a single `gh release create` used to time out and
+leave a draft behind; with one asset that is less likely.
 
 The in-app update check (`electron/ipc/updateCheck.ts`) reads the GitHub releases API for
 the newest tag and compares it against `app.getVersion()`. It only notifies; it does not
 download or install anything. If full auto-update is ever wanted, `electron-updater` would
-need code signing on both platforms, which needs a paid Apple Developer account — that was
-the reason it was not done.
+want a signed build, and this one is unsigned — that was the reason it was not done.
 
 ## Open items
 
-- The Mac builds have never been launched. macOS `safeStorage`/Keychain and the OAuth
-  loopback listener are unverified there, as is whether an unsigned arm64 build opens at all.
+- macOS is unsupported and no longer built by CI. The Mac builds were published for several
+  releases and never worked; nobody has launched one successfully. macOS `safeStorage`/Keychain
+  and the OAuth loopback listener are unverified there, as is whether an unsigned build opens
+  at all. The `mac` target remains in `package.json` for local builds, so reviving it means
+  restoring the os matrix in `release.yml` — not rewriting the packaging.
 - Transfer to the eCampus GitHub org — remember the secret.
 - Rate-limit backoff (403) and surfacing rubric fetch failures as errors are both still to do.

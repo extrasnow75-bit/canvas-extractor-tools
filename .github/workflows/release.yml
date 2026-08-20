@@ -1,11 +1,19 @@
-# Builds installers for Windows and macOS and attaches them to a GitHub Release.
+# Builds the Windows installer and attaches it to a GitHub Release.
+#
+# Windows only, deliberately. The macOS builds were produced by a matrix here for several
+# releases and were never made to work — unsigned, never launched on a real Mac, Keychain
+# storage and the OAuth loopback both untested. Shipping them meant offering course staff a
+# download that fails, above the one that works. The `mac` target is still configured in
+# package.json, so `npm run build` on a Mac still produces a .dmg; what changed is that CI
+# no longer publishes one. Bringing it back means restoring the os matrix on the build job,
+# adding release/*.dmg to the upload path and the rename step, and a Mac row in the notes.
 #
 # Triggered by pushing a version tag:
 #
 #     git tag v1.0.0 && git push origin v1.0.0
 #
-# or from the Actions tab via "Run workflow", which builds and uploads the installers as
-# workflow artifacts without publishing a release — useful for testing the pipeline itself.
+# or from the Actions tab via "Run workflow", which builds and uploads the installer as a
+# workflow artifact without publishing a release — useful for testing the pipeline itself.
 #
 # The Google client secret is not in the repo. It is injected here from the repository
 # secret MAIN_VITE_GOOGLE_CLIENT_SECRET; electron-vite reads MAIN_VITE_* at build time and
@@ -20,16 +28,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      # Don't let a macOS failure throw away a finished Windows installer, or vice versa.
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: windows
-          - os: macos-latest
-            artifact: macos
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v7
@@ -54,19 +53,14 @@ jobs:
         run: npm run build -- --publish never
         env:
           MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
-          # Builds are unsigned. Without this, electron-builder hunts for a signing identity
-          # on macOS and fails the job when it finds none.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Upload installers
+      - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: installers-${{ matrix.artifact }}
-          # Only the installers themselves — release/ also holds the unpacked app directory,
-          # which is hundreds of megabytes and of no use to anyone downloading a build.
-          path: |
-            release/*.exe
-            release/*.dmg
+          name: installer-windows
+          # Only the installer itself — release/ also holds the unpacked app directory, which
+          # is hundreds of megabytes and of no use to anyone downloading a build.
+          path: release/*.exe
           if-no-files-found: error
 
   release:
@@ -84,28 +78,20 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Rename installers
-        # electron-builder names files after the arch it built for (…-arm64.dmg), which asks
-        # the reader to know what arm64 means. The people installing this are course staff,
-        # not developers, so the filename itself should say which machine it is for.
-        # The glob is expanded once, before any renaming, so this cannot reprocess its output.
+      - name: Rename installer
+        # electron-builder names the file after the version and arch, which asks the reader to
+        # know what that means. The people installing this are course staff, not developers,
+        # so the filename itself should say which machine it is for. The glob is expanded once,
+        # before any renaming, so this cannot reprocess its output.
         #
-        # The leading 1-/2-/3- exists to control the order of the Assets list on the release
-        # page. GitHub offers no way to order those: it sorts them by filename, ignoring case
-        # and ignoring the order they were uploaded in (verified against published releases —
-        # the asset ids there do not follow the displayed order). Without a prefix, "MAC…"
-        # sorts above "WINDOWS…" and nearly every user, who is on Windows, has to read past
-        # two Mac files to reach theirs. The digits match the order of the table in the
-        # release notes below, so the two read the same way.
+        # No numeric prefix any more: it existed only to keep the Windows installer at the top
+        # of an Assets list that GitHub sorts by filename, above two Mac files. With one
+        # installer there is nothing to sort.
         run: |
           ver="${GITHUB_REF_NAME#v}"
           cd artifacts
-          for f in *; do
-            case "$f" in
-              *arm64*.dmg) mv -- "$f" "2-Canvas-Extractor-Tools-MAC-Apple-Silicon-$ver.dmg" ;;
-              *.dmg)       mv -- "$f" "3-Canvas-Extractor-Tools-MAC-Intel-$ver.dmg" ;;
-              *.exe)       mv -- "$f" "1-Canvas-Extractor-Tools-WINDOWS-$ver.exe" ;;
-            esac
+          for f in *.exe; do
+            mv -- "$f" "Canvas-Extractor-Tools-WINDOWS-$ver.exe"
           done
           ls -1
 
@@ -115,42 +101,31 @@ jobs:
         #
         # The install steps deliberately describe the warning the reader will see on screen
         # ("Windows protected your PC") rather than its cause. The audience is course staff,
-        # so "unsigned build" and "Gatekeeper" name nothing they can match to their display.
+        # so "unsigned build" and "SmartScreen" name nothing they can match to their display.
+        #
+        # The Mac line is here on purpose. Saying nothing about macOS would leave a Mac user
+        # to conclude the download is broken; naming it as unsupported takes them straight to
+        # asking for a Windows machine.
         run: |
           cat > notes.md <<'NOTES'
-          ## Which file do I download?
+          ## Download
 
-          | If you have | Download this |
-          | --- | --- |
-          | **A Windows PC** | `1-Canvas-Extractor-Tools-WINDOWS-__VER__.exe` |
-          | **A Mac from late 2020 or newer** (Apple silicon) | `2-Canvas-Extractor-Tools-MAC-Apple-Silicon-__VER__.dmg` |
-          | **An older Intel Mac** | `3-Canvas-Extractor-Tools-MAC-Intel-__VER__.dmg` |
+          **Windows PC** — `Canvas-Extractor-Tools-WINDOWS-__VER__.exe`
 
-          Not sure which Mac you have? Click the  menu in the top-left corner and choose
-          **About This Mac**. If you see **Chip: Apple M1** (or M2, M3, M4), take the Apple
-          silicon file. If you see **Processor: Intel**, take the Intel one.
+          This app is Windows-only. There is no Mac version — if you work on a Mac, contact
+          the eCampus Center.
 
           Ignore the two "Source code" links at the bottom — GitHub adds those to every
           release automatically. They are not the app.
 
           ## Installing
 
-          Both warnings below are normal and expected. They appear because this app was built
-          in-house rather than distributed through the Microsoft or Apple stores — not because
-          anything is wrong with it.
-
-          **Windows** — download the `.exe` file and double-click it to install.
+          Download the `.exe` file and double-click it to install.
 
           The first time you run it, Windows will show a blue screen saying **"Windows
           protected your PC."** Click **More info**, then click **Run anyway**. You will only
-          see this once.
-
-          **macOS** — download the `.dmg` file and drag the app into your Applications folder.
-
-          The first time you open it, macOS will say the app **"cannot be opened."** To get
-          past this, go to **System Settings → Privacy & Security**, scroll to the bottom, and
-          click **Open Anyway** next to Canvas Extractor Tools. You will only need to do this
-          once.
+          see this once. It appears because this app was built in-house rather than
+          distributed through the Microsoft Store — not because anything is wrong with it.
 
           ---
 

@@ -16,7 +16,9 @@ Output goes to Google Drive as a native Google Doc (opened in your browser), or 
 
 ## Requirements
 
-- Windows 10 or later
+- Windows 10 or later. **Windows only** — CI publishes no macOS build. The `mac` target is
+  still configured in `package.json`, so `npm run build` on a Mac still produces a `.dmg`,
+  but nobody has ever launched one successfully; treat it as unverified, not as a release.
 - A Canvas API access token
   ([how to create one](https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account))
 - A Google account, only if you want the Drive extraction

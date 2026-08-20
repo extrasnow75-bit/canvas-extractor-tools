@@ -5,9 +5,8 @@ import { app } from 'electron'
  * leaving them on an old build indefinitely.
  *
  * This deliberately only *notifies*. It does not download or install anything. Full
- * auto-update would need code signing on macOS (an Apple Developer account), and on Windows
- * would still surface an install prompt because the build is unsigned. A banner works
- * identically on both platforms today and costs nothing.
+ * auto-update would want a signed build, and this one is unsigned, so an install prompt would
+ * appear anyway. A banner costs nothing and asks for no signing certificate.
  *
  * The releases API is public and unauthenticated — no token ships in the app.
  */

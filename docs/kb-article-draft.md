@@ -20,18 +20,11 @@ The old tool was a Google Colab Notebook that ran in a browser tab. **This one i
 
 **Download:** [Canvas Extractor Tools releases page](https://github.com/extrasnow75-bit/canvas-extractor-tools/releases/latest)
 
-| Your computer | File to download |
-| :---- | :---- |
-| Windows | `1-Canvas-Extractor-Tools-WINDOWS-<version>.exe` |
-| Mac with Apple silicon (M1/M2/M3/M4) | `2-Canvas-Extractor-Tools-MAC-Apple-Silicon-<version>.dmg` |
-| Older Intel Mac | `3-Canvas-Extractor-Tools-MAC-Intel-<version>.dmg` |
+Download `Canvas-Extractor-Tools-WINDOWS-<version>.exe` and double-click it to install.
 
-Not sure which Mac you have? Apple menu → **About This Mac**. If the Chip line says "Apple," take the Apple Silicon file.
+**This app is Windows only.** There is no Mac version. If you work on a Mac, contact the eCampus Center.
 
-**You will see a security warning the first time you open it.** The app is distributed directly rather than through the Microsoft or Apple stores, so the operating system does not recognize the publisher yet. This is expected and it goes away after the first launch.
-
-* **Windows** — *"Windows protected your PC"* → click **More info**, then **Run anyway**
-* **Mac** — *"cannot be opened"* → **System Settings → Privacy & Security**, scroll to the message about Canvas Extractor Tools, click **Open Anyway**
+**You will see a security warning the first time you open it** — *"Windows protected your PC"*. Click **More info**, then **Run anyway**. The app is distributed directly rather than through the Microsoft Store, so Windows does not recognize the publisher yet. This is expected and it goes away after the first launch.
 
 ## 🔑What You Need Before You Start
 
@@ -133,8 +126,6 @@ The app checks for a newer version when it starts and shows a bar at the top if 
 Updates are never installed automatically. Download the new installer and run it over the top of the old version — your token and Google sign-in are kept.
 
 **Do not uninstall the old version first, and accept the folder the installer offers.** The installer finds the existing copy and replaces it. If you browse to a different folder instead, you end up with two versions installed side by side and no way to tell which one you are opening. Close the app before you run the installer.
-
-On a Mac, drag the new app onto the Applications folder and choose **Replace** when asked — not **Keep Both**.
 
 # **📄Related References**
 
@@ -253,19 +244,19 @@ Two consequences:
 
 1. Bump `version` in `package.json`.
 2. Commit, then tag it: `git tag v0.12.0` and `git push origin v0.12.0`.
-3. Pushing the tag triggers `.github/workflows/release.yml`, which builds Windows and both Mac versions, renames the installers to the friendly names users see, writes the release notes, and publishes. Takes about three minutes.
+3. Pushing the tag triggers `.github/workflows/release.yml`, which builds the Windows installer, renames it to the friendly name users see, writes the release notes, and publishes. Takes about three minutes.
 4. Check the release page afterwards.
 
 The version number and the tag must match, and **the tag is what actually triggers the build** — pushing a version bump without a tag does nothing.
 
-If the build job stalls (it has), you can publish by hand: download the workflow artifacts, rename them the way the workflow does, create the release, and upload the assets **one at a time**. Uploading all three in a single `gh release create` has timed out and left a broken draft behind.
+If the build job stalls (it has), you can publish by hand: download the workflow artifact, rename it the way the workflow does, create the release, and upload the asset. When there were three assets, uploading them all in a single `gh release create` timed out and left a broken draft behind; with one this is less likely, but upload separately if it happens again.
 
-The in-app update check (`electron/ipc/updateCheck.ts`) reads GitHub's releases API and compares the newest tag against the installed version. It only *notifies* — it never downloads or installs. Real auto-update would need code signing on both platforms, which needs a paid Apple Developer account. That's the only reason it isn't there.
+The in-app update check (`electron/ipc/updateCheck.ts`) reads GitHub's releases API and compares the newest tag against the installed version. It only *notifies* — it never downloads or installs. Real auto-update would need code signing, and the build is unsigned, so an install prompt would appear either way. That's the only reason it isn't there.
 
 ## Known gaps and open items
 
 * **New Quizzes questions are not extracted, but not because Canvas can't.** Canvas does publish a New Quizzes API at `/api/quiz/v1/courses/:course_id/quizzes/:assignment_id/items` — a different API surface from the `/api/v1/` one this app uses everywhere else, and keyed by the **assignment** id rather than a quiz id. The app simply doesn't call it yet. Other people have reported difficulty getting these calls to work, so treat feasibility as unproven until someone tests it against Boise State's Canvas with a real token.
 * **Classic question banks genuinely have no public API.** Unlike New Quizzes, there's no supported way to list a bank or its contents. Note also that a quiz using a random-draw question group doesn't *contain* questions at all — it stores a rule ("draw 5 from Bank X"), so there's no fixed list to extract. Those quizzes currently come through looking empty, which is misleading.
-* **The Mac builds have never been launched by anyone.** Keychain-based token storage and the Google sign-in loopback are untested there, and whether an unsigned Apple Silicon build opens at all is unknown.
+* **macOS is not supported, and the CI no longer builds for it.** The Mac builds were published for several releases and never worked; nobody has launched one successfully. Keychain-based token storage and the Google sign-in loopback are both untested there, and whether an unsigned build opens at all is unknown. The `mac` target is still configured in `package.json`, so anyone with a Mac to test on can still build one locally — reviving it means restoring the os matrix in `release.yml`.
 * **Transfer to the eCampus GitHub org** — remember the Actions secret.
 * **Rate-limit backoff on 403** and **surfacing rubric fetch failures as real errors** are both still to do. A rubric that fails to load currently renders as an empty rubric worth 0 points.
