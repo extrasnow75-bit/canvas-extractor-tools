@@ -28,11 +28,22 @@ export type MarkerRenderer = (label: string, inline: boolean) => string
 /**
  * Above this the body is passed through unannotated.
  *
- * Same reasoning as the image scanner in blueprintFormat: this runs synchronously in the
- * main process, on the same thread as the window holding the Stop button. Real Canvas bodies
- * are tens of KB.
+ * The number is set by how badly OPEN_TAG_RE degrades, not by how large a body is reasonable.
+ * The pattern is linear whenever it matches, but a run of opening tags that never reach an
+ * unquoted `>` makes every start position scan to end-of-string and fail, which is quadratic:
+ * measured 1.3s at 100KB, 5.2s at 200KB, 20.7s at 400KB, and around nine minutes at the 2MB
+ * this used to allow. That is not slow, it is a hung app — the scan runs synchronously in the
+ * main process, on the same thread as the window holding the Stop button, so there is no
+ * error, no progress and no way out.
+ *
+ * 100KB keeps the worst case near a second. Real Canvas bodies are tens of KB; a well-formed
+ * 1MB body costs 49ms, so the ceiling costs annotation on nothing that exists in practice,
+ * and a body that does exceed it still comes through in full — only its markers are missing.
+ *
+ * Keep this in step with the identical constant in blueprintFormat.ts, which guards the same
+ * class of pattern.
  */
-const MAX_SCANNED_BODY_BYTES = 2_000_000
+const MAX_SCANNED_BODY_BYTES = 100_000
 
 /**
  * Opening tags worth inspecting, matched whole.

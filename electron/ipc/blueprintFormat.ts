@@ -356,10 +356,16 @@ function iconMarker(label: string): string {
  * `<img\b…>` restarts its scan at every `<img` and runs to the end of the string when no
  * closing `>` follows, so a body consisting of unterminated `<img ` tags costs quadratic
  * time — and this runs synchronously in the main process, where it would freeze the window
- * with the Stop button on it. Real Canvas bodies are a few tens of KB; nothing legitimate
- * comes close to this ceiling.
+ * with the Stop button on it.
+ *
+ * This was 2_000_000 on the reasoning that nothing legitimate comes close to it. True, and
+ * beside the point: the ceiling has to be set by where the quadratic case stops being
+ * survivable, not by where a plausible body stops. Measured on the same pattern, 2MB of
+ * unterminated tags takes around nine minutes. 100KB takes about a second.
+ *
+ * Keep this in step with the identical constant in styledHtml.ts.
  */
-const MAX_SCANNED_BODY_BYTES = 2_000_000
+const MAX_SCANNED_BODY_BYTES = 100_000
 
 function normalizeCanvasImages(
   html: string,
