@@ -122,10 +122,24 @@ jobs:
 
           Download the `.exe` file and double-click it to install.
 
-          The first time you run it, Windows will show a blue screen saying **"Windows
-          protected your PC."** Click **More info**, then click **Run anyway**. You will only
-          see this once. It appears because this app was built in-house rather than
-          distributed through the Microsoft Store — not because anything is wrong with it.
+          Windows will show a blue screen saying **"Windows protected your PC."** Click
+          **More info**, then click **Run anyway**. It appears because this app was built
+          in-house rather than distributed through the Microsoft Store — not because anything
+          is wrong with it. You will see it again each time you install a new version.
+
+          ## Already have an earlier version?
+
+          **You do not need to uninstall it first.** Run this installer over the top of it —
+          it finds the existing copy and replaces it. Your Canvas token and Google sign-in are
+          kept, so there is nothing to set up again.
+
+          Two things to get right:
+
+          - **Close Canvas Extractor Tools before you run the installer**, or Windows reports
+            that files are in use and the install fails.
+          - **Accept the install folder the installer offers.** It lets you change it, and
+            choosing a different one leaves two copies installed side by side with no way to
+            tell which you are opening.
 
           ---
 
