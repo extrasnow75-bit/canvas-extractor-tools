@@ -320,34 +320,25 @@ export function SetupPanel({
             )}
           </div>
 
-          {/* Asked only once the token is in and Google is not: at that point the app is
+          {/* Offered only once the token is in and Google is not: at that point the app is
               usable for local .html exports, so skipping is a legitimate choice — but it has
-              to be a choice, rather than something the user drifts past without noticing. */}
+              to be a choice rather than something the user drifts past.
+
+              Deliberately a quiet line rather than a card. Signing in is the better route
+              for most people, and giving the way around it the same visual weight as the
+              sign-in button above argued against itself. The underline (not colour alone)
+              is what marks the control, and gray-600 clears 4.5:1 on white. */}
           {tokenPresent && !googleStatus.signedIn && !skippedGoogle && (
-            <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
-              <p className="font-black text-[13.5px] text-gray-900 mb-1">
-                Continue without signing in to Google?
-              </p>
-              <p className="text-[12.5px] text-gray-700 mb-3">
-                Exports will be saved as .html files on this computer instead of opening as
-                Google Docs in your Drive. You can sign in later at any time.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onGoogleSignIn(false)}
-                  disabled={googleBusy}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#0033a0] hover:bg-[#002d8f] text-white rounded-xl py-2.5 font-black text-[13px] disabled:bg-gray-200 disabled:text-gray-700 transition"
-                >
-                  {googleBusy ? 'Signing in…' : 'Sign in with Google'}
-                </button>
-                <button
-                  onClick={onSkipGoogle}
-                  className="flex-shrink-0 px-4 rounded-xl border border-gray-400 text-gray-800 font-bold text-[13px] hover:bg-white transition"
-                >
-                  Continue without
-                </button>
-              </div>
-            </div>
+            <p className="text-[12.5px] text-gray-600 text-center px-2">
+              Can&apos;t sign in?{' '}
+              <button
+                onClick={onSkipGoogle}
+                className="font-bold text-gray-800 underline underline-offset-2 hover:text-gray-900 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+              >
+                Continue without Google
+              </button>{' '}
+              — exports will save as .html files you upload yourself.
+            </p>
           )}
 
           {/* Canvas token */}
