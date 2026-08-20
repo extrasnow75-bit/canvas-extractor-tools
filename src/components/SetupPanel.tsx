@@ -252,7 +252,7 @@ export function SetupPanel({
       {isOpen && (
         <div ref={panelRef} id="initial-setup-panel" className="bg-white border border-gray-200 border-t-0 rounded-b-2xl p-3.5 space-y-3">
           {/* Google sign-in — first, because it is the step people were skipping. With the
-              Canvas token above it, saving the token revealed the export tools further down
+              Canvas token above it, saving the token revealed the extraction tools further down
               the page and pulled attention past this card entirely. */}
           <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
@@ -264,7 +264,7 @@ export function SetupPanel({
             </div>
 
             <p className="text-[13px] text-gray-600 mb-2.5">
-              This allows the export files to open in your Google Drive.
+              This allows the extraction files to open in your Google Drive.
             </p>
 
             {googleStatus.signedIn ? (
@@ -321,7 +321,7 @@ export function SetupPanel({
           </div>
 
           {/* Offered only once the token is in and Google is not: at that point the app is
-              usable for local .html exports, so skipping is a legitimate choice — but it has
+              usable for local .html extractions, so skipping is a legitimate choice — but it has
               to be a choice rather than something the user drifts past.
 
               Deliberately a quiet line rather than a card. Signing in is the better route
@@ -337,7 +337,7 @@ export function SetupPanel({
               >
                 Continue without Google
               </button>{' '}
-              — exports will save as .html files you upload yourself.
+              — extractions will save as .html files you upload yourself.
             </p>
           )}
 

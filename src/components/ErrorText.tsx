@@ -8,7 +8,7 @@ import React from 'react'
  *
  *     Error invoking remote method 'canvas:exportToDrive': Error: <the real message>
  *
- * which names an internal channel and says "remote method" to someone exporting a course.
+ * which names an internal channel and says "remote method" to someone extracting a course.
  * The wrapper is added on the way across the boundary, so no amount of rewording in the main
  * process removes it — it has to come off here.
  *

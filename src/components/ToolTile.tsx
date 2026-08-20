@@ -23,7 +23,7 @@ interface Props {
   token: string
   /**
    * Reports this tile's status upward, so the panel can decide when to offer "Start again":
-   * only once something has actually been exported, and not while an export is still going.
+   * only once something has actually been extracted, and not while one is still going.
    */
   onStatusChange?(tool: Tool, status: Status): void
 }
@@ -38,14 +38,14 @@ function formatDuration(seconds: number): string {
 }
 
 const LOCAL_FILE_NAMES: Record<Tool, string> = {
-  content: 'course_content_export.html',
+  content: 'course_content_extraction.html',
   quizzes: 'quiz_questions.html',
   rubrics: 'course_rubrics.html',
 }
 
 /**
  * "RESPCARE_560_quiz_questions.html" — the course's department and number in front of the
- * plain name, so a folder of exports from several courses can be told apart at a glance.
+ * plain name, so a folder of extractions from several courses can be told apart at a glance.
  *
  * Anything outside [A-Za-z0-9] becomes an underscore before it reaches the save dialog:
  * the label is derived from an institution-set course code, and a stray slash or colon in
@@ -100,7 +100,7 @@ export function ToolTile({
     onStatusChange?.(tool, status)
   }, [tool, status, onStatusChange])
 
-  // Tick the elapsed clock once a second while an export is running.
+  // Tick the elapsed clock once a second while an extraction is running.
   useEffect(() => {
     if (startedAt === null) return
     setElapsed((Date.now() - startedAt) / 1000)
@@ -131,9 +131,9 @@ export function ToolTile({
   /**
    * A selection belongs to the course it was made in. Without this, picking items in one
    * course and then switching to another sent the first course's item ids as the filter for
-   * the second: nothing matched, every module was skipped, and the export silently produced
-   * a document containing only the home page and syllabus — which are emitted before the
-   * module loop and so escape the filter. It looked like a working export, which is worse
+   * the second: nothing matched, every module was skipped, and the extraction silently
+   * produced a document containing only the home page and syllabus — which are emitted before
+   * the module loop and so escape the filter. It looked like a working run, which is worse
    * than an error.
    *
    * Clearing `items` also matters on its own: `openPicker` returns early when items are
@@ -146,8 +146,8 @@ export function ToolTile({
     setSelected(new Set())
   }, [courseUrl])
 
-  // A finished export's result refers to the course it ran against, so it is stale too.
-  // A running export is left alone: its progress and Stop button must survive an edit to
+  // A finished extraction's result refers to the course it ran against, so it is stale too.
+  // A running one is left alone: its progress and Stop button must survive an edit to
   // the URL field, and its own completion will overwrite this.
   useEffect(() => {
     setStatus((s) => (s === 'running' ? s : 'idle'))
@@ -232,7 +232,7 @@ export function ToolTile({
       }
     } catch (err) {
       setStatus('error')
-      setMessage(err instanceof Error ? err.message : 'Export failed.')
+      setMessage(err instanceof Error ? err.message : 'Extraction failed.')
     } finally {
       setJobId(null)
       setStopping(false)
@@ -247,12 +247,12 @@ export function ToolTile({
   }
 
   /**
-   * Shown once before the first local save of a content export.
+   * Shown once before the first local save of a content extraction.
    *
    * The file is written for Google Docs, since that is where it is going — so the blue
-   * due-header rules are absent, and someone comparing this against a Drive export needs to
-   * know that before they spend minutes on it rather than after. Only the content export
-   * has due headers, so quizzes and rubrics save straight away.
+   * due-header rules are absent, and someone comparing this against a Drive extraction needs
+   * to know that before they spend minutes on it rather than after. Only the content
+   * extraction has due headers, so quizzes and rubrics save straight away.
    */
   const [localNoticeOpen, setLocalNoticeOpen] = useState(false)
   const [dontAskAgain, setDontAskAgain] = useState(false)
@@ -284,7 +284,7 @@ export function ToolTile({
   /**
    * The code arrives with the course lookup, which is a button the user is free to skip —
    * so fetch it here when it is missing rather than letting the file name quietly lose its
-   * prefix for anyone who pastes a URL and exports straight away. One small request, and a
+   * prefix for anyone who pastes a URL and extracts straight away. One small request, and a
    * failure just means the plain name.
    */
   async function resolveCourseCode(): Promise<string | null> {
@@ -321,7 +321,7 @@ export function ToolTile({
       }
     } catch (err) {
       setStatus('error')
-      setMessage(err instanceof Error ? err.message : 'Export failed.')
+      setMessage(err instanceof Error ? err.message : 'Extraction failed.')
     } finally {
       setJobId(null)
       setStopping(false)
@@ -335,7 +335,7 @@ export function ToolTile({
    * One permanently-mounted announcer per tile, rather than `role="status"` on the result
    * blocks. Those mount with their text already in place, which screen readers announce
    * unreliably; this element never moves and only its contents change. It also covers the
-   * two moments that had no announcement at all: pressing Stop, and the export ending.
+   * two moments that had no announcement at all: pressing Stop, and the extraction ending.
    */
   const announcement =
     status === 'running'
@@ -351,7 +351,7 @@ export function ToolTile({
               `${label} failed. ${cleanErrorMessage(message)}`
             : ''
 
-  // An export runs for minutes; when it ends, the control that was focused (Stop) unmounts
+  // An extraction runs for minutes; when it ends, the control that was focused (Stop) unmounts
   // and focus would fall to <body>. Send it to the result instead.
   const resultRef = useRef<HTMLDivElement>(null)
   const prevStatus = useRef<Status>('idle')
@@ -361,14 +361,14 @@ export function ToolTile({
     if (was === 'running' && status !== 'running') resultRef.current?.focus()
   }, [status])
 
-  // Once the picker has loaded, the main button follows the selection: it exports exactly
-  // what is ticked. Without this the label could read "Export all" while items were
-  // deselected — and, worse, it would actually export them.
+  // Once the picker has loaded, the main button follows the selection: it extracts exactly
+  // what is ticked. Without this the label could read "Extract all" while items were
+  // deselected — and, worse, it would actually extract them.
   const hasSelection = items !== null
   const isSubset = hasSelection && selected.size < items.length
   const nothingSelected = hasSelection && selected.size === 0
   const selectionArgs = hasSelection ? Array.from(selected) : undefined
-  const exportLabel = isSubset ? 'Export selected as a Google Doc' : 'Export all as a Google Doc'
+  const extractLabel = isSubset ? 'Extract selected to a Google Doc' : 'Extract all to a Google Doc'
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-4 hover:border-gray-300 hover:shadow-sm transition">
@@ -391,11 +391,11 @@ export function ToolTile({
       {busy ? (
         <>
           <div className="flex gap-2 mt-3.5">
-            {/* #4f68a4 rather than #6b83b8: this sits on screen for the whole export, and
+            {/* #4f68a4 rather than #6b83b8: this sits on screen for the whole run, and
                 the old value carried white 13px bold at 3.77:1. */}
             <div className="flex-1 rounded-xl bg-[#4f68a4] text-white font-black text-[13px] py-2.5 flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              {stopping ? 'Stopping…' : 'Exporting…'}
+              {stopping ? 'Stopping…' : 'Extracting…'}
             </div>
             <button
               onClick={stopExport}
@@ -410,12 +410,12 @@ export function ToolTile({
           {/* Progress bar — only once a total is known.
               Deliberately a progressbar rather than an aria-live region: the count changes
               once per item, and announcing every change would talk over the user for the
-              whole export. A progressbar is read on demand instead. Completion and failure
+              whole extraction. A progressbar is read on demand instead. Completion and failure
               below are what actually get announced. */}
           {progress && progress.total > 0 && (
             <div
               role="progressbar"
-              aria-label={`${label} export progress`}
+              aria-label={`${label} progress`}
               aria-valuemin={0}
               aria-valuemax={progress.total}
               aria-valuenow={progress.done}
@@ -461,7 +461,7 @@ export function ToolTile({
               }`}
             >
               <Download className="w-4 h-4" aria-hidden="true" />
-              {nothingSelected ? 'Nothing selected' : exportLabel}
+              {nothingSelected ? 'Nothing selected' : extractLabel}
             </button>
             <button
               onClick={openPicker}
@@ -479,7 +479,7 @@ export function ToolTile({
 
           {nothingSelected && (
             <p id={`${tool}-nothing-selected`} className="text-xs text-gray-700 mt-2 text-center">
-              Select at least one item below to export.
+              Select at least one item below to extract.
             </p>
           )}
 
@@ -569,7 +569,7 @@ export function ToolTile({
             <>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-black uppercase tracking-wide text-gray-600">
-                  Choose items to export
+                  Choose items to extract
                 </span>
                 <button onClick={toggleAll} className="text-xs font-bold text-blue-600 hover:underline">
                   Toggle all
@@ -605,7 +605,7 @@ export function ToolTile({
                 disabled={busy || selected.size === 0}
                 className="w-full mt-2.5 py-2 rounded-lg bg-[#0033a0] hover:bg-[#002d8f] disabled:bg-gray-200 disabled:text-gray-700 text-white font-black text-xs transition"
               >
-                Export selected as a Google Doc
+                Extract selected to a Google Doc
               </button>
             </>
           )}
@@ -617,7 +617,7 @@ export function ToolTile({
         {announcement}
       </div>
 
-      {/* Focus lands here when an export ends, so the result is where the user already is. */}
+      {/* Focus lands here when an extraction ends, so the result is where the user already is. */}
       <div ref={resultRef} tabIndex={-1} className="focus:outline-none">
       {status === 'cancelled' && (
         <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-gray-50 border border-gray-200 rounded-xl text-[12.5px] text-gray-800">
@@ -635,7 +635,7 @@ export function ToolTile({
         >
           <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-green-600" aria-hidden="true" />
           <div className="flex-1">
-            {/* `label` already ends in "export" ("Course content export"), so no extra noun. */}
+            {/* `label` already ends in "extraction" ("Course content extraction"), so no extra noun. */}
             <p className="font-black">{label} done</p>
             <p className="text-gray-700 mt-0.5">{message}</p>
             {webViewLink && (

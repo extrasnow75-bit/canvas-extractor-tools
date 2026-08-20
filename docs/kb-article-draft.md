@@ -8,7 +8,7 @@
 
 The purpose of this tool is to save the IDC time copying and pasting out of Canvas when an instructor would like to reuse material from a previously-taught course.
 
-Canvas Extractor Tools does what the old Content Export notebook did, and adds two more exports: **quiz questions** and **rubrics**. Those used to require a separate app, separate code, or manual copy and paste.
+Canvas Extractor Tools does what the old Content Export notebook did, and adds two more extractions: **quiz questions** and **rubrics**. Those used to require a separate app, separate code, or manual copy and paste.
 
 What the tool produces is a **starting point** for the IDC to organize the blueprint and easily copy/paste the components the FD has indicated as wanting to keep or review. **The extracted content in the blueprint will be reviewed by the IDC and FD.**
 
@@ -51,13 +51,13 @@ This app keeps the token on your own computer instead, encrypted and tied to you
 
 # **✅What Is Extracted**
 
-You choose **one** of three exports each time you run the app. Each one produces its own document.
+You choose **one** of three extractions each time you run the app. Each one produces its own document.
 
 ## Course content
 
 * Content from pages and assignments in the order they appear on the course's **Modules** page
 * Home page and syllabus
-* Discussions and quiz **instructions** (not quiz questions — that is the second export)
+* Discussions and quiz **instructions** (not quiz questions — that is the second extraction)
 * Blueprint markup tags (e.g. **H2**, **H3**, **Assignment**, **Page**...)
 * Due-date headers, with the blue Blueprint rules
 * Images
@@ -107,9 +107,9 @@ Every rubric in the course, as a table — criteria down the side, rating levels
 **Every run:**
 
 1. Paste the course URL, e.g. `https://boisestatecanvas.instructure.com/courses/12345`. Copy it from your browser's address bar while you are in the course. The course name appears once the app confirms it.
-2. Pick an export: **Course content**, **Classic quizzes**, or **Rubrics**.
-3. Export everything, or tick specific items.
-4. Choose **Export to Google Drive** or **Save as HTML file**.
+2. Pick an extraction: **Course content**, **Classic quizzes**, or **Rubrics**.
+3. Extract everything, or tick specific items.
+4. Choose **Extract all to a Google Doc** or **or save a local copy (.html)**.
 5. Wait. A progress line names each item as it is fetched, and **Stop** cancels between items. A large course takes a few minutes.
 
 When it finishes, the Google Doc opens in your browser. It is a normal Doc in your own Drive — edit, share, or move it however you like.
@@ -121,7 +121,7 @@ When it finishes, the Google Doc opens in your browser. It is a normal Doc in yo
 | "Token expired" or "Action needed" | Canvas tokens can be revoked or expire. Create a new one and paste it in. |
 | Google sign-in stops working | Sign in again from the setup panel. The app clears the dead sign-in for you. |
 | "Not a recognized Canvas course URL" | The URL must contain `/courses/` followed by the course number. |
-| The export stops partway | Usually Canvas rate limiting. Wait a minute and run it again. |
+| The extraction stops partway | Usually Canvas rate limiting. Wait a minute and run it again. |
 | A rubric looks blank | Check it in Canvas — a rubric that fails to load currently comes through empty rather than as an error. |
 | Text is too small to read | Use the text size buttons in the app's top bar. |
 
@@ -137,10 +137,10 @@ On a Mac, drag the new app onto the Applications folder and choose **Replace** w
 
 # **📄Related References**
 
-* [Template Blueprint 5.0](https://docs.google.com/document/d/1FONxZaZr2HEIM3sc7GNBcLtsB6U-KtCVJ5S2K3uiEtE/edit?usp=drivesdk) — content export
-* [Quiz Questions Extraction Template](https://docs.google.com/document/d/1zm9yRGtg4u9C3ddOVX7iNGrGp8gxDCrj9rbFY4GUtDM/edit?tab=t.0#heading=h.qet84pprm5t9) — quiz export
-* [Required Formatting for Quiz Questions](https://docs.google.com/document/d/1SrLp9OKCKJJm86jJEFGnClhvS86MI6qp1YqhI1jHA4M/edit?usp=drivesdk) — quiz export
-* [Rubric Example Point Ranges (MS Word version)](https://docs.google.com/document/d/1YAs6TdSfRIpRXyKyQWSFc-VtgZ39gbYgnWdVtHZBDT4/edit?tab=t.0#heading=h.4v5p1vp9zrcz) — rubric export
+* [Template Blueprint 5.0](https://docs.google.com/document/d/1FONxZaZr2HEIM3sc7GNBcLtsB6U-KtCVJ5S2K3uiEtE/edit?usp=drivesdk) — content extraction
+* [Quiz Questions Extraction Template](https://docs.google.com/document/d/1zm9yRGtg4u9C3ddOVX7iNGrGp8gxDCrj9rbFY4GUtDM/edit?tab=t.0#heading=h.qet84pprm5t9) — quiz extraction
+* [Required Formatting for Quiz Questions](https://docs.google.com/document/d/1SrLp9OKCKJJm86jJEFGnClhvS86MI6qp1YqhI1jHA4M/edit?usp=drivesdk) — quiz extraction
+* [Rubric Example Point Ranges (MS Word version)](https://docs.google.com/document/d/1YAs6TdSfRIpRXyKyQWSFc-VtgZ39gbYgnWdVtHZBDT4/edit?tab=t.0#heading=h.4v5p1vp9zrcz) — rubric extraction
 
 # **💭Feedback**
 
@@ -195,7 +195,7 @@ The renderer is **sandboxed**: it cannot make network calls or read files direct
 
 These all look like they could be simplified. Each one is load-bearing, and removing any of them fails **silently** — the app keeps working and just becomes unsafe.
 
-**1. Never return a Google token to the renderer.** No IPC handler hands one over; `google:status` returns only the display name and picture. The Canvas token *is* given to the renderer (it's passed back on each export call) — that asymmetry is deliberate, but it's exactly why the other three rules matter.
+**1. Never return a Google token to the renderer.** No IPC handler hands one over; `google:status` returns only the display name and picture. The Canvas token *is* given to the renderer (it's passed back on each extraction call) — that asymmetry is deliberate, but it's exactly why the other three rules matter.
 
 **2. `app:openReleases` takes no URL.** It opens one hardcoded address. The moment you let the renderer pass in a URL, you've handed it a general-purpose "open anything" button.
 
@@ -227,7 +227,7 @@ These all look like they could be simplified. Each one is load-bearing, and remo
 
 ## Gotchas that cost real time
 
-* **Google Docs cannot import a paragraph border.** Instead of ignoring it, its HTML importer turns one into a separate grey line — so the blue Blueprint rules around each "Due by..." header came out as grey lines above and below. The fix: emit no border CSS on the Drive path, then draw the real blue rules through the Docs API *after* upload (`applyDueHeaderBorders()`). The local HTML export keeps the CSS borders, because nothing runs afterwards there.
+* **Google Docs cannot import a paragraph border.** Instead of ignoring it, its HTML importer turns one into a separate grey line — so the blue Blueprint rules around each "Due by..." header came out as grey lines above and below. The fix: emit no border CSS on the Drive path, then draw the real blue rules through the Docs API *after* upload (`applyDueHeaderBorders()`). The local HTML extraction keeps the CSS borders, because nothing runs afterwards there.
 * **Canvas signals rate limiting with HTTP 403, not 429.** 429 is the normal code for "slow down" everywhere else, so any retry logic you write by habit will be wrong. Key on 403.
 * **Google Docs repeats a table's header row across page breaks on its own.** `rubricExport.ts` emits no `<thead>`. If you see an "untitled" rubric table, it's the continuation of the one above it, not a bug.
 * **Canvas headings inside item bodies** become bold black 11pt text plus a red `(H1)`–`(H6)` tag. That's the Blueprint spec, not a formatting error.
@@ -264,7 +264,7 @@ The in-app update check (`electron/ipc/updateCheck.ts`) reads GitHub's releases 
 ## Known gaps and open items
 
 * **New Quizzes questions are not extracted, but not because Canvas can't.** Canvas does publish a New Quizzes API at `/api/quiz/v1/courses/:course_id/quizzes/:assignment_id/items` — a different API surface from the `/api/v1/` one this app uses everywhere else, and keyed by the **assignment** id rather than a quiz id. The app simply doesn't call it yet. Other people have reported difficulty getting these calls to work, so treat feasibility as unproven until someone tests it against Boise State's Canvas with a real token.
-* **Classic question banks genuinely have no public API.** Unlike New Quizzes, there's no supported way to list a bank or its contents. Note also that a quiz using a random-draw question group doesn't *contain* questions at all — it stores a rule ("draw 5 from Bank X"), so there's no fixed list to export. Those quizzes currently come through looking empty, which is misleading.
+* **Classic question banks genuinely have no public API.** Unlike New Quizzes, there's no supported way to list a bank or its contents. Note also that a quiz using a random-draw question group doesn't *contain* questions at all — it stores a rule ("draw 5 from Bank X"), so there's no fixed list to extract. Those quizzes currently come through looking empty, which is misleading.
 * **The Mac builds have never been launched by anyone.** Keychain-based token storage and the Google sign-in loopback are untested there, and whether an unsigned Apple Silicon build opens at all is unknown.
 * **Transfer to the eCampus GitHub org** — remember the Actions secret.
 * **Rate-limit backoff on 403** and **surfacing rubric fetch failures as real errors** are both still to do. A rubric that fails to load currently renders as an empty rubric worth 0 points.

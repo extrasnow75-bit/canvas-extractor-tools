@@ -148,7 +148,7 @@ export async function buildRubricsHtml(
   progress?.(0, list.length)
 
   // The detail fetches run concurrently — a course can hold dozens of rubrics, and one
-  // round trip each was the whole cost of this export. Results are collected first and
+  // round trip each was the whole cost of this extraction. Results are collected first and
   // written out afterwards so the document still follows Canvas's rubric order.
   const fetched = await mapWithConcurrency(list.length, CANVAS_CONCURRENCY, async (i) => {
     throwIfCancelled(cancel)
@@ -182,7 +182,7 @@ export async function buildRubricsHtml(
       // Say so, loudly. This used to substitute an empty rubric with 0 points possible, which
       // is indistinguishable from a rubric that genuinely has no criteria — so a failed fetch
       // silently became plausible-looking data. One bad rubric still must not abort the
-      // export, so the run continues with the failure recorded in place.
+      // extraction, so the run continues with the failure recorded in place.
       parts.push(
         '<p style="color:purple;font-weight:bold;">' +
           'This rubric could not be retrieved from Canvas, so its criteria are missing here — ' +
@@ -222,10 +222,10 @@ export async function handleRubricExport(
     writeFileSync(consumeSavePath(args.savePath), result.html, 'utf-8')
     return {
       ok: true,
-      message: `Exported ${result.count} rubric${result.count !== 1 ? 's' : ''} from "${result.courseName}".`,
+      message: `Extracted ${result.count} rubric${result.count !== 1 ? 's' : ''} from "${result.courseName}".`,
     }
   } catch (err) {
-    if (isCancellation(err)) return { ok: false, message: 'Export cancelled.', cancelled: true }
+    if (isCancellation(err)) return { ok: false, message: 'Extraction cancelled.', cancelled: true }
     throw err
   } finally {
     endJob(args.jobId)

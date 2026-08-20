@@ -1,5 +1,5 @@
 /**
- * Blueprint formatting constants and HTML helpers, shared by all three exporters.
+ * Blueprint formatting constants and HTML helpers, shared by all three extractors.
  *
  * Specs are taken from the Boise State Blueprint Tools suite (`blueprint-tools/Code.gs`)
  * and the Blueprint template document — NOT the older Python Colab script, whose output
@@ -36,7 +36,7 @@ export function escapeHtml(s: string): string {
 /**
  * Return `url` if it is safe to put in an href, or null if it is not.
  *
- * Only http and https survive. Course authors control these values, and the exported .html
+ * Only http and https survive. Course authors control these values, and the extracted .html
  * is opened directly from disk — a `javascript:` URL there executes in the file:// origin,
  * and `file:` targets local content. Relative URLs are rejected too: the document has no
  * meaningful base, so they cannot resolve to anything useful.
@@ -146,7 +146,7 @@ export function isDueHeader(title: string): boolean {
  * the header that it was meant to produce in blue. The real blue rules are applied after
  * upload by applyDueHeaderBorders() in googleDocs.ts, which is authoritative for that path.
  *
- * Keep it true for the local .html export, where nothing runs afterwards and the CSS is
+ * Keep it true for the local .html extraction, where nothing runs afterwards and the CSS is
  * the only thing drawing the rules.
  */
 export function dueHeader(title: string, cssBorders = true): string {
@@ -176,8 +176,8 @@ export function subHeader(title: string): string {
  * Canvas' Rich Content Editor has a "Decorative Image" checkbox. Ticking it blanks the alt
  * text and stamps the tag with `data-decorative`, `role="presentation"` and/or
  * `aria-hidden` — and course authors tick it for virtually every icon, since that is what
- * the box is for. Consumers of the exported HTML read those markers as permission to drop
- * the image (Google Docs' importer among them), so the exported document loses exactly the
+ * the box is for. Consumers of the extracted HTML read those markers as permission to drop
+ * the image (Google Docs' importer among them), so the extracted document loses exactly the
  * icons a course reviewer is looking at.
  *
  * A course-review document has to show every image regardless of how it was tagged, so the
@@ -186,7 +186,7 @@ export function subHeader(title: string): string {
  * Relative `src` values are resolved against the Canvas host at the same time. The API
  * returns some file URLs host-relative, and neither a document opened from file:// nor
  * Google's server-side importer has a base to resolve those against — a second, quieter
- * way for an image to vanish from the export.
+ * way for an image to vanish from the extraction.
  *
  * Quote-aware on purpose. `<img\b[^>]*>` stops at the first `>` even when that `>` sits
  * inside a quoted attribute value, where a browser treats it as ordinary text — so a tag
@@ -232,7 +232,7 @@ const SRC_ANY_RE = new RegExp(`\\ssrc\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(${UNQUOTED
 const TITLE_RE = /\stitle\s*=\s*(?:"([^"]*)"|'([^']*)')/i
 
 /**
- * The Blueprint icon set. In the export these are replaced by a red text marker rather than
+ * The Blueprint icon set. In the extraction these are replaced by a red text marker rather than
  * the image itself: a reviewer needs to know *which* icon the author used, and a picture of
  * it says less than its name — especially once the image has been through Google Docs' HTML
  * importer, which is where they have been going missing.

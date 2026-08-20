@@ -301,14 +301,14 @@ export async function handleQuizExport(
     return {
       ok: true,
       message:
-        `Exported ${classicCount} classic quiz${classicCount !== 1 ? 'zes' : ''}` +
+        `Extracted ${classicCount} classic quiz${classicCount !== 1 ? 'zes' : ''}` +
         (newQuizCount > 0
           ? ` (${newQuizCount} New Quiz${newQuizCount !== 1 ? 'zes' : ''} noted but not extracted)`
           : '') +
         '.',
     }
   } catch (err) {
-    if (isCancellation(err)) return { ok: false, message: 'Export cancelled.', cancelled: true }
+    if (isCancellation(err)) return { ok: false, message: 'Extraction cancelled.', cancelled: true }
     throw err
   } finally {
     endJob(args.jobId)

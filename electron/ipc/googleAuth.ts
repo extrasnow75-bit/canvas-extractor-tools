@@ -282,7 +282,7 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
 }
 
 /**
- * What the user is told when the export cannot reach their Drive.
+ * What the user is told when the extraction cannot reach their Drive.
  *
  * Both routes here — never signed in, and a sign-in that has since died — leave them in the
  * same place and needing the same action, and the difference between the two is the app's

@@ -318,17 +318,17 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
 
           <Section id="without-google" title="How to use this app without Google sign-in">
             <p className="text-sm text-gray-600 mb-3">
-              Google sign-in only decides whether an export lands in your Drive automatically.
+              Google sign-in only decides whether an extraction lands in your Drive automatically.
               Everything the app extracts works without it — you save the file yourself and
-              upload it. It takes about a minute more per export.
+              upload it. It takes about a minute more per extraction.
             </p>
 
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
-              <h4 className="text-sm font-black text-gray-900">1. Save the export to your computer</h4>
+              <h4 className="text-sm font-black text-gray-900">1. Save the extraction to your computer</h4>
               <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-                <li>Paste your course URL and pick your export as usual.</li>
+                <li>Paste your course URL and pick your extraction as usual.</li>
                 <li>
-                  Instead of the blue <span className="font-bold">Export all as a Google Doc</span>{' '}
+                  Instead of the blue <span className="font-bold">Extract all to a Google Doc</span>{' '}
                   button, click <span className="font-bold">or save a local copy (.html)</span> just
                   beneath it.
                 </li>
@@ -391,7 +391,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               <p className="text-sm text-gray-700">
                 A document made this way will not have the blue lines above and below each{' '}
                 <span className="font-bold">Due by</span> heading. Those are drawn in Google Docs
-                itself after an export is uploaded, which the app can only do when it is signed in.
+                itself after an extraction is uploaded, which the app can only do when it is signed in.
                 The headings are still blue and bold, and everything else — modules, activity titles,
                 the red tool labels, the heading tags — is identical either way.
               </p>
@@ -432,7 +432,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
 
           {/* The KB article is documentation for the app itself, not a formatting standard
               for course content, so it gets its own section rather than sitting among the
-              export references. */}
+              extraction references. */}
           <Section id="kb-article" title="KB article">
             <div className="space-y-3">
               <ResourceLink
@@ -451,7 +451,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               section says. These are style and formatting references. */}
           {/* Plain "&" — this is a string prop, not JSX text, so an entity would render raw. */}
           <Section id="resources-references" title="Style & formatting references">
-            <h4 className="text-sm font-black text-gray-900 mb-2">Content export</h4>
+            <h4 className="text-sm font-black text-gray-900 mb-2">Content extraction</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Template Blueprint 5.0"
@@ -459,7 +459,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               />
             </div>
 
-            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Quiz export</h4>
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Quiz extraction</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Quiz Questions Extraction Template"
@@ -471,7 +471,7 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               />
             </div>
 
-            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Rubric export</h4>
+            <h4 className="text-sm font-black text-gray-900 mt-5 mb-2">Rubric extraction</h4>
             <div className="space-y-3">
               <ResourceLink
                 label="Rubric Example Point Ranges (MS Word version)"

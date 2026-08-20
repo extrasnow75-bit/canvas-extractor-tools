@@ -172,7 +172,7 @@ ipcMain.handle('dialog:saveFile', async (_e, opts: { defaultName: string; ext: s
     filters: [{ name: opts.label, extensions: [opts.ext] }],
   })
   if (!filePath) return null
-  // The export handlers will only write to a path this dialog issued; see savePaths.ts.
+  // The extraction handlers will only write to a path this dialog issued; see savePaths.ts.
   rememberSavePath(filePath)
   return filePath
 })
@@ -230,8 +230,8 @@ ipcMain.handle('canvas:exportContent', handleCanvasExport)
 ipcMain.handle('canvas:exportQuizzes', handleQuizExport)
 ipcMain.handle('canvas:exportRubrics', handleRubricExport)
 
-// Stop a running export. Cancellation is cooperative: the builders check between
-// items, so the export ends at its next checkpoint rather than instantly.
+// Stop a running extraction. Cancellation is cooperative: the builders check between
+// items, so the extraction ends at its next checkpoint rather than instantly.
 ipcMain.handle('canvas:cancelExport', (_e, jobId: string) => cancelJob(jobId))
 
 // ─── Course lookup (for the shared Canvas-course card) ────────────────────────
@@ -245,8 +245,8 @@ ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; tok
       `/courses/${ref.courseId}`,
       ref,
     )
-    // `code` is what the export file names are prefixed with. It comes back separately from
-    // the display name because the renderer needs it before an export starts, and it is
+    // `code` is what the saved file names are prefixed with. It comes back separately from
+    // the display name because the renderer needs it before an extraction starts, and it is
     // absent whenever the course code does not carry a recognisable DEPT + number.
     return { ok: true, name: course.name, code: courseCodeLabel(course.course_code) ?? undefined }
   } catch (e) {
@@ -254,7 +254,7 @@ ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; tok
   }
 })
 
-// ─── Picker item listing (for "choose specific items" on each export tool) ────
+// ─── Picker item listing (for "choose specific items" on each extraction tool) ─
 
 ipcMain.handle(
   'canvas:listItems',
@@ -277,7 +277,7 @@ ipcMain.handle('google:signIn', (_e, options?: { useAnotherAccount?: boolean }) 
 ipcMain.handle('google:status', () => getStatus())
 ipcMain.handle('google:signOut', () => clearTokens())
 
-// ─── Export to Google Drive (build HTML → upload as Google Doc → open) ─────────
+// ─── Extract to Google Drive (build HTML → upload as Google Doc → open) ────────
 
 ipcMain.handle(
   'canvas:exportToDrive',
@@ -321,7 +321,7 @@ ipcMain.handle(
       }
     } catch (err) {
       if (isCancellation(err)) {
-        return { ok: false, message: 'Export cancelled — nothing was uploaded.', cancelled: true }
+        return { ok: false, message: 'Extraction cancelled — nothing was uploaded.', cancelled: true }
       }
       throw err
     } finally {
@@ -332,7 +332,7 @@ ipcMain.handle(
 
     // Draw the blue rules above/below each "Due by …" header via the Docs API — the one
     // part of the Blueprint spec the HTML importer can drop. Purely cosmetic, and the
-    // document is already saved, so a failure here must not fail the whole export.
+    // document is already saved, so a failure here must not fail the whole extraction.
     let borderNote = ''
     if (args.tool === 'content') {
       try {

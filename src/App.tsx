@@ -32,7 +32,7 @@ export default function App() {
    *
    * Deliberately not persisted: it is a decision about this session's work, and asking once
    * per launch is a light enough nudge that someone who meant to sign in gets another
-   * chance without being nagged mid-export.
+   * chance without being nagged mid-extraction.
    */
   const [skippedGoogle, setSkippedGoogle] = useState(false)
 
@@ -63,7 +63,7 @@ export default function App() {
 
     // A stored Google sign-in can die between launches — Google expires refresh tokens
     // after seven days while the OAuth consent screen is in Testing. When that surfaces
-    // mid-export, stop showing the user as signed in.
+    // mid-extraction, stop showing the user as signed in.
     return window.api.google.onSignedOut(() => {
       setGoogleStatus({ signedIn: false })
       // No "please sign in again" here — the banner below already says where to do that,
@@ -89,7 +89,7 @@ export default function App() {
       const status = await window.api.google.signIn({ useAnotherAccount })
       setGoogleStatus(status)
     } catch (err) {
-      // Same Electron IPC wrapper as the export errors — strip it before it is shown.
+      // Same Electron IPC wrapper as the extraction errors — strip it before it is shown.
       setGoogleError(err instanceof Error ? cleanErrorMessage(err.message) : 'Google sign-in failed.')
     } finally {
       setGoogleBusy(false)
@@ -127,7 +127,7 @@ export default function App() {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <span className="text-xs text-gray-600 truncate">
-            Export Canvas course content, quizzes, and rubrics
+            Extract Canvas course content, quizzes, and rubrics
           </span>
           <div className="flex items-center gap-3 flex-shrink-0">
             <ZoomControl />
@@ -190,7 +190,7 @@ export default function App() {
             />
           </div>
 
-          {/* Held back until the Google question has an answer. Revealing the export tools
+          {/* Held back until the Google question has an answer. Revealing the extraction tools
               the moment a token was saved is what pulled attention past the sign-in card —
               the panel stayed open, but nobody was looking at it any more. */}
           {canvasToken && (googleStatus.signedIn || skippedGoogle) && (

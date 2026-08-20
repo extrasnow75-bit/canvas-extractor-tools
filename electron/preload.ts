@@ -54,7 +54,7 @@ contextBridge.exposeInMainWorld('api', {
     listItems: (args: unknown) => ipcRenderer.invoke('canvas:listItems', args),
     cancelExport: (jobId: string): Promise<boolean> =>
       ipcRenderer.invoke('canvas:cancelExport', jobId),
-    /** Subscribe to export progress. Returns an unsubscribe function. */
+    /** Subscribe to extraction progress. Returns an unsubscribe function. */
     onExportProgress: (
       callback: (data: { jobId: string; done: number; total: number }) => void,
     ): (() => void) => {

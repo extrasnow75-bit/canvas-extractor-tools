@@ -65,21 +65,21 @@ const RubricIcon = () => (
 const TOOLS = [
   {
     id: 'content' as const,
-    label: 'Course content export',
+    label: 'Course content extraction',
     description: 'Modules, pages, assignments, discussions → Blueprint-formatted HTML',
     icon: <CanvasIcon />,
     tileBg: '#EA4335',
   },
   {
     id: 'quizzes' as const,
-    label: 'Classic quiz export',
+    label: 'Classic quiz extraction',
     description: 'All classic-quiz questions and answers, template-formatted HTML',
     icon: <QuizIcon />,
     tileBg: '#FBBC05',
   },
   {
     id: 'rubrics' as const,
-    label: 'Rubric export',
+    label: 'Rubric extraction',
     description: 'Every course rubric with criteria and rating levels, as a table',
     icon: <RubricIcon />,
     tileBg: '#34A853',
@@ -107,8 +107,8 @@ export function ToolPanel({ token }: Props) {
 
   const anyRunning = Object.values(toolStatus).some((s) => s === 'running')
   const anyFinished = Object.values(toolStatus).some((s) => s === 'success' || s === 'error')
-  // Hidden until an export has actually finished — there is nothing to start again from
-  // before that — and hidden again while one is running, because resetting mid-export would
+  // Hidden until an extraction has actually finished — there is nothing to start again from
+  // before that — and hidden again while one is running, because resetting mid-run would
   // remount the tile and orphan a job that is still going.
   const showStartOver = anyFinished && !anyRunning
 
@@ -132,12 +132,12 @@ export function ToolPanel({ token }: Props) {
   }, [resetKey])
 
   /**
-   * Return every tool to the state it had at launch, for the common case of exporting one
+   * Return every tool to the state it had at launch, for the common case of extracting one
    * course and then moving on to the next.
    *
    * This is a convenience, not the safeguard: each tile already discards its own selection
    * when the course URL changes. Without that, this button would be load-bearing, and an
-   * export would silently come out wrong whenever someone forgot to press it.
+   * extraction would silently come out wrong whenever someone forgot to press it.
    */
   const startOver = () => {
     setCourseUrl(DEFAULT_COURSE_URL)
@@ -185,7 +185,7 @@ export function ToolPanel({ token }: Props) {
           )}
         </div>
         <p className="text-[13px] text-gray-600 mb-2.5">
-          Paste the homepage URL of the course you want to export. All three tools below use it.
+          Paste the homepage URL of the course you want to extract. All three tools below use it.
         </p>
         <div className="flex gap-2">
           {/* type="text" (not "url") so the caret can be positioned — setSelectionRange
@@ -257,7 +257,7 @@ export function ToolPanel({ token }: Props) {
           ) : null}
         </div>
 
-        {/* Appears only once an export has finished. White on green-800 (#166534) measures
+        {/* Appears only once an extraction has finished. White on green-800 (#166534) measures
             6.6:1, comfortably past the 4.5:1 needed for normal text — green-600 and
             green-700 are both too light to carry white text at this size. */}
         {showStartOver && (
@@ -271,9 +271,9 @@ export function ToolPanel({ token }: Props) {
         )}
       </div>
 
-      <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black px-1 pt-1">Export tools</h2>
+      <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black px-1 pt-1">Extraction tools</h2>
       <p className="text-xs text-gray-600 -mt-2 px-1">
-        Each export becomes a Google Doc in your Drive. Not signed in to Google? Use "save a local copy" instead.
+        Each extraction becomes a Google Doc in your Drive. Not signed in to Google? Use "save a local copy" instead.
       </p>
 
       <div className="space-y-3">

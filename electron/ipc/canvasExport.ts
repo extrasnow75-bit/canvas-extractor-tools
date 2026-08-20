@@ -85,8 +85,8 @@ interface CanvasQuiz {
   title: string
   /**
    * The Rich Content Editor instructions shown above the questions. This is body content
-   * like a page's, so it belongs in the content export; the questions themselves belong to
-   * the quiz export and are deliberately not fetched here.
+   * like a page's, so it belongs in the content extraction; the questions themselves belong to
+   * the quiz extraction and are deliberately not fetched here.
    */
   description?: string
 }
@@ -97,7 +97,7 @@ interface CanvasFile {
 }
 
 /**
- * Canvas file id → display name, for the whole export.
+ * Canvas file id → display name, for the whole extraction.
  *
  * Needed because Canvas embeds images with no name in the markup at all: the `src` is
  * `/files/6932907/preview` and the `alt` is empty, so the only way to tell an icon from a
@@ -117,11 +117,11 @@ function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promis
       .then((file) => file.display_name ?? file.filename ?? null)
       .catch((err) => {
         // Stop must not be absorbed here. Cancellation reaches this as a thrown error like
-        // any other, and swallowing it left the export running until the next checkpoint.
+        // any other, and swallowing it left the extraction running until the next checkpoint.
         if (isCancellation(err)) throw err
         // Anything else — deleted file, locked folder, a hotlink from another course, a
         // rate-limit that outlasted its retries — leaves the image as an image rather than
-        // failing a multi-minute export over an icon. The entry is dropped rather than
+        // failing a multi-minute extraction over an icon. The entry is dropped rather than
         // cached, so a transient failure does not follow the file for the whole run.
         cache.delete(id)
         return null
@@ -136,7 +136,7 @@ function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promis
  *
  * Without this each embedded image costs its own `GET /files/:id`, including the photographs
  * and diagrams whose names will never match an icon — on an image-heavy course that nearly
- * doubled the export's Canvas traffic. Courses where the token cannot list files fall back
+ * doubled the extraction's Canvas traffic. Courses where the token cannot list files fall back
  * to the per-id path, which is why a failure here is swallowed rather than raised.
  */
 async function seedFileNames(ref: CourseRef, cache: FileNameCache): Promise<void> {
@@ -246,9 +246,9 @@ async function renderModuleItem(
       }
     }
     case 'Quiz': {
-      // Classic Quiz. The questions are the quiz export's job, but the instructions above
+      // Classic Quiz. The questions are the quiz extraction's job, but the instructions above
       // them are authored body content like any page's — without this they appeared in
-      // neither export.
+      // neither extraction.
       const quiz = await canvasGetOne<CanvasQuiz>(
         `/courses/${ref.courseId}/quizzes/${item.content_id}`,
         ref,
@@ -267,7 +267,7 @@ async function renderModuleItem(
       // The URL is whatever a course author typed into Canvas, so the scheme is checked
       // rather than assumed. Escaping alone would not help: it stops an attribute breakout,
       // not a `javascript:` or `file:` target. Google Docs sanitises links on import, but the
-      // local .html export is opened straight from the filesystem, where a javascript: link
+      // local .html extraction is opened straight from the filesystem, where a javascript: link
       // would run in the file:// origin.
       const url = safeLinkHref(item.external_url)
       return {
@@ -345,7 +345,7 @@ export async function buildContentHtml(
   // Positions of the due-date headers, so the bodies on either side can have a colliding
   // template divider trimmed once the document is assembled.
   const dueHeaderIndices: number[] = []
-  // One cache for the whole export, so an icon used on twenty pages is fetched once.
+  // One cache for the whole extraction, so an icon used on twenty pages is fetched once.
   const files: FileNameCache = new Map()
   await seedFileNames(ref, files)
   parts.push(`<h1 style="font-family:${FONT};">${escapeHtml(course.name)}</h1>`)
@@ -430,7 +430,7 @@ export async function buildContentHtml(
   }
 }
 
-/** Sends progress for this job back to the window that requested the export. */
+/** Sends progress for this job back to the window that requested the extraction. */
 export function makeProgressReporter(
   event: IpcMainInvokeEvent,
   jobId?: string,
@@ -459,7 +459,7 @@ export async function handleCanvasExport(
       selectedIds,
       cancel,
       makeProgressReporter(event, args.jobId),
-      // Written for Google Docs, because that is where a locally saved export goes: the
+      // Written for Google Docs, because that is where a locally saved extraction goes: the
       // people using this route cannot sign in, so they upload the file and open it with
       // Docs by hand. Leaving the CSS rules in makes the importer draw a grey line above
       // and below every due header — worse than no line at all. Neither route can give
@@ -470,10 +470,10 @@ export async function handleCanvasExport(
     writeFileSync(consumeSavePath(args.savePath), html, 'utf-8')
     return {
       ok: true,
-      message: `Exported "${courseName}" — ${moduleCount} module${moduleCount === 1 ? '' : 's'}.`,
+      message: `Extracted "${courseName}" — ${moduleCount} module${moduleCount === 1 ? '' : 's'}.`,
     }
   } catch (err) {
-    if (isCancellation(err)) return { ok: false, message: 'Export cancelled.', cancelled: true }
+    if (isCancellation(err)) return { ok: false, message: 'Extraction cancelled.', cancelled: true }
     throw err
   } finally {
     endJob(args.jobId)

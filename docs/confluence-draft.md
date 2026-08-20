@@ -12,17 +12,17 @@ that QA review used to require.
 It is **read-only against Canvas.** The app never edits, publishes, or deletes anything in
 a course. The only thing it creates is a Google Doc in your own Drive.
 
-## What it exports
+## What it extracts
 
-You choose one of three exports each time you run it. Each produces one document.
+You choose one of three extractions each time you run it. Each produces one document.
 
-| Export | What lands in the document |
+| Extraction | What lands in the document |
 | --- | --- |
 | **Course content** | The home page, the syllabus, and every module item in the order the Modules page shows them — pages, assignments, discussions, quiz instructions, files, and external links. Due-date headers get the blue Blueprint rules; Canvas tool names (Page, Assignment, …) get the grey chip. |
 | **Classic quizzes** | Every question and every answer choice, with the correct answers marked. |
 | **Rubrics** | Every rubric in the course as a table — criteria down the side, rating levels across, points per criterion and a total. |
 
-You can export the whole course or tick a subset of items.
+You can extract the whole course or tick a subset of items.
 
 Output goes to **Google Drive** as a real Google Doc, which opens in your browser when it
 finishes. If you would rather not sign in to Google, you can save a **local `.html` file**
@@ -45,10 +45,10 @@ The token gives the app exactly the access you already have — no more. It is s
 encrypted on your own computer, tied to your Windows sign-in, and is never sent anywhere
 except Canvas.
 
-**2. Access to Google sign-in — only if you want the Drive export.** Google sign-in is
+**2. Access to Google sign-in — only if you want the Drive extraction.** Google sign-in is
 currently limited to an approved list of accounts. **Contact the eCampus Center to be added
 before your first use**, or sign-in will fail with a message about the app not being
-verified. The local `.html` export needs no Google account at all.
+verified. The local `.html` extraction needs no Google account at all.
 
 ## Installing
 
@@ -93,9 +93,9 @@ files it creates itself. It cannot read the rest of your Drive.
 1. Paste the course URL — anything of the form
    `https://boisestatecanvas.instructure.com/courses/12345`. The course name appears once
    the app confirms it.
-2. Pick an export: Course content, Classic quizzes, or Rubrics.
-3. Either export everything, or click to choose specific items.
-4. Choose **Export to Google Drive** or **Save as HTML file**.
+2. Pick an extraction: Course content, Classic quizzes, or Rubrics.
+3. Either extract everything, or click to choose specific items.
+4. Choose **Extract all to a Google Doc** or **or save a local copy (.html)**.
 5. Wait. A progress line names each item as it is fetched, and **Stop** cancels between
    items. A large course takes a few minutes — the app makes one request per item and
    Canvas limits how fast it will answer.
@@ -118,19 +118,19 @@ course number. Copy it from your browser's address bar while you are on the cour
 empty from Canvas. It is usually a New Quiz (see below) or a genuinely empty item — open it
 in Canvas and confirm.
 
-**The export stops partway with an error.** Most often this is Canvas rate limiting after a
+**The extraction stops partway with an error.** Most often this is Canvas rate limiting after a
 burst of requests. Wait a minute and run it again.
 
 ## Known limitations
 
-- **New Quizzes are only partly supported.** The Classic quizzes export covers Classic
+- **New Quizzes are only partly supported.** The Classic quizzes extraction covers Classic
   quizzes fully. Canvas stores a New Quiz differently, and the app can usually only reach
   its description, not its questions.
-- **The local `.html` export is a plain file**, not a Google Doc. It opens fine in Word or a
+- **The local `.html` extraction is a plain file**, not a Google Doc. It opens fine in Word or a
   browser, and its formatting matches, but there is no sharing or commenting.
 - **A rubric that fails to load** is currently rendered as an empty rubric worth 0 points
   rather than as an error. If a rubric looks blank, check it in Canvas.
-- **Exports are one-at-a-time and sequential**, so long courses take minutes.
+- **Extractions are one-at-a-time and sequential**, so long courses take minutes.
 
 ## Updates
 
@@ -182,7 +182,7 @@ the main process only through the narrow API in `electron/preload.ts`.
 The **Google** tokens are never handed to the renderer — no IPC handler returns one, and
 `google:status` returns only the display fields. **Do not weaken that for convenience.** The
 **Canvas** token is different: `credentials:load` returns it and the renderer passes it back
-on each export call, so a renderer compromise would cost the user their Canvas token. That
+on each extraction call, so a renderer compromise would cost the user their Canvas token. That
 asymmetry is deliberate, but it is the reason the renderer's inputs are worth guarding.
 
 Three related defences, each of which would be quietly fatal to remove:
@@ -193,7 +193,7 @@ Three related defences, each of which would be quietly fatal to remove:
   launches whatever the OS registered for a scheme, so an unfiltered call is a "run
   something" primitive — `file://` reaches executables, and Windows protocol handlers have
   produced RCE more than once.
-- `savePaths.ts` — the export handlers write only to a path the save dialog actually issued.
+- `savePaths.ts` — the extraction handlers write only to a path the save dialog actually issued.
   The renderer supplies that path as a plain string, and nothing else proves its origin.
 
 One trap worth knowing: **every `file://` URL has the origin `"null"`.** The `will-navigate`

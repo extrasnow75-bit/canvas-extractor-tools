@@ -3,7 +3,7 @@ export interface CourseRef {
   courseId: string
   token: string
   /**
-   * The running export's cancel token, if any. It rides along on the ref so that the fetch
+   * The running extraction's cancel token, if any. It rides along on the ref so that the fetch
    * helpers can abandon a rate-limit backoff the moment Stop is pressed, without every one
    * of their ~25 call sites having to pass it explicitly.
    */
@@ -24,7 +24,7 @@ interface FetchResponseLike {
   headers: { get(name: string): string | null }
 }
 
-/** One selectable row in an export "choose specific items" picker. */
+/** One selectable row in an extraction "choose specific items" picker. */
 export interface PickerItem {
   id: string
   label: string
@@ -32,7 +32,7 @@ export interface PickerItem {
 }
 
 /**
- * Cooperative cancellation for long exports. An export is a long sequence of Canvas
+ * Cooperative cancellation for long extractions. An extraction is a long sequence of Canvas
  * requests, so it cannot be aborted outright — instead the builders check this flag
  * between items and bail out early when the user presses Stop.
  */
@@ -41,14 +41,14 @@ export interface CancelToken {
 }
 
 /**
- * Reports export progress so the UI can show elapsed time and a remaining-time estimate.
+ * Reports extraction progress so the UI can show elapsed time and a remaining-time estimate.
  * The estimate is derived from measured throughput, so `total` must be known up front.
  */
 export type ProgressReporter = (done: number, total: number) => void
 
 export class ExportCancelledError extends Error {
   constructor() {
-    super('Export cancelled.')
+    super('Extraction cancelled.')
     this.name = 'ExportCancelledError'
   }
 }
@@ -57,7 +57,7 @@ export function throwIfCancelled(token?: CancelToken | null): void {
   if (token?.cancelled) throw new ExportCancelledError()
 }
 
-/** Registry of in-flight exports, keyed by a renderer-supplied job id. */
+/** Registry of in-flight extractions, keyed by a renderer-supplied job id. */
 const activeJobs = new Map<string, CancelToken>()
 
 export function beginJob(jobId?: string): CancelToken | null {
@@ -71,7 +71,7 @@ export function endJob(jobId?: string): void {
   if (jobId) activeJobs.delete(jobId)
 }
 
-/** Flag a running export as cancelled; it stops at its next checkpoint. */
+/** Flag a running extraction as cancelled; it stops at its next checkpoint. */
 export function cancelJob(jobId: string): boolean {
   const token = activeJobs.get(jobId)
   if (!token) return false
@@ -84,10 +84,10 @@ export function isCancellation(err: unknown): boolean {
 }
 
 /**
- * How many Canvas requests an export keeps in flight.
+ * How many Canvas requests an extraction keeps in flight.
  *
  * Canvas meters requests with a leaky bucket rather than a fixed rate, and cost is charged
- * per in-flight request, so concurrency is the dial that decides whether an export drains it.
+ * per in-flight request, so concurrency is the dial that decides whether an extraction drains it.
  * Four is deliberately modest: most of the speedup is in escaping the strictly-serial round
  * trip, and pushing higher mainly buys more 403s for `canvasFetch` to sit out.
  */
@@ -98,7 +98,7 @@ export const CANVAS_CONCURRENCY = 4
  * in index order regardless of the order they completed in.
  *
  * On the first failure it stops handing out new work and waits for the already-running
- * workers to settle before rethrowing, so a cancelled or failed export never leaves a
+ * workers to settle before rethrowing, so a cancelled or failed extraction never leaves a
  * promise rejecting into nothing.
  */
 export async function mapWithConcurrency<T>(
@@ -160,7 +160,7 @@ export type TokenState = 'valid' | 'expired' | 'unknown'
  *
  * Canvas expires personal access tokens on a schedule, so a saved token is not a working
  * token — and a setup panel that reports "Complete" for a dead token sends the user hunting
- * through the wrong part of the app when exports start failing.
+ * through the wrong part of the app when extractions start failing.
  *
  * Returns 'unknown' for anything that is not a clear yes or a clear no: offline, DNS blocked,
  * Canvas down, rate limited. Those say nothing about the token, and claiming otherwise would
@@ -228,7 +228,7 @@ export function parseCourseUrl(raw: string): { baseUrl: string; courseId: string
 /**
  * Waits before each successive retry after Canvas reports its request bucket empty.
  * Four attempts, ~37s of patience in total — enough for a leaky bucket to refill, short
- * enough that a genuinely stuck export still fails rather than hanging indefinitely.
+ * enough that a genuinely stuck extraction still fails rather than hanging indefinitely.
  */
 const RATE_LIMIT_BACKOFF_MS = [2000, 5000, 10000, 20000]
 
@@ -237,7 +237,7 @@ const RATE_LIMIT_BACKOFF_MS = [2000, 5000, 10000, 20000]
  *
  * Generous, because a large Modules page genuinely can take a while to come back; the point
  * is not to be strict but to guarantee that the request *ends*. Without it a stalled socket
- * never settles and the export hangs with a Stop button that cannot help.
+ * never settles and the extraction hangs with a Stop button that cannot help.
  */
 const REQUEST_TIMEOUT_MS = 30000
 
@@ -250,7 +250,7 @@ const NETWORK_RETRY_BACKOFF_MS = [1000, 3000]
  * Canvas signals an exhausted request bucket with **403**, not the 429 you would expect,
  * and the body is the bare string "403 Forbidden (Rate Limit Exceeded)". A permissions
  * failure carries the same 403, so status alone cannot tell them apart — retrying a real
- * permission error would just stall the export behind pointless waiting. Hence the body
+ * permission error would just stall the extraction behind pointless waiting. Hence the body
  * and the remaining-quota header, either of which is conclusive.
  */
 function isRateLimited(status: number, body: string, remaining: string | null): boolean {
@@ -283,8 +283,8 @@ async function sleepCancellable(ms: number, cancel?: CancelToken | null): Promis
 /**
  * One authenticated Canvas GET, retried while Canvas is throttling us.
  *
- * Exporting a large course is hundreds of sequential requests, which is enough to drain
- * Canvas's leaky bucket. Before this retried, one 403 discarded an export that had already
+ * Extracting a large course is hundreds of sequential requests, which is enough to drain
+ * Canvas's leaky bucket. Before this retried, one 403 discarded a run that had already
  * been running for minutes and the user had no recourse but to start over.
  */
 async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLike> {
@@ -302,9 +302,9 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
       })
     } catch (err) {
       // Without a timeout a single stalled connection — dropped VPN, flaky campus wifi —
-      // hung the whole export permanently, and Stop could not rescue it: cancellation is
+      // hung the whole extraction permanently, and Stop could not rescue it: cancellation is
       // only checked between requests, so a fetch that never settles is never interrupted.
-      // An export is hundreds of requests, so the odds of meeting one compound.
+      // An extraction is hundreds of requests, so the odds of meeting one compound.
       if (isCancellation(err)) throw err
       if (attempt < NETWORK_RETRY_BACKOFF_MS.length) {
         await sleepCancellable(NETWORK_RETRY_BACKOFF_MS[attempt], ref.cancel)

@@ -1,9 +1,9 @@
 # Canvas Extractor Tools
 
-Desktop app for Boise State eCampus that exports a Canvas course to Google Docs, formatted
+Desktop app for Boise State eCampus that extracts a Canvas course to Google Docs, formatted
 to match the Blueprint template so QA staff can read it without reformatting.
 
-Three exports, each producing one document:
+Three extractions, each producing one document:
 
 | Tool | Contents |
 | --- | --- |
@@ -19,7 +19,7 @@ Output goes to Google Drive as a native Google Doc (opened in your browser), or 
 - Windows 10 or later
 - A Canvas API access token
   ([how to create one](https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account))
-- A Google account, only if you want the Drive export
+- A Google account, only if you want the Drive extraction
 
 ## Running from source
 
@@ -30,7 +30,7 @@ npm run dev
 
 Google sign-in needs an OAuth client secret that is not in this repo. Copy `.env.example`
 to `.env.local` and fill in `MAIN_VITE_GOOGLE_CLIENT_SECRET`. Everything else — the Canvas
-export and the local `.html` output — works without it.
+extraction and the local `.html` output — works without it.
 
 ```
 npm run typecheck   # both tsconfigs (main + renderer)
@@ -56,7 +56,7 @@ uses the OS keychain.
 The two credentials are not equally contained, and the difference is deliberate. The
 **Google** tokens never leave the main process — no IPC handler returns one, and
 `getAccessToken()` has no caller outside `electron/ipc/`. The **Canvas** token does reach
-the renderer: `credentials:load` returns it and the UI passes it back on each export call.
+the renderer: `credentials:load` returns it and the UI passes it back on each extraction call.
 So a renderer compromise would expose the Canvas token but not the Google session. Treat
 that asymmetry as intentional and keep the Google side of it intact.
 
@@ -75,21 +75,21 @@ only the Python standard library. Edit the SVG, then re-run the script.
 ## Known limitations
 
 - **New Quiz instructions may not be extracted.** Canvas stores New Quizzes as an
-  LTI-backed assignment; the export reads that assignment's description, which is where the
+  LTI-backed assignment; the extraction reads that assignment's description, which is where the
   instructions usually live but not always. When it is empty the document shows a "check
   manually" note instead. Classic Quiz instructions are confirmed working.
 - **Canvas rate limiting is not handled.** Canvas signals an exhausted request bucket with
-  a 403, which currently aborts the whole export rather than backing off and retrying.
+  a 403, which currently aborts the whole extraction rather than backing off and retrying.
 - **Rubric fetch failures are silent.** A rubric whose detail fetch fails is rendered as an
   empty rubric with 0 points rather than reported as an error.
-- Exports are sequential — one Canvas request per module item — so a large course takes
+- Extractions are sequential — one Canvas request per module item — so a large course takes
   minutes. The Stop button cancels between items.
 - Builds are unsigned, so Windows SmartScreen warns on first run: **More info → Run anyway**.
 
 ## Documentation
 
 `docs/confluence-draft.md` is the user-facing article — how to get a Canvas token, install,
-run each export, and troubleshoot — followed by a maintainer section covering the security
+run each extraction, and troubleshoot — followed by a maintainer section covering the security
 boundary, the OAuth consent-screen constraints, the release process, and the open items.
 
 ## License
