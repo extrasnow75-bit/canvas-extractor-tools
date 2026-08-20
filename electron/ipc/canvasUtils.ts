@@ -183,6 +183,33 @@ export async function verifyToken(token: string, origin?: string): Promise<Token
   }
 }
 
+/**
+ * Words that look like a department but are not. Canvas course codes routinely carry the
+ * term, and `FALL2026-ENGL-416` would otherwise be read as department FALL, number 2026.
+ */
+const NOT_A_DEPARTMENT = /^(?:spring|summer|fall|winter|term|sem|sect?|sec|online|fa|sp|su|wi)$/i
+
+/**
+ * Department and course number pulled out of a Canvas course code — `RESPCARE 560` from
+ * `RESPCARE-560-001-FA26`, `ENGL 416` from `FALL2026-ENGL416`.
+ *
+ * Only this much of the code is wanted. Course codes carry section, term and campus
+ * suffixes that make a file name long without making it easier to recognise, and course
+ * *names* are worse ("Advanced Respiratory Care Practicum II"). Returns null rather than
+ * guessing when nothing matches the shape, so the caller can fall back to a plain name.
+ *
+ * The number must be three or four digits: two would match the year in every term prefix.
+ */
+export function courseCodeLabel(code?: string | null): string | null {
+  if (!code) return null
+  const re = /(?:^|[^A-Za-z0-9])([A-Za-z]{2,12})[\s\-_]?(\d{3,4}[A-Za-z]?)(?![0-9])/g
+  for (const m of code.matchAll(re)) {
+    if (NOT_A_DEPARTMENT.test(m[1])) continue
+    return `${m[1].toUpperCase()} ${m[2].toUpperCase()}`
+  }
+  return null
+}
+
 export function parseCourseUrl(raw: string): { baseUrl: string; courseId: string } | null {
   const match = raw.trim().match(/^(https:\/\/[^/]+)\/courses\/(\d+)/)
   if (!match) return null

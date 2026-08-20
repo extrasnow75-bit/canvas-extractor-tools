@@ -90,6 +90,9 @@ export function ToolPanel({ token }: Props) {
   const [courseUrl, setCourseUrl] = useState(DEFAULT_COURSE_URL)
   const inputRef = useRef<HTMLInputElement>(null)
   const [courseName, setCourseName] = useState<string | null>(null)
+  // "RESPCARE 560" — prefixes the default save-dialog file name. Null when the course code
+  // has no recognisable department + number, in which case the plain names are used.
+  const [courseCode, setCourseCode] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   // Bumped by "Start again": it is part of each tile's key, so the tiles remount with
@@ -115,6 +118,7 @@ export function ToolPanel({ token }: Props) {
   // from a different course can never linger next to a new URL.
   useEffect(() => {
     setCourseName(null)
+    setCourseCode(null)
     setNameError(null)
   }, [courseUrl])
 
@@ -138,6 +142,7 @@ export function ToolPanel({ token }: Props) {
   const startOver = () => {
     setCourseUrl(DEFAULT_COURSE_URL)
     setCourseName(null)
+    setCourseCode(null)
     setNameError(null)
     setToolStatus({})
     setResetKey((k) => k + 1)
@@ -147,11 +152,14 @@ export function ToolPanel({ token }: Props) {
     if (!urlValid || validating) return
     setValidating(true)
     setCourseName(null)
+    setCourseCode(null)
     setNameError(null)
     try {
       const res = await window.api.canvas.getCourseName({ courseUrl: courseUrl.trim(), token })
-      if (res.ok && res.name) setCourseName(res.name)
-      else setNameError(res.message ?? 'Could not load this course.')
+      if (res.ok && res.name) {
+        setCourseName(res.name)
+        setCourseCode(res.code ?? null)
+      } else setNameError(res.message ?? 'Could not load this course.')
     } catch (err) {
       setNameError(err instanceof Error ? err.message : 'Could not load this course.')
     } finally {
@@ -278,6 +286,7 @@ export function ToolPanel({ token }: Props) {
             icon={t.icon}
             tileBg={t.tileBg}
             courseUrl={courseUrl.trim()}
+            courseCode={courseCode}
             token={token}
             onStatusChange={handleStatusChange}
           />

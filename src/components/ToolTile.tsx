@@ -18,6 +18,8 @@ interface Props {
   icon: React.ReactNode
   tileBg: string
   courseUrl: string
+  /** "RESPCARE 560", or null when the course has no code of that shape. Prefixes saved files. */
+  courseCode: string | null
   token: string
   /**
    * Reports this tile's status upward, so the panel can decide when to offer "Start again":
@@ -39,6 +41,22 @@ const LOCAL_FILE_NAMES: Record<Tool, string> = {
   content: 'course_content_export.html',
   quizzes: 'quiz_questions.html',
   rubrics: 'course_rubrics.html',
+}
+
+/**
+ * "RESPCARE_560_quiz_questions.html" — the course's department and number in front of the
+ * plain name, so a folder of exports from several courses can be told apart at a glance.
+ *
+ * Anything outside [A-Za-z0-9] becomes an underscore before it reaches the save dialog:
+ * the label is derived from an institution-set course code, and a stray slash or colon in
+ * it would be rejected by Windows or, worse, read as a path. Falls back to the plain name
+ * when there is no code, and when sanitising leaves nothing behind.
+ */
+function localFileName(tool: Tool, courseCode: string | null): string {
+  const base = LOCAL_FILE_NAMES[tool]
+  if (!courseCode) return base
+  const prefix = courseCode.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return prefix ? `${prefix}_${base}` : base
 }
 
 const LOCAL_HANDLERS: Record<
@@ -63,6 +81,7 @@ export function ToolTile({
   icon,
   tileBg,
   courseUrl,
+  courseCode,
   token,
   onStatusChange,
 }: Props) {
@@ -262,9 +281,21 @@ export function ToolTile({
     await runLocalSave(pendingLocalSave.current)
   }
 
+  /**
+   * The code arrives with the course lookup, which is a button the user is free to skip —
+   * so fetch it here when it is missing rather than letting the file name quietly lose its
+   * prefix for anyone who pastes a URL and exports straight away. One small request, and a
+   * failure just means the plain name.
+   */
+  async function resolveCourseCode(): Promise<string | null> {
+    if (courseCode) return courseCode
+    const res = await window.api.canvas.getCourseName({ courseUrl, token }).catch(() => null)
+    return res?.ok ? (res.code ?? null) : null
+  }
+
   async function runLocalSave(selectedIds?: string[]) {
     const savePath = await window.api.dialog.saveFile({
-      defaultName: LOCAL_FILE_NAMES[tool],
+      defaultName: localFileName(tool, await resolveCourseCode()),
       ext: 'html',
       label: 'HTML File',
     })

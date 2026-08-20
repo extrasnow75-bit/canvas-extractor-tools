@@ -33,6 +33,8 @@ export interface ListItemsResult {
 export interface CourseNameResult {
   ok: boolean
   name?: string
+  /** Department and number only, e.g. "RESPCARE 560". Absent when the code has no such shape. */
+  code?: string
   message?: string
 }
 

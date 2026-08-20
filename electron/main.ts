@@ -13,6 +13,7 @@ import {
   cancelJob,
   isCancellation,
   verifyToken,
+  courseCodeLabel,
 } from './ipc/canvasUtils'
 import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
@@ -240,8 +241,14 @@ ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; tok
   if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
   const ref: CourseRef = { ...parsed, token: args.token }
   try {
-    const course = await canvasGetOne<{ name: string }>(`/courses/${ref.courseId}`, ref)
-    return { ok: true, name: course.name }
+    const course = await canvasGetOne<{ name: string; course_code?: string }>(
+      `/courses/${ref.courseId}`,
+      ref,
+    )
+    // `code` is what the export file names are prefixed with. It comes back separately from
+    // the display name because the renderer needs it before an export starts, and it is
+    // absent whenever the course code does not carry a recognisable DEPT + number.
+    return { ok: true, name: course.name, code: courseCodeLabel(course.course_code) ?? undefined }
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : 'Could not load course.' }
   }
