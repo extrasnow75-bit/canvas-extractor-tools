@@ -59,6 +59,7 @@ You choose **one** of three extractions each time you run the app. Each one prod
 * Home page and syllabus
 * Discussions and quiz **instructions** (not quiz questions — that is the second extraction)
 * Blueprint markup tags (e.g. **H2**, **H3**, **Assignment**, **Page**...)
+* Stylized HTML, named in red bold above the block it applies to (e.g. **\[Callout Box\]**, **\[Styled Dropdown\]**, **\[Styled Table\]**, **\[Alert Box\]**). The styling itself does not survive the trip out of Canvas, so the marker is what tells you a template was used. Anything not built from a template in the **HTML Templates** article — hand-written styling, buttons — comes through unmarked.
 * Due-date headers, with the blue Blueprint rules
 * Images
 * Video URLs

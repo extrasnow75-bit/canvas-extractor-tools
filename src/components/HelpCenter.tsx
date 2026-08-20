@@ -393,7 +393,8 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
                 <span className="font-bold">Due by</span> heading. Those are drawn in Google Docs
                 itself after an extraction is uploaded, which the app can only do when it is signed in.
                 The headings are still blue and bold, and everything else — modules, activity titles,
-                the red tool labels, the heading tags — is identical either way.
+                the red tool labels, the heading tags, the stylized-HTML markers — is identical
+                either way.
               </p>
             </div>
           </Section>

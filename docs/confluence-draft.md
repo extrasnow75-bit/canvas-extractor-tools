@@ -18,7 +18,7 @@ You choose one of three extractions each time you run it. Each produces one docu
 
 | Extraction | What lands in the document |
 | --- | --- |
-| **Course content** | The home page, the syllabus, and every module item in the order the Modules page shows them — pages, assignments, discussions, quiz instructions, files, and external links. Due-date headers get the blue Blueprint rules; Canvas tool names (Page, Assignment, …) get the grey chip. |
+| **Course content** | The home page, the syllabus, and every module item in the order the Modules page shows them — pages, assignments, discussions, quiz instructions, files, and external links. Due-date headers get the blue Blueprint rules; Canvas tool names (Page, Assignment, …) get the grey chip; stylized HTML from the eCampus templates is named in red bold above the block — `[Callout Box]`, `[Styled Dropdown]`, `[Styled Table]` and so on. |
 | **Classic quizzes** | Every question and every answer choice, with the correct answers marked. |
 | **Rubrics** | Every rubric in the course as a table — criteria down the side, rating levels across, points per criterion and a total. |
 

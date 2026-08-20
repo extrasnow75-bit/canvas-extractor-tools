@@ -10,6 +10,8 @@
  *   2. The grey chip highlight behind Canvas tool names (Page, Assignment, …).
  */
 
+import { annotateStyledHtml } from './styledHtml'
+
 export const DEEP_BLUE = '#0033a0' // due-header text
 export const RED = '#ff0000' // Canvas tool labels + heading-level tags
 export const BORDER_BLUE = '#0000e7' // due-header rules (Code.gs: rgb(0, 0, 0.90588))
@@ -415,11 +417,34 @@ function normalizeCanvasImages(
 }
 
 /**
+ * Stylized-HTML marker — Arial 11pt bold red, in square brackets, matching the icon markers
+ * and the (H1)…(H6) level tags. No grey chip: that highlight is the Canvas tool cue and QA
+ * reads it as one, so giving it to a second kind of label would dilute it.
+ *
+ * Block markers are their own zero-margin paragraph above the element they name. Inline ones
+ * get a trailing space, for the same reason `iconMarker` does — they butt up against text.
+ */
+function styledHtmlMarker(label: string, inline: boolean): string {
+  const span =
+    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">` +
+    `[${escapeHtml(label)}]</span>`
+  return inline ? `${span} ` : `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;">${span}</p>`
+}
+
+/**
  * Convert heading tags inside a Canvas HTML body to Blueprint style: an 11pt Arial
- * paragraph whose text is bold black, followed by a bold red "(H1)…(H6)" level tag.
+ * paragraph whose text is bold black, followed by a bold red "(H1)…(H6)" level tag, and
+ * name each piece of stylized HTML with a red bold marker of its own.
  * The rest of the body is Canvas-authored HTML and passes through unchanged — including
  * <hr> dividers, which authors insert deliberately via the Rich Content Editor. Only the
  * rules that collide with a due-date header are removed; see `stripEdgeRules`.
+ *
+ * The three passes are ordered. Images first, so that the stylized-HTML pass sees only the
+ * <img> tags that survived — a Blueprint icon has already become text by then and cannot
+ * pick up a stray [Float Left] on its way out. Stylized HTML second, before the headings
+ * become <p> elements of this module's own making: the paragraph signature keys on a blue
+ * background, and running it over generated markup means auditing generated markup against
+ * it forever.
  *
  * `baseUrl` is the Canvas host, used to resolve host-relative image sources. Omitting it
  * only means those images keep the src Canvas gave them. `fileNames` maps Canvas file ids
@@ -434,7 +459,7 @@ export function formatCanvasBody(
   if (!html) {
     return '<p style="color:purple;font-weight:bold;">This item had no text — it may be unparseable by the API or empty by design. Please check manually.</p>'
   }
-  let out = normalizeCanvasImages(html, baseUrl, fileNames)
+  let out = annotateStyledHtml(normalizeCanvasImages(html, baseUrl, fileNames), styledHtmlMarker)
   for (let level = 1; level <= 6; level++) {
     out = out.replace(
       new RegExp(`<h${level}[^>]*>([\\s\\S]*?)</h${level}>`, 'gi'),
