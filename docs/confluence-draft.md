@@ -104,19 +104,30 @@ course number. Copy it from your browser's address bar while you are on the cour
 empty from Canvas. It is usually a New Quiz (see below) or a genuinely empty item — open it
 in Canvas and confirm.
 
-**The extraction stops partway with an error.** Most often this is Canvas rate limiting after a
-burst of requests. Wait a minute and run it again.
+**The extraction stops partway with an error.** Canvas rate limiting on its own no longer stops
+a run — the app waits and retries. If a run does stop, the message says why. Run it again, and
+if it stops in the same place, send that message to the eCampus Center.
+
+**The extraction seems to pause.** That is usually the rate-limit wait above. Stop still works
+while it is waiting.
 
 ## Known limitations
 
-- **New Quizzes are only partly supported.** The Classic quizzes extraction covers Classic
-  quizzes fully. Canvas stores a New Quiz differently, and the app can usually only reach
-  its description, not its questions.
+- **New Quizzes questions are not extracted.** The quiz extraction covers Classic quizzes only.
+  A New Quiz appears in the document with a note saying its questions could not be extracted,
+  and the summary counts them separately, so you can see how many you need to handle another
+  way. In a course content extraction a New Quiz appears as an assignment, so you get whatever
+  the instructor wrote in its description.
 - **The local `.html` extraction is a plain file**, not a Google Doc. It opens fine in Word or a
   browser, and its formatting matches, but there is no sharing or commenting.
-- **A rubric that fails to load** is currently rendered as an empty rubric worth 0 points
-  rather than as an error. If a rubric looks blank, check it in Canvas.
-- **Extractions are one-at-a-time and sequential**, so long courses take minutes.
+- **Rubric rating descriptions may lose bold, italics and links.** Where a rubric stores
+  formatted text — usually one that came in by course copy — the wording and the line breaks
+  come through, but inline styling is flattened to plain text.
+- **A very long page may come through without its markers.** Above roughly 100 KB of source, an
+  item's text is extracted in full but the heading tags and stylized-HTML labels are skipped.
+  No course page in normal use comes close to that size.
+- **A large course takes a few minutes.** The app fetches several items at once, but Canvas
+  limits how fast it will answer.
 
 ## Updates
 
@@ -217,7 +228,11 @@ Key files:
 - **Google Docs repeats a table's header row across page breaks by itself** when the row is
   made of `<th>` cells. `rubricExport.ts` emits no `<thead>` and does not need one. If you
   see an "untitled" rubric table, it is the continuation of the one above it.
-- **Canvas signals rate limiting with HTTP 403, not 429.** Any retry logic must key on 403.
+- **Canvas signals rate limiting with HTTP 403, not 429.** Handled in `canvasUtils` now, but
+  the trap is worth keeping in mind: a genuine permissions failure is *also* a 403, so the
+  status alone cannot tell them apart. The body has to be read — Canvas sends the bare string
+  "403 Forbidden (Rate Limit Exceeded)". Retrying a real permissions error would hammer Canvas
+  and still fail.
 - **Canvas headings inside item bodies** are converted to bold black 11pt text plus a red
   `(H1)`–`(H6)` tag — that is the Blueprint spec, not a bug.
 - **Windows builds may fail extracting electron-builder's `winCodeSign`**, because that
@@ -274,5 +289,11 @@ want a signed build, and this one is unsigned — that was the reason it was not
   and the OAuth loopback listener are unverified there, as is whether an unsigned build opens
   at all. The `mac` target remains in `package.json` for local builds, so reviving it means
   restoring the os matrix in `release.yml` — not rewriting the packaging.
-- Transfer to the eCampus GitHub org — remember the secret.
-- Rate-limit backoff (403) and surfacing rubric fetch failures as errors are both still to do.
+- Transfer to the eCampus GitHub org — remember the secret. Re-check anonymous access straight
+  afterwards: the releases page, the releases API and an asset download must all work with no
+  credentials, or both the KB article's download link and the in-app update check break. A
+  private repo or enforced SAML SSO would do it, and the update check would fail silently in
+  every copy already installed.
+- Rate-limit backoff (403) and rubric failure reporting are both done. Still open: the
+  redundant per-rubric detail fetch in `buildRubricsHtml` — the list endpoint already returns
+  full criteria, and the detail call can 404 on a rubric the list returned.

@@ -80,7 +80,7 @@ Every rubric in the course, as a table — criteria down the side, rating levels
 # **🛑What Is Not Extracted**
 
 * Settings associated with assignments, quizzes, etc.
-* **New Quizzes** questions — Canvas stores New Quizzes differently, and the app can usually reach only the description, not the questions. Classic quizzes are fully supported.
+* **New Quizzes** questions — Canvas stores New Quizzes differently, and the app does not extract their questions. Each one appears in the document with a note saying so, and the summary tells you how many were found, so none go by unnoticed. Classic quizzes are fully supported.
 * Alt tags on images
 * H5P content; content stored in Perusall or other LTI apps
 * Access to the Files stored in Canvas
@@ -115,8 +115,9 @@ When it finishes, the Google Doc opens in your browser. It is a normal Doc in yo
 | "Token expired" or "Action needed" | Canvas tokens can be revoked or expire. Create a new one and paste it in. |
 | Google sign-in stops working | Sign in again from the setup panel. The app clears the dead sign-in for you. |
 | "Not a recognized Canvas course URL" | The URL must contain `/courses/` followed by the course number. |
-| The extraction stops partway | Usually Canvas rate limiting. Wait a minute and run it again. |
-| A rubric looks blank | Check it in Canvas — a rubric that fails to load currently comes through empty rather than as an error. |
+| The extraction seems to pause | Canvas limits how fast it answers. The app waits and carries on by itself. Stop still works while it waits. |
+| The extraction stops partway | Read the message it shows — rate limiting alone no longer stops a run. Try again, and if it stops the same way, send that message to the eCampus Center. |
+| A rubric looks blank | If a rubric genuinely could not be loaded, the document says so in its place. A rubric with no criteria in Canvas comes through empty because it is empty. |
 | Text is too small to read | Use the text size buttons in the app's top bar. |
 
 # **🔄Updates**
@@ -220,7 +221,7 @@ These all look like they could be simplified. Each one is load-bearing, and remo
 ## Gotchas that cost real time
 
 * **Google Docs cannot import a paragraph border.** Instead of ignoring it, its HTML importer turns one into a separate grey line — so the blue Blueprint rules around each "Due by..." header came out as grey lines above and below. The fix: emit no border CSS on the Drive path, then draw the real blue rules through the Docs API *after* upload (`applyDueHeaderBorders()`). The local HTML extraction keeps the CSS borders, because nothing runs afterwards there.
-* **Canvas signals rate limiting with HTTP 403, not 429.** 429 is the normal code for "slow down" everywhere else, so any retry logic you write by habit will be wrong. Key on 403.
+* **Canvas signals rate limiting with HTTP 403, not 429.** 429 is the normal code for "slow down" everywhere else, so any retry logic you write by habit will be wrong. Key on 403 — but not on 403 alone: a genuine permissions failure carries the same status, and retrying one of those just hammers Canvas and fails anyway. The body is what separates them; Canvas sends the bare string "403 Forbidden (Rate Limit Exceeded)". This is implemented in `canvasUtils`.
 * **Google Docs repeats a table's header row across page breaks on its own.** `rubricExport.ts` emits no `<thead>`. If you see an "untitled" rubric table, it's the continuation of the one above it, not a bug.
 * **Canvas headings inside item bodies** become bold black 11pt text plus a red `(H1)`–`(H6)` tag. That's the Blueprint spec, not a formatting error.
 * **Windows builds can fail while extracting `winCodeSign`.** That archive contains macOS symlinks, and standard Windows accounts can't create symlinks. Either turn on Developer Mode, or pre-extract the archive without its `darwin/` folder into `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0`.
@@ -259,4 +260,5 @@ The in-app update check (`electron/ipc/updateCheck.ts`) reads GitHub's releases 
 * **Classic question banks genuinely have no public API.** Unlike New Quizzes, there's no supported way to list a bank or its contents. Note also that a quiz using a random-draw question group doesn't *contain* questions at all — it stores a rule ("draw 5 from Bank X"), so there's no fixed list to extract. Those quizzes currently come through looking empty, which is misleading.
 * **macOS is not supported, and the CI no longer builds for it.** The Mac builds were published for several releases and never worked; nobody has launched one successfully. Keychain-based token storage and the Google sign-in loopback are both untested there, and whether an unsigned build opens at all is unknown. The `mac` target is still configured in `package.json`, so anyone with a Mac to test on can still build one locally — reviving it means restoring the os matrix in `release.yml`.
 * **Transfer to the eCampus GitHub org** — remember the Actions secret.
-* **Rate-limit backoff on 403** and **surfacing rubric fetch failures as real errors** are both still to do. A rubric that fails to load currently renders as an empty rubric worth 0 points.
+* **Rate-limit backoff and rubric failure reporting are both done.** `canvasUtils` retries on a rate-limit 403 with a backoff that sleeps in slices, so Stop is noticed during a wait rather than after it, and a rubric that cannot be retrieved gets an explicit note in the document saying it is not an empty rubric. Extractions also run four requests at a time rather than strictly serially.
+* **The per-rubric detail fetch is redundant and should go.** `buildRubricsHtml` calls the rubrics list endpoint and then fetches each rubric again for its criteria. The list response already carries full `data` — see `electron/ipc/__fixtures__/rubrics-list-response.json`, captured from the demo course. Worse than wasteful: the two endpoints resolve rubrics differently (`index` over the course's own rubrics, `show` through bookmarked rubric associations), so the detail call can 404 on a rubric the list returned fine, producing a "could not be retrieved" note for criteria the app was already holding. Verify that against Canvas source before changing it.
