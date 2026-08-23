@@ -52,7 +52,13 @@ interface CanvasCriterion {
    * Comes back as null, not false, on rubrics that do not use ranges.
    */
   criterion_use_range?: boolean | null
-  ratings: CanvasRating[]
+  /**
+   * Optional because every use below already guards it with `?? []` or `?.`, which is the
+   * honest reading: this is an unvalidated cast over JSON from a service we do not control,
+   * and a criterion with no ratings array must not throw. Declaring it required only hid
+   * that from the type checker.
+   */
+  ratings?: CanvasRating[]
 }
 
 /** List endpoint returns id/title; criteria arrive as `data` on the single-rubric GET. */
@@ -90,6 +96,11 @@ const ENTITIES: Record<string, string> = {
 
 const ENTITY_RE = /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(nbsp|lt|gt|quot|apos|amp));/g
 
+// decodeEntities, richTextToHtml and buildRubricTableHtml below are exported for
+// rubricExport.test.ts and are not called outside this module. They are pure string functions
+// and hold most of the logic that has actually been wrong here, so they are worth testing
+// directly rather than only through the IPC handler, which needs a live Canvas to reach.
+
 /**
  * Decode the entities Canvas actually emits.
  *
@@ -104,7 +115,7 @@ const ENTITY_RE = /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(nbsp|lt|gt|quot|apos|amp));/g
  * problem — they do not throw, they reach writeFileSync and land in the file as U+FFFD.
  * Control characters are rejected because they have no meaning in a document cell.
  */
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s.replace(ENTITY_RE, (match, dec: string, hex: string, name: string) => {
     if (name) return ENTITIES[name.toLowerCase()]
     const code = dec ? Number.parseInt(dec, 10) : Number.parseInt(hex, 16)
@@ -138,7 +149,7 @@ function decodeEntities(s: string): string {
  * Degrading to plain text means a huge malformed description shows its tags rather than
  * hanging the app — no rubric field that exists in practice comes near the limit.
  */
-function richTextToHtml(raw: string): string {
+export function richTextToHtml(raw: string): string {
   const flattened = raw.length <= MAX_SCANNED_BODY_BYTES && /<[a-z!/]/i.test(raw)
     ? decodeEntities(
         raw
@@ -176,7 +187,7 @@ function ratingPointsLabel(criterion: CanvasCriterion, ratings: CanvasRating[], 
  * Adapts to however many rating columns Canvas provides — Boise State rubrics
  * are usually 4-level, but the count can vary per rubric.
  */
-function buildRubricTableHtml(rubric: CanvasRubricFull): string {
+export function buildRubricTableHtml(rubric: CanvasRubricFull): string {
   const criteria = rubric.data ?? rubric.criteria ?? []
 
   const maxRatings = criteria.reduce((m, c) => Math.max(m, (c.ratings ?? []).length), 0)

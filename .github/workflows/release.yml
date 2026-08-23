@@ -46,6 +46,12 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      # Before the build, so a broken parser fails the release rather than shipping. These
+      # cover the pure string functions that turn Canvas responses into documents, which is
+      # where every defect found in this app so far has been.
+      - name: Test
+        run: npm test
+
       - name: Build installer
         # `--publish never` is essential: electron-builder detects CI and otherwise tries to
         # publish the artifacts itself, failing with "GitHub Personal Access Token is not set"

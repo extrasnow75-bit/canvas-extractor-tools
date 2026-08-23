@@ -1,0 +1,176 @@
+[
+  {
+    "id": 57717,
+    "title": "Discussion Board Rubric",
+    "context_id": 14409,
+    "context_type": "Course",
+    "points_possible": 10.0,
+    "reusable": false,
+    "public": false,
+    "read_only": true,
+    "free_form_criterion_comments": false,
+    "hide_score_total": false,
+    "data": [
+      {
+        "description": "Overall quality of initial post, including: demonstrating familiarity with content of assigned sources; addressing all of the required elements in the assignment; factual accuracy, when applicable",
+        "long_description": "",
+        "points": 4.0,
+        "id": "_90",
+        "criterion_use_range": true,
+        "ratings": [
+          {
+            "description": "Met",
+            "long_description": "Post refers to ideas and concepts in the assigned readings, identifies where in the readings they are mentioned, and elaborates on the ideas or concepts in some way. For instance: interpreting or explaining them; relating them to other concepts or ideas in the readings, or; providing real world examples that clarify or illustrate the concept. Post addresses all of the required elements in the assignment. If data or factual information is presented (not always required), it is verifiable and accurate, with the source provided.",
+            "points": 4.0,
+            "criterion_id": "_90",
+            "id": "blank"
+          },
+          {
+            "description": "Partially Met",
+            "long_description": "Post refers to ideas and concepts in the assigned readings, but does not provide either additional insight, commentary, or connections. For instance: Interpretation or explanations insufficient; concepts were not related to other concepts or ideas in the readings, and/or; real world examples that clarify or illustrate the concept are not included. Post fails to address at least one of the required elements in the assignment. Some data or factual information presented is not verifiable and accurate.",
+            "points": 3.0,
+            "criterion_id": "_90",
+            "id": "_1729"
+          },
+          {
+            "description": "Not Met",
+            "long_description": "Post does not refer to ideas and concepts in the assigned readings. Post does not provide additional insight, commentary, or connections. Post fails to address most of the required elements in the assignment. Data or factual information presented is not verifiable and accurate.",
+            "points": 1.0,
+            "criterion_id": "_90",
+            "id": "blank_2"
+          }
+        ]
+      },
+      {
+        "description": "Reply posts to peers engage with or extend ideas presented by others",
+        "long_description": "",
+        "points": 2.0,
+        "id": "_1089",
+        "criterion_use_range": true,
+        "ratings": [
+          {
+            "description": "Met",
+            "long_description": "Post agrees with a previous message and provides argument in support of an alternative view or posting; or post disagrees with a previous message and provides additional reasoning.",
+            "points": 2.0,
+            "criterion_id": "_1089",
+            "id": "_7402"
+          },
+          {
+            "description": "Partially Met",
+            "long_description": "Post expresses agreement or disagreement with a previous message, but does not supply any substantial additional information.",
+            "points": 1.0,
+            "criterion_id": "_1089",
+            "id": "_5409"
+          },
+          {
+            "description": "Not Met",
+            "long_description": "No post expresses agreement or disagreement with a previous message.",
+            "points": 0.5,
+            "criterion_id": "_1089",
+            "id": "_6397"
+          }
+        ]
+      }
+    ],
+    "rating_order": "descending",
+    "button_display": "numeric"
+  },
+  {
+    "id": 161216,
+    "title": "Project Rubric - Final Dashboard",
+    "context_id": 14409,
+    "context_type": "Course",
+    "points_possible": 15.0,
+    "reusable": false,
+    "public": false,
+    "read_only": false,
+    "free_form_criterion_comments": false,
+    "hide_score_total": false,
+    "data": [
+      {
+        "id": "_9041",
+        "description": "Relevance to Focus Area",
+        "long_description": null,
+        "points": 3.0,
+        "mastery_points": null,
+        "ignore_for_scoring": null,
+        "title": "Relevance to Focus Area",
+        "criterion_use_range": null,
+        "ratings": [
+          {
+            "description": "Excellent",
+            "long_description": "All metrics and visualizations are highly relevant to the chosen focus area",
+            "id": "blank",
+            "criterion_id": "_9041",
+            "points": 3.0
+          },
+          {
+            "description": "Satisfactory",
+            "long_description": "Most metrics and visualizations are relevant to the chosen focus area",
+            "id": "_1543",
+            "criterion_id": "_9041",
+            "points": 2.0
+          },
+          {
+            "description": "Needs Improvement",
+            "long_description": "Several metrics or visualizations seem unrelated to the focus area",
+            "id": "blank_2",
+            "criterion_id": "_9041",
+            "points": 1.0
+          }
+        ]
+      }
+    ],
+    "rating_order": "descending",
+    "button_display": "numeric"
+  },
+  {
+    "id": 234670,
+    "title": "Perusall Annotations",
+    "context_id": 14409,
+    "context_type": "Course",
+    "points_possible": 10.0,
+    "reusable": false,
+    "public": false,
+    "read_only": false,
+    "free_form_criterion_comments": false,
+    "hide_score_total": false,
+    "data": [
+      {
+        "id": "1770143543697",
+        "description": "Annotations",
+        "long_description": null,
+        "points": 10.0,
+        "mastery_points": null,
+        "ignore_for_scoring": null,
+        "title": "Annotations",
+        "criterion_use_range": null,
+        "ratings": [
+          {
+            "description": "Excellent",
+            "long_description": "The text was annotated at least three times, with a minimum of four sentences each. The annotation demonstrated that you analyzed the text, made insightful connections, asked relevant questions, and provided valid conclusions.",
+            "id": "1",
+            "criterion_id": "1770143543697",
+            "points": 10.0
+          },
+          {
+            "description": "Good",
+            "long_description": "The text was annotated fewer than three times, or did not meet the four-sentence minimum. The annotations indicated a cursory reading of the text and/or were superficial or not meaningful.",
+            "id": "3",
+            "criterion_id": "1770143543697",
+            "points": 5.0
+          },
+          {
+            "description": "Needs Improvement",
+            "long_description": "The text was completely unmarked/no attempt was made.",
+            "id": "5",
+            "criterion_id": "1770143543697",
+            "points": 0.0
+          }
+        ]
+      }
+    ],
+    "rating_order": "descending",
+    "button_display": "numeric"
+  }
+]
