@@ -76,17 +76,27 @@ only the Python standard library. Edit the SVG, then re-run the script.
 
 ## Known limitations
 
-- **New Quiz instructions may not be extracted.** Canvas stores New Quizzes as an
-  LTI-backed assignment; the extraction reads that assignment's description, which is where the
-  instructions usually live but not always. When it is empty the document shows a "check
-  manually" note instead. Classic Quiz instructions are confirmed working.
-- **Canvas rate limiting is not handled.** Canvas signals an exhausted request bucket with
-  a 403, which currently aborts the whole extraction rather than backing off and retrying.
-- **Rubric fetch failures are silent.** A rubric whose detail fetch fails is rendered as an
-  empty rubric with 0 points rather than reported as an error.
-- Extractions are sequential — one Canvas request per module item — so a large course takes
-  minutes. The Stop button cancels between items.
-- Builds are unsigned, so Windows SmartScreen warns on first run: **More info → Run anyway**.
+- **New Quiz questions are not extracted.** The quiz tool handles Classic Quizzes only. A New
+  Quiz is listed in the document with a note saying so, and counted separately in the summary,
+  but its questions are not retrieved — Canvas models New Quizzes as an assignment submitted
+  through the Quizzes.Next LTI tool, and the questions sit behind an API this app does not use.
+  In a content extraction the same item arrives as an assignment, so what you get is whatever
+  the instructor put in its description.
+- **Builds are unsigned**, so Windows SmartScreen warns on first run: **More info → Run anyway**.
+  (Windows-only support is covered under [Requirements](#requirements).)
+- **Item bodies over 100 KB skip annotation.** Above that ceiling a body is passed through
+  without heading conversion or stylized-HTML markers. The text itself is complete; only the
+  markers are missing. The limit exists because the tag scans degrade quadratically on
+  malformed HTML, and they run on the same thread as the window.
+- **Rubric rating descriptions lose inline formatting.** Where a rubric stores HTML rather than
+  plain text — usually one that arrived by course copy — bold, italics and links are flattened
+  to plain text. Paragraph breaks and list bullets are preserved. This is deliberate: passing
+  course-authored markup into a file that opens from disk would carry its styling and scripts
+  with it.
+- **A large course can take a few minutes.** Requests run four at a time rather than one after
+  another, but Canvas meters them with a leaky bucket and answers an exhausted one with a 403.
+  The app backs off and retries rather than failing, which is correct but slow. Stop is
+  responsive during a backoff, not just between items.
 
 ## Documentation
 
