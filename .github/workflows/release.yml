@@ -110,13 +110,14 @@ jobs:
           cat > notes.md <<'NOTES'
           ## Download
 
-          **Windows PC** — `Canvas-Extractor-Tools-WINDOWS-__VER__.exe`
+          **[Download for Windows — Canvas-Extractor-Tools-WINDOWS-__VER__.exe](https://github.com/__REPO__/releases/download/v__VER__/Canvas-Extractor-Tools-WINDOWS-__VER__.exe)**
 
           This app is Windows-only. There is no Mac version — if you work on a Mac, contact
           the eCampus Center.
 
-          Ignore the two "Source code" links at the bottom — GitHub adds those to every
-          release automatically. They are not the app.
+          The Assets section further down holds the same file. Ignore the two "Source code"
+          links beside it — GitHub adds those to every release automatically. They are not
+          the app.
 
           ## Installing
 
@@ -146,7 +147,13 @@ jobs:
           Your Canvas token and Google sign-in are stored in your operating system's keychain
           and never leave your computer.
           NOTES
-          sed -i "s/__VER__/${GITHUB_REF_NAME#v}/g" notes.md
+          # `|` as the delimiter for the repo, which contains slashes. The download URL is
+          # assembled rather than looked up: GitHub serves release assets at a predictable
+          # path, and the rename step above fixes the filename, so the two agree by
+          # construction. v__VER__ reconstructs the tag, which holds for pre-release tags
+          # too — v0.9.0-rc.1 yields a version of 0.9.0-rc.1.
+          sed -i "s/__VER__/${GITHUB_REF_NAME#v}/g; s|__REPO__|${GITHUB_REPOSITORY}|g" notes.md
+          cat notes.md
 
       - name: Publish release
         env:
