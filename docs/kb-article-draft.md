@@ -166,8 +166,11 @@ npm run dev
 | :---- | :---- |
 | `npm run dev` | Run the app locally with live reload |
 | `npm run typecheck` | Check for type errors. **Run this before committing.** |
-| `npm run lint` | Style and correctness checks |
+| `npm test` | Run the test suite once. **Also run this before committing.** |
+| `npm run test:watch` | Re-run tests automatically as you edit |
 | `npm run build` | Build a real installer into `release/` |
+
+`npm run lint` exists in `package.json` but has never worked — eslint is named in the script and was never installed as a dependency. Either install it or delete the script; right now it just fails.
 
 `npm run dev` will not catch every problem — see "Things that only break in the real build" below.
 
@@ -196,6 +199,65 @@ These all look like they could be simplified. Each one is load-bearing, and remo
 
 **4. `savePaths.ts` — only write to a path the save dialog actually issued.** The renderer sends the save location back as an ordinary string, and a string proves nothing about where it came from. The main process remembers which paths it handed out and refuses anything else.
 
+## If you change the HTML parsing, read this first
+
+Most of this app is regular expressions run over HTML that course authors wrote. That is where
+essentially every bug found so far has come from, and they keep arriving in the same two shapes.
+Neither is obvious, and both look fine in testing until they don't.
+
+**1. `[^>]*` does not mean "the rest of the tag."** It means "up to the first `>` anywhere,"
+including a `>` inside an attribute value. Course authors put `>` in `title` and `aria-label`
+attributes all the time. So `<h2 title="a > b">Heading</h2>` matched only as far as that inner
+`>`, and the leftover `b">` was carried into the finished document as visible text. The same
+defect has now been found and fixed three separate times in this codebase.
+
+The fix is to match quote-aware, which is what `OPEN_TAG_RE` in `styledHtml.ts` and `HEADING_RE`
+in `blueprintFormat.ts` do. Copy the shape from one of those rather than writing a new one:
+
+```
+(?:[^>"']|"[^"]*"|'[^']*')*
+```
+
+Read it as: any character that is not a quote or `>`, **or** a complete double-quoted string,
+**or** a complete single-quoted string — repeated. Because a quoted run is consumed whole, a `>`
+inside it cannot end the tag.
+
+**2. That same pattern is slow on broken HTML.** When a tag never reaches its closing `>`, the
+regex scans to the end of the text from every position it could start at. The cost grows with
+the square of the length, so it stops being a delay and becomes a hang: measured at 3.4 seconds
+for 176 KB of unterminated heading tags, and roughly nine minutes at 2 MB. This runs on the same
+thread as the window, so the app freezes — including the Stop button, so the user cannot even
+cancel.
+
+Every such scan is therefore capped by `MAX_SCANNED_BODY_BYTES` (100 KB, defined once in
+`styledHtml.ts`). Above the cap the text still comes through in full; only the annotation is
+skipped. **If you add a new scan, put it under the same cap.** No real course page is anywhere
+near 100 KB, so this costs nothing in practice and removes the whole failure mode.
+
+**3. Escape last, and escape everything.** Where course text is turned into plain text —
+`richTextToHtml()` in `rubricExport.ts` is the example — tags are stripped first and *then* every
+resulting line is escaped. That ordering is what makes it safe: even if the stripping misses
+something malformed, the escape on the way out means no tag from a course can become live markup
+in the finished file. A security review threw about 900,000 hostile inputs at it without finding
+a way through. Keep the ordering if you touch it.
+
+## Check Canvas's actual responses, not just its documentation
+
+The Canvas API docs are thin in places and occasionally imply something untrue. Two examples
+that cost real time, both now pinned by `electron/ipc/__fixtures__/rubrics-list-response.json` —
+a real response captured from the demo course:
+
+* `criterion_use_range` comes back as **null**, not `false`, on rubrics that do not use point
+  ranges. Code written against a `true`/`false` assumption would be wrong.
+* The rubrics **list** endpoint already returns each rubric's full criteria, despite a comment
+  in this codebase asserting for a long time that it did not.
+
+When you need to know what a Canvas endpoint really returns, look at it directly. Take any
+course URL, change `/courses/` to `/api/v1/courses/`, and open it in a browser where you are
+already signed in to Canvas — it returns raw JSON using your existing session, no token needed.
+If you are relying on the answer, save it under `__fixtures__` with a note saying which claim it
+supports, so the next person does not have to take your word for it.
+
 ## Things that only break in the real build
 
 `npm run dev` and the installed app differ in ways that will bite you.
@@ -222,6 +284,7 @@ These all look like they could be simplified. Each one is load-bearing, and remo
 
 * **Google Docs cannot import a paragraph border.** Instead of ignoring it, its HTML importer turns one into a separate grey line — so the blue Blueprint rules around each "Due by..." header came out as grey lines above and below. The fix: emit no border CSS on the Drive path, then draw the real blue rules through the Docs API *after* upload (`applyDueHeaderBorders()`). The local HTML extraction keeps the CSS borders, because nothing runs afterwards there.
 * **Canvas signals rate limiting with HTTP 403, not 429.** 429 is the normal code for "slow down" everywhere else, so any retry logic you write by habit will be wrong. Key on 403 — but not on 403 alone: a genuine permissions failure carries the same status, and retrying one of those just hammers Canvas and fails anyway. The body is what separates them; Canvas sends the bare string "403 Forbidden (Rate Limit Exceeded)". This is implemented in `canvasUtils`.
+* **Google Docs sizes table columns from the first row, and does not expand `rowspan` or `colspan` when it does.** A rubric table used to have a two-row header — "Criteria / Ratings / Points" above the individual level names — using spans. Five columns, but the first row held only three cells, so the last two columns got no width at all and collapsed to about one character wide. A two-page rubric came out as fourteen pages of vertical text. The fix was a single flat header row plus an explicit `<colgroup>`, which states one width per real column where no span can interfere. **If a table comes out with unreadable columns, look at spans in its first row before anything else.**
 * **Google Docs repeats a table's header row across page breaks on its own.** `rubricExport.ts` emits no `<thead>`. If you see an "untitled" rubric table, it's the continuation of the one above it, not a bug.
 * **Canvas headings inside item bodies** become bold black 11pt text plus a red `(H1)`–`(H6)` tag. That's the Blueprint spec, not a formatting error.
 * **Windows builds can fail while extracting `winCodeSign`.** That archive contains macOS symlinks, and standard Windows accounts can't create symlinks. Either turn on Developer Mode, or pre-extract the archive without its `darwin/` folder into `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0`.
@@ -249,6 +312,10 @@ Two consequences:
 4. Check the release page afterwards.
 
 The version number and the tag must match, and **the tag is what actually triggers the build** — pushing a version bump without a tag does nothing.
+
+**Do not skip step 1.** It is the one mistake here that does not announce itself. If you tag a new release without bumping `version` in `package.json`, everything appears to work: the build passes, the release publishes, the installer is on the page and installs correctly. But every copy already out there compares its own version against the newest release, sees the same number, concludes it is current, and never shows the update banner. The fix reaches nobody, and nothing anywhere reports an error. If you are ever unsure whether you bumped it, check the version shown in the app's own window against the newest tag on GitHub.
+
+The workflow runs `npm run typecheck` and `npm test` before it builds, so a broken parser fails the release instead of shipping inside an installer. If a release fails at the Test step, read the failure rather than working around it — those tests exist because each one corresponds to a bug that reached a real document.
 
 If the build job stalls (it has), you can publish by hand: download the workflow artifact, rename it the way the workflow does, create the release, and upload the asset. When there were three assets, uploading them all in a single `gh release create` timed out and left a broken draft behind; with one this is less likely, but upload separately if it happens again.
 
