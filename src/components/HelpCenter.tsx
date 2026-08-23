@@ -443,13 +443,15 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               extraction references. */}
           <Section id="kb-article" title="KB article">
             <div className="space-y-3">
+              {/* Confluence shortlink, not the long /wiki/spaces/…/pages/… form. Both resolve
+                  to the same page, and the short one survives the page being renamed or moved
+                  between spaces — the long form embeds the title and the space key. */}
               <ResourceLink
                 label="Canvas Extractor Tools KB Article"
-                href="https://docs.google.com/document/d/1h9eFqxroCyIkHov5Dk4jmISU0qg33p5sOMUW6zaReOI/edit?tab=t.dt1zwyxe9p6f#heading=h.3ilum53tbdk5"
+                href="https://boisestateecampus.atlassian.net/wiki/x/BIDV0"
               />
               <p className="text-xs text-gray-600 px-1">
-                Currently a Google Doc. This will move to a Confluence page when the app is
-                officially launched.
+                Opens in Confluence. Sign in with your Boise State account if prompted.
               </p>
             </div>
           </Section>
