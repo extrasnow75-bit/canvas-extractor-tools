@@ -12,8 +12,6 @@ import {
   beginJob,
   endJob,
   isCancellation,
-  mapWithConcurrency,
-  CANVAS_CONCURRENCY,
 } from './canvasUtils'
 import { FONT, htmlDocument, escapeHtml, LANDSCAPE_PAGE } from './blueprintFormat'
 import { MAX_SCANNED_BODY_BYTES } from './styledHtml'
@@ -61,7 +59,10 @@ interface CanvasCriterion {
   ratings?: CanvasRating[]
 }
 
-/** List endpoint returns id/title; criteria arrive as `data` on the single-rubric GET. */
+/**
+ * The subset the item picker needs. The list endpoint returns each rubric in full, criteria
+ * included — this narrower view just says which fields `listRubricItems` reads.
+ */
 interface CanvasRubricRef {
   id: string | number
   title: string
@@ -290,9 +291,22 @@ export async function listRubricItems(ref: CourseRef): Promise<PickerItem[]> {
 
 /**
  * Build the full "Rubrics" HTML for a course — one document, each rubric under its title
- * heading. Does the two-step fetch (list → per-rubric detail) since the list endpoint
- * does not return full criteria. Kept separate from the file-write for Drive reuse.
- * When `selectedIds` is provided, only matching rubrics are included.
+ * heading. Kept separate from the file-write for Drive reuse. When `selectedIds` is provided,
+ * only matching rubrics are included.
+ *
+ * One request, not one per rubric. This used to list the rubrics and then fetch each one again
+ * for its criteria, on a comment asserting the list endpoint did not return them. It does:
+ * `index` renders through `rubrics_json` → `rubric_json`, and `data` is in that serializer's
+ * allowed-fields list, so criteria, ratings, long descriptions and criterion_use_range all
+ * arrive with the list. `electron/ipc/__fixtures__/rubrics-list-response.json` is a captured
+ * response showing exactly that.
+ *
+ * The second request was not merely redundant, it could lose data. The two endpoints resolve a
+ * rubric differently — `index` reads the course's own rubrics (`@context.rubrics.active`),
+ * while `show` goes through bookmarked rubric associations and 404s when it finds none. Both
+ * authorize identically, so `show` can never succeed where `index` failed, only fail where it
+ * succeeded. When it did, this function reported "could not be retrieved" for a rubric whose
+ * criteria it was already holding.
  */
 export async function buildRubricsHtml(
   ref: CourseRef,
@@ -301,60 +315,40 @@ export async function buildRubricsHtml(
   progress?: ProgressReporter | null,
 ): Promise<{ html: string; courseName: string; count: number } | null> {
   const course = await canvasGetOne<CanvasCourse>(`/courses/${ref.courseId}`, ref)
-  const allList = await canvasGet<CanvasRubricRef>(`/courses/${ref.courseId}/rubrics`, ref)
+  const allList = await canvasGet<CanvasRubricFull>(`/courses/${ref.courseId}/rubrics`, ref)
   const list = selectedIds ? allList.filter((r) => selectedIds.has(String(r.id))) : allList
   if (list.length === 0) return null
 
   const parts: string[] = []
   parts.push(`<h1 style="font-family:${FONT};">${escapeHtml(`${course.name} Rubrics`)}</h1>`)
 
-  let done = 0
   progress?.(0, list.length)
 
-  // The detail fetches run concurrently — a course can hold dozens of rubrics, and one
-  // round trip each was the whole cost of this extraction. Results are collected first and
-  // written out afterwards so the document still follows Canvas's rubric order.
-  const fetched = await mapWithConcurrency(list.length, CANVAS_CONCURRENCY, async (i) => {
+  list.forEach((rubric, i) => {
     throwIfCancelled(cancel)
-    // Two-step fetch: the single-rubric endpoint returns the full criteria (`data`).
-    let full: CanvasRubricFull | null = null
-    let failure = ''
-    try {
-      full = await canvasGetOne<CanvasRubricFull>(
-        `/courses/${ref.courseId}/rubrics/${list[i].id}`,
-        ref,
-      )
-    } catch (err) {
-      if (isCancellation(err)) throw err
-      failure = err instanceof Error ? err.message : 'unknown error'
-    }
-    done++
-    progress?.(done, list.length)
-    return { full, failure }
-  })
+    parts.push(`<h2 style="font-family:${FONT};">${escapeHtml(rubric.title)}</h2>`)
 
-  list.forEach((rubricRef, i) => {
-    const { full, failure } = fetched[i]
-
-    parts.push(
-      `<h2 style="font-family:${FONT};">${escapeHtml(full?.title || rubricRef.title)}</h2>`,
-    )
-
-    if (full) {
-      parts.push(buildRubricTableHtml(full))
+    // Say so, loudly — but about the shape of the response rather than a failed request.
+    //
+    // The point of this warning has always been that "no criteria" and "criteria we could not
+    // get" look identical once rendered, and rendering the second as the first turns a failure
+    // into plausible data. With the per-rubric fetch gone there is no per-rubric failure to
+    // catch: the one list request either returns or throws, and a throw is handled by the
+    // caller. What remains is the response arriving without the field at all, which is the
+    // same ambiguity from a different direction. An empty array is a real, empty rubric and is
+    // rendered as one.
+    const criteria = rubric.data ?? rubric.criteria
+    if (criteria) {
+      parts.push(buildRubricTableHtml(rubric))
     } else {
-      // Say so, loudly. This used to substitute an empty rubric with 0 points possible, which
-      // is indistinguishable from a rubric that genuinely has no criteria — so a failed fetch
-      // silently became plausible-looking data. One bad rubric still must not abort the
-      // extraction, so the run continues with the failure recorded in place.
       parts.push(
         '<p style="color:purple;font-weight:bold;">' +
-          'This rubric could not be retrieved from Canvas, so its criteria are missing here — ' +
-          'this is NOT an empty rubric. Please check it manually. ' +
-          `(${escapeHtml(failure)})</p>`,
+          'Canvas returned this rubric without any criteria data, so they are missing here — ' +
+          'this is NOT an empty rubric. Please check it manually.</p>',
       )
     }
     parts.push('<p style="margin:0;">&nbsp;</p>')
+    progress?.(i + 1, list.length)
   })
 
   return {

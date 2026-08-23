@@ -275,4 +275,21 @@ describe('the captured Canvas response', () => {
     const criterion = byTitle('Project Rubric - Final Dashboard').data[0]
     expect(criterion.criterion_use_range).toBeNull()
   })
+
+  it('renders every rubric from the list response alone, with no detail fetch', () => {
+    // buildRubricsHtml needs a live Canvas, so this exercises what it now does per rubric:
+    // take the object straight out of the list response and render it. If the list response
+    // were ever insufficient, this is what would fail.
+    for (const rubric of fixture) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const html = buildRubricTableHtml(rubric as any)
+      expect(html).toContain('<table')
+      expect(html).toContain('pts')
+      // Every criterion's description reached the table.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const criterion of rubric.data as any[]) {
+        expect(html).toContain(criterion.description.slice(0, 40).replace(/&/g, '&amp;'))
+      }
+    }
+  })
 })
