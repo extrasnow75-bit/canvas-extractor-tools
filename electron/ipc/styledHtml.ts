@@ -40,10 +40,12 @@ export type MarkerRenderer = (label: string, inline: boolean) => string
  * 1MB body costs 49ms, so the ceiling costs annotation on nothing that exists in practice,
  * and a body that does exceed it still comes through in full — only its markers are missing.
  *
- * Keep this in step with the identical constant in blueprintFormat.ts, which guards the same
- * class of pattern.
+ * Exported, and defined here, because three modules now guard the same class of pattern —
+ * this one, blueprintFormat and rubricExport. It lived in two of them as duplicate constants
+ * with comments asking a human to keep them in step; a third copy would have made that worse.
+ * This module imports nothing from the others, so it is the one they can all import from.
  */
-const MAX_SCANNED_BODY_BYTES = 100_000
+export const MAX_SCANNED_BODY_BYTES = 100_000
 
 /**
  * Every opening tag, matched whole — not just the ones carrying a signature.

@@ -10,7 +10,11 @@
  *   2. The grey chip highlight behind Canvas tool names (Page, Assignment, …).
  */
 
-import { annotateStyledHtml } from './styledHtml'
+// MAX_SCANNED_BODY_BYTES guards the scans below for the same reason it guards the one in
+// styledHtml: `<img\b…>` restarts at every `<img` and runs to end-of-string when no closing
+// `>` follows, so a body of unterminated tags costs quadratic time on the main process
+// thread. See the constant's own comment for the measurements that set the number.
+import { annotateStyledHtml, MAX_SCANNED_BODY_BYTES } from './styledHtml'
 
 export const DEEP_BLUE = '#0033a0' // due-header text
 export const RED = '#ff0000' // Canvas tool labels + heading-level tags
@@ -53,14 +57,30 @@ export function safeLinkHref(url: string | null | undefined): string | null {
   }
 }
 
-/** Wrap body parts in a complete HTML document (opens cleanly in Google Docs / Word). */
-export function htmlDocument(title: string, bodyParts: string[]): string {
+/**
+ * Page setup for a document whose tables are wider than a portrait page.
+ *
+ * Letter portrait at 1in margins leaves 6.5in of usable width; landscape at 0.5in leaves 10in,
+ * which is over half as much again. Google Docs writes exactly this `@page` shape in its own
+ * HTML export, which is why the importer reads it back. Page setup is a property of the whole
+ * document, so a document that opts in is landscape throughout.
+ */
+export const LANDSCAPE_PAGE = '@page { size: 11in 8.5in; margin: 0.5in; }'
+
+/**
+ * Wrap body parts in a complete HTML document (opens cleanly in Google Docs / Word).
+ *
+ * `pageCss` carries optional @page rules. Omitted, the document keeps the importer's default
+ * portrait Letter — every extraction but rubrics is ordinary prose and wants that.
+ */
+export function htmlDocument(title: string, bodyParts: string[], pageCss?: string): string {
   return [
     '<!DOCTYPE html>',
     '<html lang="en">',
     '<head>',
     '<meta charset="utf-8">',
     `<title>${escapeHtml(title)}</title>`,
+    ...(pageCss ? [`<style>${pageCss}</style>`] : []),
     '</head>',
     `<body style="${BODY_RUN}${NO_INDENT}">`,
     ...bodyParts,
@@ -349,23 +369,6 @@ function iconMarker(label: string): string {
     `${escapeHtml(label)}</span> `
   )
 }
-
-/**
- * Above this, the per-tag scanning below is skipped and the body is passed through as-is.
- *
- * `<img\b…>` restarts its scan at every `<img` and runs to the end of the string when no
- * closing `>` follows, so a body consisting of unterminated `<img ` tags costs quadratic
- * time — and this runs synchronously in the main process, where it would freeze the window
- * with the Stop button on it.
- *
- * This was 2_000_000 on the reasoning that nothing legitimate comes close to it. True, and
- * beside the point: the ceiling has to be set by where the quadratic case stops being
- * survivable, not by where a plausible body stops. Measured on the same pattern, 2MB of
- * unterminated tags takes around nine minutes. 100KB takes about a second.
- *
- * Keep this in step with the identical constant in styledHtml.ts.
- */
-const MAX_SCANNED_BODY_BYTES = 100_000
 
 function normalizeCanvasImages(
   html: string,
