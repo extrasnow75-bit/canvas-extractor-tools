@@ -460,6 +460,27 @@ function styledHtmlMarker(label: string, inline: boolean): string {
  * to their display names, which is how icons are recognised; without it only images whose
  * name is visible in the tag can be matched.
  */
+/**
+ * One pattern per heading level, h1 first.
+ *
+ * The opening tag is matched quote-aware, the same way OPEN_TAG_RE is in styledHtml, rather
+ * than with `[^>]*`. `[^>]*` stops at the first `>` in the source text, including one inside
+ * an attribute value — so `<h2 title="a > b">Heading</h2>` matched only as far as that inner
+ * `>`, and the remainder of the attribute, `b">`, was carried into the paragraph as visible
+ * body text. Course authors put `>` in title and aria-label attributes routinely.
+ *
+ * `\b` after the level stops `<h1` matching `<h1foo>`. The closing tag allows trailing
+ * whitespace: `</h2 >` is valid HTML and previously matched nothing at all, so that heading
+ * kept its tags and never became a paragraph.
+ *
+ * Built once at module scope: a course body runs six passes and formatCanvasBody is called
+ * per item. `String.replace` resets lastIndex on a global regex, so sharing them is safe.
+ */
+const HEADING_RE = Array.from({ length: 6 }, (_, i) => {
+  const level = i + 1
+  return new RegExp(`<h${level}\\b(?:[^>"']|"[^"]*"|'[^']*')*>([\\s\\S]*?)</h${level}\\s*>`, 'gi')
+})
+
 export function formatCanvasBody(
   html: string | null | undefined,
   baseUrl?: string,
@@ -469,15 +490,21 @@ export function formatCanvasBody(
     return '<p style="color:purple;font-weight:bold;">This item had no text — it may be unparseable by the API or empty by design. Please check manually.</p>'
   }
   let out = annotateStyledHtml(normalizeCanvasImages(html, baseUrl, fileNames), styledHtmlMarker)
-  for (let level = 1; level <= 6; level++) {
-    out = out.replace(
-      new RegExp(`<h${level}[^>]*>([\\s\\S]*?)</h${level}>`, 'gi'),
-      (_m, inner) =>
-        `<p style="${BODY_RUN}${NO_INDENT}">` +
-        `<span style="${BODY_RUN}font-weight:bold;">${inner}</span>` +
-        `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};"> (H${level})</span>` +
-        '</p>',
-    )
+  // Same ceiling, same reason as the passes above: the quote-aware alternation scans to
+  // end-of-string from every `<hN` when no closing `>` follows, and six passes over 176KB of
+  // unterminated heading tags measured 3.4s. Over the limit the body still comes through in
+  // full — its headings just keep their own tags instead of becoming marked paragraphs.
+  if (out.length <= MAX_SCANNED_BODY_BYTES) {
+    for (let level = 1; level <= 6; level++) {
+      out = out.replace(
+        HEADING_RE[level - 1],
+        (_m, inner) =>
+          `<p style="${BODY_RUN}${NO_INDENT}">` +
+          `<span style="${BODY_RUN}font-weight:bold;">${inner}</span>` +
+          `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};"> (H${level})</span>` +
+          '</p>',
+      )
+    }
   }
   return out
 }
