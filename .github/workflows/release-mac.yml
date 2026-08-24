@@ -1,0 +1,152 @@
+# Builds the macOS disk images and parks them in a DRAFT release.
+#
+# ─── Read this before using anything it produces ──────────────────────────────
+#
+# This build has never been launched on a Mac. It compiles, and that is the whole
+# of what is known about it. It exists so that the macOS work has a starting point
+# on GitHub rather than living only in package.json, and it is deliberately kept
+# where no ordinary user can reach it.
+#
+# Known or near-certain problems for whoever picks this up:
+#
+#   * Unsigned and un-notarized. A .dmg downloaded through a browser carries the
+#     quarantine attribute, so on Apple Silicon this typically reports "the app is
+#     damaged and can't be opened" rather than offering a way through. Removing it
+#     by hand (`xattr -dr com.apple.quarantine`) is the usual workaround. This is a
+#     much worse first run than the Windows SmartScreen click-through.
+#   * The title bar. `titleBarStyle: 'hidden'` plus `titleBarOverlay` in
+#     electron/main.ts is a Windows arrangement; on macOS the traffic-light buttons
+#     land on top of the app's own 36px blue header at top left.
+#   * safeStorage against the macOS Keychain is untested.
+#   * The Google OAuth loopback redirect is untested.
+#   * The in-app update check points at the same releases/latest as Windows, so it
+#     would offer a Mac user the .exe.
+#
+# ─── Why this is a separate file ──────────────────────────────────────────────
+#
+# release.yml stays Windows-only and tag-triggered. This one runs ONLY from the
+# Actions tab ("Run workflow"), so a Mac build can never ride along with a public
+# release by accident, and nothing here can alter what release.yml publishes.
+#
+# ─── Why a draft release ──────────────────────────────────────────────────────
+#
+# Draft releases are invisible to anyone without write access on the repo, and
+# their assets are not publicly downloadable — so an untested build cannot reach
+# course staff browsing the Releases page. A draft also does not create its tag
+# until it is published, so `mac-v1.0.0` never appears alongside the real `v1.0.0`.
+# Workflow artifacts would hide it just as well but expire after 90 days, which is
+# wrong for something meant to sit and wait for a maintainer.
+#
+# Drafts are also skipped by /releases/latest, so this cannot trigger the update
+# banner in anybody's copy of the app.
+
+name: Release (macOS, draft)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Matching release.yml: vite and electron-vite require ^20.19 || >=22.12.
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same gates as the Windows release. Both are platform-independent, so this is
+      # not retesting so much as refusing to build a draft from broken source.
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build disk images
+        # CSC_IDENTITY_AUTO_DISCOVERY=false because there is no signing certificate in
+        # this repo. Left on, electron-builder hunts the runner's empty Keychain for an
+        # identity and fails the build rather than producing an unsigned app.
+        #
+        # `--publish never` for the same reason as release.yml: electron-builder detects
+        # CI and otherwise tries to publish on its own, after the build, without a token.
+        run: npm run build -- --mac --publish never
+        env:
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Rename disk images
+        # package.json builds x64 and arm64, so two files come out. electron-builder
+        # distinguishes them with an "-arm64" suffix and nothing on the Intel one, which
+        # asks the reader to know that bare means Intel. Name both explicitly.
+        #
+        # The glob is expanded once, before any renaming, so this cannot reprocess its
+        # own output.
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          echo "APP_VERSION=$ver" >> "$GITHUB_ENV"
+          cd release
+          for f in *.dmg; do
+            case "$f" in
+              *arm64*) arch="APPLE-SILICON" ;;
+              *)       arch="INTEL" ;;
+            esac
+            mv -- "$f" "Canvas-Extractor-Tools-MAC-$arch-$ver.dmg"
+          done
+          ls -1 *.dmg
+
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="mac-v${APP_VERSION}"
+
+          # Re-running this workflow for the same version would otherwise fail on an
+          # existing draft. Only ever touches mac-v* tags, which nothing but this file
+          # creates, and only ever a draft — `--draft` on create means there is no
+          # published release under this name to lose.
+          gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || true
+
+          cat > mac-notes.md <<'NOTES'
+          ## Untested build — do not distribute
+
+          These disk images compile from the same source as the Windows release. Beyond
+          that, nothing about them is known: **no one has launched this app on a Mac.**
+
+          This release is a draft on purpose. It is here so the macOS port has somewhere
+          to start, not because it is ready for anyone to use.
+
+          ### What a maintainer should expect to fix first
+
+          - **Gatekeeper.** The build is unsigned and un-notarized. A `.dmg` downloaded
+            through a browser is quarantined, which on Apple Silicon usually surfaces as
+            "the app is damaged and can't be opened." `xattr -dr com.apple.quarantine`
+            on the installed app is the usual way through while testing.
+          - **The title bar.** `titleBarStyle: 'hidden'` with a `titleBarOverlay`
+            (`electron/main.ts`) is a Windows arrangement. On macOS the traffic-light
+            buttons will sit on top of the app's own blue header.
+          - **Keychain.** Canvas token storage goes through Electron's `safeStorage`,
+            which is Windows Credential Manager on Windows and the Keychain here. Untested.
+          - **Google sign-in.** The OAuth loopback redirect is untested on macOS.
+          - **Update check.** It reads the same `releases/latest` as Windows, so it would
+            offer a Mac user the `.exe`. See `electron/ipc/updateCheck.ts`.
+
+          Two images are attached: `APPLE-SILICON` for M-series Macs, `INTEL` for older ones.
+          NOTES
+
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "macOS build ${APP_VERSION} (untested draft)" \
+            --notes-file mac-notes.md \
+            --draft \
+            release/*.dmg
+
+          echo "Draft created: $tag"
