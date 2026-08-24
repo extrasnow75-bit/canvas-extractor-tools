@@ -112,6 +112,11 @@ jobs:
         # The Mac line is here on purpose. Saying nothing about macOS would leave a Mac user
         # to conclude the download is broken; naming it as unsupported takes them straight to
         # asking for a Windows machine.
+        #
+        # The Help Center link is the Confluence shortlink, matching src/components/HelpCenter.tsx
+        # — it survives the page being renamed or moved between spaces, which the long
+        # /wiki/spaces/…/pages/… form does not, and these notes are published permanently.
+        # Anyone can read the URL here; the article itself still requires a Boise State login.
         run: |
           cat > notes.md <<'NOTES'
           ## Download
@@ -147,6 +152,15 @@ jobs:
           - **Accept the install folder the installer offers.** It lets you change it, and
             choosing a different one leaves two copies installed side by side with no way to
             tell which you are opening.
+
+          ## Instructions and help
+
+          Setting the app up, what each extraction produces, and what to do when something
+          goes wrong are covered in the eCampus Help Center:
+
+          **[Canvas Extractor Tools — Help Center article](https://boisestateecampus.atlassian.net/wiki/x/BIDV0)**
+
+          Sign in with your Boise State account if prompted.
 
           ---
 
