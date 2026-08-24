@@ -113,30 +113,41 @@ describe('buildRubricTableHtml', () => {
     const html = buildRubricTableHtml(byTitle('Discussion Board Rubric'))
 
     it('renders a range when the criterion bands its scores', () => {
-      expect(html).toContain('4 to &gt;3 pts')
-      expect(html).toContain('3 to &gt;1 pts')
+      expect(html).toContain('4 to &gt;3 points')
+      expect(html).toContain('3 to &gt;1 points')
     })
 
     it('floors the lowest range at zero', () => {
-      expect(html).toContain('1 to &gt;0 pts')
+      expect(html).toContain('1 to &gt;0 points')
     })
 
     it('does not pad fractional points', () => {
-      expect(html).toContain('2 to &gt;1 pts')
-      expect(html).toContain('1 to &gt;0.5 pts')
+      expect(html).toContain('2 to &gt;1 points')
+      expect(html).toContain('1 to &gt;0.5 points')
       expect(html).not.toContain('0.50')
     })
 
     it('renders a plain value when criterion_use_range is null', () => {
       const plain = buildRubricTableHtml(byTitle('Project Rubric - Final Dashboard'))
-      expect(plain).toContain('3 pts')
+      expect(plain).toContain('3 points')
       expect(plain).not.toContain(' to &gt;')
     })
 
     it('does not invent a range for a zero-point floor', () => {
       const zero = buildRubricTableHtml(byTitle('Perusall Annotations'))
-      expect(zero).toContain('0 pts')
+      expect(zero).toContain('0 points')
       expect(zero).not.toContain('0 to &gt;0')
+    })
+
+    it('says "points" everywhere, never Canvas\'s "pts"', () => {
+      // The rating cells, the Points column and the Total row all have to agree; a row reading
+      // "3 to >2.5 points" next to a column reading "3 pts" was the inconsistency this fixed.
+      expect(html).not.toMatch(/\bpts\b/)
+    })
+
+    it('keeps the exclusive lower bound rather than the template\'s hyphen form', () => {
+      // "3-2.5" would claim 2.5 scores in this band. It does not — the bound is exclusive.
+      expect(html).toContain('to &gt;')
     })
   })
 
@@ -145,6 +156,26 @@ describe('buildRubricTableHtml', () => {
 
     it('includes the rating long description', () => {
       expect(html).toContain('identifies where in the readings they are mentioned')
+    })
+
+    it('puts the points above the description, not below it', () => {
+      // Canvas puts them last and right-aligned. In a printed table that stranded the number
+      // at the foot of a long paragraph; the eCampus template heads each cell with it instead.
+      const cell = html.slice(html.indexOf('4 to &gt;3 points'))
+      const points = cell.indexOf('4 to &gt;3 points')
+      const description = cell.indexOf('identifies where in the readings they are mentioned')
+      expect(points).toBeGreaterThan(-1)
+      expect(description).toBeGreaterThan(points)
+    })
+
+    it('centres and bolds the points caption', () => {
+      expect(html).toContain('text-align:center;font-weight:bold;')
+    })
+
+    it('leaves the points caption to inherit Arial 11pt from the cell', () => {
+      // Declaring the font twice is two places to drift apart. CELL is the one that decides.
+      expect(html).toContain('font-family:Arial;font-size:11pt;')
+      expect(html).not.toMatch(/font-weight:bold;[^"]*font-family/)
     })
 
     it('uses the level names as column headers', () => {
@@ -284,7 +315,7 @@ describe('the captured Canvas response', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const html = buildRubricTableHtml(rubric as any)
       expect(html).toContain('<table')
-      expect(html).toContain('pts')
+      expect(html).toContain('points')
       // Every criterion's description reached the table.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const criterion of rubric.data as any[]) {

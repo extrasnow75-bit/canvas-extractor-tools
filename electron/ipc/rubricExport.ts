@@ -169,18 +169,24 @@ export function richTextToHtml(raw: string): string {
 }
 
 /**
- * The points caption Canvas puts at the foot of a rating cell.
+ * The points caption that heads a rating cell.
  *
  * A range's lower bound is not a field — it is the next rating down, which is why this needs
  * the whole list rather than one rating. Canvas returns ratings highest-first; if some rubric
  * does not, the comparison fails and the cell falls back to the fixed value rather than
  * printing an inverted range.
+ *
+ * "points", not Canvas's own "pts", to match the eCampus rubric template these documents are
+ * read alongside. The `to >` phrasing is Canvas's and is kept deliberately: the lower bound is
+ * exclusive, so 2.5 in "3 to >2.5" scores in the band below, not this one. The template's
+ * hyphen form ("10-8") cannot say that, and rewriting it that way would state something about
+ * how the rubric grades that is not true.
  */
 function ratingPointsLabel(criterion: CanvasCriterion, ratings: CanvasRating[], i: number): string {
   const upper = ratings[i].points
-  if (!criterion.criterion_use_range) return `${upper} pts`
+  if (!criterion.criterion_use_range) return `${upper} points`
   const lower = ratings[i + 1] ? ratings[i + 1].points : 0
-  return lower < upper ? `${upper} to >${lower} pts` : `${upper} pts`
+  return lower < upper ? `${upper} to >${lower} points` : `${upper} points`
 }
 
 /**
@@ -251,13 +257,21 @@ export function buildRubricTableHtml(rubric: CanvasRubricFull): string {
       }
       if (body) lines.push(richTextToHtml(body))
 
-      // Points sit under the description, right-aligned, the way Canvas positions them.
+      // Points head the cell, centred and bold, matching the eCampus rubric template rather
+      // than Canvas's own layout. Canvas puts them last and right-aligned, which reads fine on
+      // screen where each cell is its own box, but in a printed table it left the number
+      // stranded at the foot of a long description and hard to find. No font declared: CELL
+      // already sets Arial 11pt on the cell and this inherits it, so there is one place that
+      // decides the table's typeface rather than two that can drift apart.
       const pts =
-        `<div style="text-align:right;margin-top:4px;">` +
+        `<div style="text-align:center;font-weight:bold;margin-bottom:4px;">` +
         `${escapeHtml(ratingPointsLabel(c, ratings, i))}</div>`
-      return `<td style="${CELL}vertical-align:top;">${lines.join('<br>')}${pts}</td>`
+      return `<td style="${CELL}vertical-align:top;">${pts}${lines.join('<br>')}</td>`
     }).join('')
-    const ptsCell = `<td style="${CELL}text-align:center;">${c.points} pts</td>`
+    // "points" here too, so the row does not say "pts" in one column and "points" in the next.
+    // Left unbolded on purpose: the template shows this column plain, and the bold in the
+    // rating cells is what marks those out as the thing to look at.
+    const ptsCell = `<td style="${CELL}text-align:center;">${c.points} points</td>`
     rows.push('<tr>' + critCell + ratingCells + ptsCell + '</tr>')
   }
 
