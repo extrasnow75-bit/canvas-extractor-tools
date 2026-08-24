@@ -270,6 +270,34 @@ describe('buildRubricTableHtml', () => {
       ).not.toThrow()
     })
 
+    it('escapes the points values, which are typed number but arrive as untrusted JSON', () => {
+      // `points` and `points_possible` are declared number, but that is a cast over a Canvas
+      // response, not a guarantee. Every other value in the table is escaped on the way in.
+      const hostile = {
+        id: 1,
+        title: 'x',
+        points_possible: '<script>alert(1)</script>',
+        data: [
+          {
+            id: 'c',
+            description: 'd',
+            points: '<img src=x onerror=alert(1)>',
+            criterion_use_range: false,
+            ratings: [{ description: 'Met', long_description: 'body', points: 1, id: 'a' }],
+          },
+        ],
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const html = buildRubricTableHtml(hostile as any)
+      // What matters is that neither value can open a tag. The words themselves surviving as
+      // inert text inside an escaped string is correct — "onerror" with its angle brackets
+      // escaped is a sentence, not an attribute.
+      expect(html).not.toContain('<script')
+      expect(html).not.toContain('<img')
+      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+    })
+
     it('does not crash on an out-of-range entity in a description', () => {
       const bad = {
         id: 1,

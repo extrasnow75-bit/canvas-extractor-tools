@@ -271,7 +271,12 @@ export function buildRubricTableHtml(rubric: CanvasRubricFull): string {
     // "points" here too, so the row does not say "pts" in one column and "points" in the next.
     // Left unbolded on purpose: the template shows this column plain, and the bold in the
     // rating cells is what marks those out as the thing to look at.
-    const ptsCell = `<td style="${CELL}text-align:center;">${c.points} points</td>`
+    //
+    // Escaped despite being typed `number`. That type is an unvalidated cast over JSON from a
+    // service we do not control — the same reasoning that made `ratings` optional — so it is a
+    // claim about what Canvas usually sends, not a guarantee about what arrives. Every other
+    // value in this table is escaped on the way in; these two were the exceptions.
+    const ptsCell = `<td style="${CELL}text-align:center;">${escapeHtml(String(c.points))} points</td>`
     rows.push('<tr>' + critCell + ratingCells + ptsCell + '</tr>')
   }
 
@@ -279,7 +284,7 @@ export function buildRubricTableHtml(rubric: CanvasRubricFull): string {
   rows.push(
     '<tr>' +
       `<td colspan="${numCols + 1}" style="${CELL}text-align:right;"><strong>Total Points</strong></td>` +
-      `<td style="${CELL}text-align:center;"><strong>${rubric.points_possible} points</strong></td>` +
+      `<td style="${CELL}text-align:center;"><strong>${escapeHtml(String(rubric.points_possible))} points</strong></td>` +
       '</tr>',
   )
 
