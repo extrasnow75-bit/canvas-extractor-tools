@@ -2,7 +2,7 @@ export interface Credentials {
   canvasToken: string
 }
 
-export type Tool = 'content' | 'quizzes' | 'rubrics'
+export type Tool = 'content' | 'quizzes' | 'rubrics' | 'settings'
 
 export interface ExportResult {
   ok: boolean
@@ -95,6 +95,13 @@ declare global {
           jobId?: string
         }): Promise<ExportResult>
         exportRubrics(args: {
+          courseUrl: string
+          token: string
+          savePath: string
+          selectedIds?: string[]
+          jobId?: string
+        }): Promise<ExportResult>
+        exportSettings(args: {
           courseUrl: string
           token: string
           savePath: string

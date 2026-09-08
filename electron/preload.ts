@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('api', {
     exportContent: (args: unknown) => ipcRenderer.invoke('canvas:exportContent', args),
     exportQuizzes: (args: unknown) => ipcRenderer.invoke('canvas:exportQuizzes', args),
     exportRubrics: (args: unknown) => ipcRenderer.invoke('canvas:exportRubrics', args),
+    exportSettings: (args: unknown) => ipcRenderer.invoke('canvas:exportSettings', args),
     exportToDrive: (args: unknown) => ipcRenderer.invoke('canvas:exportToDrive', args),
     getCourseName: (args: unknown) => ipcRenderer.invoke('canvas:getCourseName', args),
     listItems: (args: unknown) => ipcRenderer.invoke('canvas:listItems', args),

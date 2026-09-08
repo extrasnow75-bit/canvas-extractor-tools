@@ -46,6 +46,23 @@ const LOCAL_FILE_NAMES: Record<Tool, string> = {
   content: 'course_content_extraction.html',
   quizzes: 'quiz_questions.html',
   rubrics: 'course_rubrics.html',
+  settings: 'course_settings_tables.xlsx',
+}
+
+/** File-save-dialog extension + filter label per tool. Every tool but Settings writes HTML. */
+const LOCAL_FILE_KIND: Record<Tool, { ext: string; label: string }> = {
+  content: { ext: 'html', label: 'HTML File' },
+  quizzes: { ext: 'html', label: 'HTML File' },
+  rubrics: { ext: 'html', label: 'HTML File' },
+  settings: { ext: 'xlsx', label: 'Excel File' },
+}
+
+/** The Drive file type each tool produces — drives the badge and the button wording. */
+const GOOGLE_KIND: Record<Tool, { badge: string; noun: string }> = {
+  content: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
+  quizzes: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
+  rubrics: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
+  settings: { badge: 'GOOGLE SHEET', noun: 'Google Sheet' },
 }
 
 /**
@@ -77,6 +94,7 @@ const LOCAL_HANDLERS: Record<
   content: (args) => window.api.canvas.exportContent(args),
   quizzes: (args) => window.api.canvas.exportQuizzes(args),
   rubrics: (args) => window.api.canvas.exportRubrics(args),
+  settings: (args) => window.api.canvas.exportSettings(args),
 }
 
 export function ToolTile({
@@ -264,7 +282,7 @@ export function ToolTile({
   const [localNoticeOpen, setLocalNoticeOpen] = useState(false)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const pendingLocalSave = useRef<string[] | undefined>(undefined)
-  const noticeApplies = tool === 'content'
+  const noticeApplies = tool === 'content' || tool === 'settings'
 
   // The notice appears below the button that was just pressed, so focus has to be moved into
   // it — otherwise it is silent to a screen reader and easy to miss with the keyboard.
@@ -325,8 +343,7 @@ export function ToolTile({
 
     const savePath = await window.api.dialog.saveFile({
       defaultName,
-      ext: 'html',
-      label: 'HTML File',
+      ...LOCAL_FILE_KIND[tool],
     })
     if (!savePath) return
 
@@ -418,7 +435,7 @@ export function ToolTile({
   const isSubset = hasSelection && selected.size < items.length
   const nothingSelected = hasSelection && selected.size === 0
   const selectionArgs = hasSelection ? Array.from(selected) : undefined
-  const extractLabel = isSubset ? 'Extract selected to a Google Doc' : 'Extract all to a Google Doc'
+  const extractLabel = `Extract ${isSubset ? 'selected' : 'all'} to a ${GOOGLE_KIND[tool].noun}`
 
   return (
     /* A section with its own heading, so each tile is a stop in heading navigation. The tile
@@ -443,7 +460,7 @@ export function ToolTile({
           <p className="text-xs text-gray-600 mt-0.5">{description}</p>
         </div>
         <span className="text-[10px] font-black tracking-wide px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
-          GOOGLE DOC
+          {GOOGLE_KIND[tool].badge}
         </span>
       </div>
 
@@ -553,6 +570,17 @@ export function ToolTile({
             </p>
           )}
 
+          {/* Settings tables are one whole tab per item, so a full course turns into dozens of
+              tabs and a correspondingly long run. Nudging people toward the picker up front is
+              cheaper than letting them discover that after a five-minute extraction. */}
+          {tool === 'settings' && (
+            <p className="text-xs text-gray-600 mt-2">
+              Each item becomes its own tab, so a whole course makes a large, slow spreadsheet.
+              Use <span className="font-bold">Choose specific items</span> to pick just the ones
+              you need.
+            </p>
+          )}
+
           {/* Both branches used to render text-gray-600 at the same weight, so the only
               unavailable cue was `cursor: not-allowed` — hover-only, and therefore invisible
               to touch and keyboard (1.4.1). The underline is what marks it as a control when
@@ -571,7 +599,7 @@ export function ToolTile({
                 : 'text-gray-600 underline underline-offset-2 hover:text-gray-900'
             }`}
           >
-            or save a local copy (.html)
+            or save a local copy (.{LOCAL_FILE_KIND[tool].ext})
           </button>
 
           {localNoticeOpen && (
@@ -606,15 +634,33 @@ export function ToolTile({
                     Saving a local copy? One difference to expect
                   </p>
                   <div id={`${tool}-local-notice-body`}>
-                    <p className="text-[12.5px] text-gray-700 mt-1">
-                      A local file will not have the blue lines above and below each{' '}
-                      <span className="font-bold">Due by</span> heading. Everything else — the
-                      headings, the red tool labels, the colours — comes across as normal.
-                    </p>
+                    {tool === 'settings' ? (
+                      <p className="text-[12.5px] text-gray-700 mt-1">
+                        A local file shows checkboxes as plain <span className="font-bold">TRUE</span>
+                        /<span className="font-bold">FALSE</span> text rather than the tickable
+                        boxes the Google Sheets version has. Everything else — labels, values,
+                        and the dropdown option lists — comes across as normal.
+                      </p>
+                    ) : (
+                      <p className="text-[12.5px] text-gray-700 mt-1">
+                        A local file will not have the blue lines above and below each{' '}
+                        <span className="font-bold">Due by</span> heading. Everything else — the
+                        headings, the red tool labels, the colours — comes across as normal.
+                      </p>
+                    )}
                     <p className="text-[12.5px] text-gray-700 mt-1.5">
-                      To use it: upload the .html file to Google Drive, then right-click it and
-                      choose <span className="font-bold">Open with → Google Docs</span>. There
-                      are fuller instructions in the Help Center.
+                      {tool === 'settings' ? (
+                        <>
+                          To use it: upload the .xlsx file to Google Drive, then right-click it
+                          and choose <span className="font-bold">Open with → Google Sheets</span>.
+                        </>
+                      ) : (
+                        <>
+                          To use it: upload the .html file to Google Drive, then right-click it and
+                          choose <span className="font-bold">Open with → Google Docs</span>.
+                        </>
+                      )}{' '}
+                      There are fuller instructions in the Help Center.
                     </p>
                   </div>
 
@@ -749,7 +795,7 @@ export function ToolTile({
                   : 'bg-[#0033a0] hover:bg-[#002d8f] text-white'
               }`}
             >
-              Extract selected to a Google Doc
+              Extract selected to a {GOOGLE_KIND[tool].noun}
             </button>
           </>
         )}

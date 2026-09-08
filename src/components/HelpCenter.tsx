@@ -391,6 +391,24 @@ export function HelpCenter({ isOpen, onClose, returnFocusTo, appVersion }: Props
               </ol>
             </div>
 
+            <div className="mt-3 p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+              <h4 className="text-sm font-black text-gray-900">
+                Settings tables work the same way, with two differences
+              </h4>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                <li>
+                  The local copy is an <span className="font-bold">.xlsx</span> file, and you open it
+                  with <span className="font-bold">Google Sheets</span> rather than Google Docs.
+                </li>
+                <li>
+                  Checkboxes arrive as plain <span className="font-bold">TRUE</span>/
+                  <span className="font-bold">FALSE</span> text instead of tickable boxes. Extracting
+                  straight to a Google Sheet gives you the real checkboxes; this is the one thing the
+                  local route cannot carry across.
+                </li>
+              </ul>
+            </div>
+
             <div className="mt-3 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl">
               <h4 className="text-sm font-black text-gray-900 mb-1">
                 One difference: the blue due-date lines

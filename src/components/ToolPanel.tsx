@@ -62,6 +62,17 @@ const RubricIcon = () => (
   </svg>
 )
 
+const SettingsIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="3" y1="9.3" x2="21" y2="9.3" />
+    <line x1="3" y1="14.7" x2="21" y2="14.7" />
+    <line x1="9" y1="4" x2="9" y2="20" />
+    <path d="M13.2 11.2h4.4l-.5 1 .5 1h-4.4l.5-1z" fill="#fff" stroke="none" />
+    <circle cx="6" cy="6.65" r="0.9" fill="#fff" stroke="none" />
+  </svg>
+)
+
 const TOOLS = [
   {
     id: 'content' as const,
@@ -82,6 +93,18 @@ const TOOLS = [
     label: 'Rubric extraction',
     description: 'Every course rubric with criteria and rating levels, as a table',
     icon: <RubricIcon />,
+    // Google Docs blue — this tool's output is a Google Doc, matching the other Docs-based
+    // tiles' Google-brand-color scheme (red/yellow used above). Was green, which is Sheets'
+    // color and belonged to the settings tool below instead.
+    tileBg: '#4285F4',
+  },
+  {
+    id: 'settings' as const,
+    label: 'Settings tables extraction',
+    description: 'Assignment, discussion, and quiz settings → Google Sheets template',
+    icon: <SettingsIcon />,
+    // Google Sheets green — this tool's output is a Google Sheet, freed up from Rubric
+    // extraction above when that tile moved to Docs blue.
     tileBg: '#34A853',
   },
 ]
@@ -187,7 +210,7 @@ export function ToolPanel({ token }: Props) {
           )}
         </div>
         <p className="text-[13px] text-gray-600 mb-2.5">
-          Paste the homepage URL of the course you want to extract. All three tools below use it.
+          Paste the homepage URL of the course you want to extract. All four tools below use it.
         </p>
         <div className="flex gap-2">
           {/* type="text" (not "url") so the caret can be positioned — setSelectionRange
@@ -289,7 +312,7 @@ export function ToolPanel({ token }: Props) {
 
       <h2 className="text-[12px] text-gray-700 uppercase tracking-wide font-black px-1 pt-1">Extraction tools</h2>
       <p className="text-xs text-gray-600 -mt-2 px-1">
-        Each extraction becomes a Google Doc in your Drive. Not signed in to Google? Use "save a local copy" instead.
+        Each extraction becomes a Google Doc or Sheet in your Drive. Not signed in to Google? Use "save a local copy" instead.
       </p>
 
       <div className="space-y-3">

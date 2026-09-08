@@ -4,6 +4,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { handleCanvasExport, buildContentHtml, makeProgressReporter } from './ipc/canvasExport'
 import { handleQuizExport, buildQuizzesHtml } from './ipc/quizExport'
 import { handleRubricExport, buildRubricsHtml } from './ipc/rubricExport'
+import { handleSettingsExport, buildSettingsData, ACCESS_CODE_WARNING } from './ipc/settingsExport'
+import { createSettingsSpreadsheet } from './ipc/googleSheets'
 import {
   parseCourseUrl,
   canvasGetOne,
@@ -229,6 +231,7 @@ ipcMain.handle('canvas:verifyToken', (_e, args: { token: string; courseUrl?: str
 ipcMain.handle('canvas:exportContent', handleCanvasExport)
 ipcMain.handle('canvas:exportQuizzes', handleQuizExport)
 ipcMain.handle('canvas:exportRubrics', handleRubricExport)
+ipcMain.handle('canvas:exportSettings', handleSettingsExport)
 
 // Stop a running extraction. Cancellation is cooperative: the builders check between
 // items, so the extraction ends at its next checkpoint rather than instantly.
@@ -284,7 +287,7 @@ ipcMain.handle(
   async (
     e,
     args: {
-      tool: 'content' | 'quizzes' | 'rubrics'
+      tool: 'content' | 'quizzes' | 'rubrics' | 'settings'
       courseUrl: string
       token: string
       selectedIds?: string[]
@@ -297,6 +300,38 @@ ipcMain.handle(
     const cancel = beginJob(args.jobId)
     const ref: CourseRef = { ...parsed, token: args.token, cancel }
     const progress = makeProgressReporter(e, args.jobId)
+
+    // The settings tool produces a Sheet rather than a Doc, so it takes its own path through
+    // Canvas fetch → Sheets API rather than the shared "build HTML → upload as Doc" one below.
+    if (args.tool === 'settings') {
+      let webViewLink: string
+      let accessCodeNote = ''
+      try {
+        // reservedSteps: 1 — writing the spreadsheet is the slowest step here, and without
+        // reserving it the bar reached 100% before that work started and the app looked hung.
+        const data = await buildSettingsData(ref, selectedIds, cancel, progress, 1)
+        if (data.tabs.length === 0) {
+          return { ok: false, message: 'No settings tables were selected.' }
+        }
+        const created = await createSettingsSpreadsheet(data, `${data.courseName} Settings Tables`)
+        webViewLink = created.webViewLink
+        accessCodeNote = data.containsAccessCode ? ACCESS_CODE_WARNING : ''
+        progress?.(data.tabs.length + 1, data.tabs.length + 1)
+      } catch (err) {
+        if (isCancellation(err)) {
+          return { ok: false, message: 'Extraction cancelled — nothing was uploaded.', cancelled: true }
+        }
+        throw err
+      } finally {
+        endJob(args.jobId)
+      }
+      await openInBrowser(webViewLink)
+      return {
+        ok: true,
+        message: 'Created in your Google Drive and opened in your browser.' + accessCodeNote,
+        webViewLink,
+      }
+    }
 
     let html: string
     let docName: string
