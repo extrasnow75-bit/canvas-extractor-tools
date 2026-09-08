@@ -227,7 +227,7 @@ async function renderModuleItem(
           // A New Quiz lands here rather than in the `Quiz` case. Canvas labels it "Quiz"
           // on the Modules page, and the tool label is the cue QA reads, so match Canvas
           // rather than the underlying object type.
-          toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment'),
+          toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment', true),
           await formatBody(asgn.description, ref, files),
         ],
       }
@@ -240,7 +240,7 @@ async function renderModuleItem(
       return {
         parts: [
           itemTitle(disc.title),
-          toolLabel('Discussion'),
+          toolLabel('Discussion', true),
           await formatBody(disc.message, ref, files),
         ],
       }
@@ -256,7 +256,7 @@ async function renderModuleItem(
       return {
         parts: [
           itemTitle(quiz.title),
-          toolLabel('Quiz'),
+          toolLabel('Quiz', true),
           await formatBody(quiz.description, ref, files),
         ],
       }

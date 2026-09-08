@@ -7,7 +7,8 @@
  *
  * Two details QA treats as critical:
  *   1. The blue horizontal rules above AND below every "Due by …" header.
- *   2. The grey chip highlight behind Canvas tool names (Page, Assignment, …).
+ *   2. The black circle marker after every Canvas tool name (Page, Assignment, …),
+ *      plus "; Link to settings tab" for the tools that have one.
  */
 
 // MAX_SCANNED_BODY_BYTES guards the scans below for the same reason it guards the one in
@@ -19,7 +20,6 @@ import { annotateStyledHtml, MAX_SCANNED_BODY_BYTES } from './styledHtml'
 export const DEEP_BLUE = '#0033a0' // due-header text
 export const RED = '#ff0000' // Canvas tool labels + heading-level tags
 export const BORDER_BLUE = '#0000e7' // due-header rules (Code.gs: rgb(0, 0, 0.90588))
-export const GREY_CHIP = '#e8eaed' // Canvas-tool chip highlight (Code.gs GREY_CHIP)
 export const BLACK = '#000000'
 export const FONT = 'Arial'
 
@@ -117,16 +117,32 @@ export function itemTitle(inner: string, escape = true): string {
   )
 }
 
+// ⏺ U+23FA BLACK CIRCLE FOR RECORD. Replaces the old grey chip highlight (Blueprint
+// Tools Code.gs, 2026-09-08): a background colour is one attribute per character, so
+// QA's light-green "ready for Canvas" highlight overwrote the grey outright and the one
+// cue that identified a Canvas tool vanished at exactly the moment the line mattered
+// most. A real character survives a highlight painted over it.
+const TOOL_MARKER = '⏺'
+// Black, not red: it is a structural mark that says "this line tags a Canvas tool", not
+// part of the tool's name or the settings-tab link text on either side of it.
+const TOOL_MARKER_COLOR = BLACK
+
 /**
- * Canvas tool label (Page, Assignment, Discussion, …) — Blueprint spec (Code.gs:245,433):
- * Arial 11pt bold red, on a grey #e8eaed chip highlight. QA relies on the chip as a
- * visual cue, so the background is applied to the tool name run itself.
+ * Canvas tool label (Page, Assignment, Discussion, …) — Blueprint spec (Code.gs
+ * TOOL_MARKER/TOOL_SUFFIX): Arial 11pt bold red, followed by a black circle marker.
+ * Tools with a Canvas Settings tab to link to (Assignment, Discussion, Quiz — classic
+ * and New) also get "; Link to settings tab" after the marker, red like the tool name.
+ * Page, File, and External Link have no Settings tab, so they get the marker alone.
  */
-export function toolLabel(label: string): string {
+export function toolLabel(label: string, hasSettingsTab = false): string {
+  const suffix = hasSettingsTab
+    ? `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">; Link to settings tab</span>`
+    : ''
   return (
     `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;">` +
-    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};` +
-    `background-color:${GREY_CHIP};">${escapeHtml(label)}</span>` +
+    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">${escapeHtml(label)}</span>` +
+    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${TOOL_MARKER_COLOR};"> ${TOOL_MARKER}</span>` +
+    suffix +
     '</p>'
   )
 }
