@@ -12,6 +12,9 @@
 #
 #     git tag v1.0.0 && git push origin v1.0.0
 #
+# Before tagging, rewrite RELEASE_NOTES.md as the "What's new in vX.Y.Z" list for that
+# version; the release job refuses to publish if the file does not name the tag.
+#
 # or from the Actions tab via "Run workflow", which builds and uploads the installer as a
 # workflow artifact without publishing a release — useful for testing the pipeline itself.
 #
@@ -79,10 +82,28 @@ jobs:
       contents: write
 
     steps:
+      # Only for RELEASE_NOTES.md; the installer comes from the build job's artifact.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: RELEASE_NOTES.md
+          sparse-checkout-cone-mode: false
+
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Check the change list names this version
+        # RELEASE_NOTES.md is the "What's new" section of the release page: a bulleted list
+        # of what changed since the previous version, written for the people installing
+        # the app. It is rewritten for every release, so a tag pushed without updating it
+        # would publish the previous version's list under a new heading. Stop here instead;
+        # the installer is already built and the tag can be re-pushed once the file is right.
+        run: |
+          if ! grep -q "What's new in $GITHUB_REF_NAME" RELEASE_NOTES.md; then
+            echo "::error file=RELEASE_NOTES.md::RELEASE_NOTES.md must start with '## What's new in $GITHUB_REF_NAME' and list the changes since the previous release."
+            exit 1
+          fi
 
       - name: Rename installer
         # electron-builder names the file after the version and arch, which asks the reader to
@@ -117,6 +138,10 @@ jobs:
         # — it survives the page being renamed or moved between spaces, which the long
         # /wiki/spaces/…/pages/… form does not, and these notes are published permanently.
         # Anyone can read the URL here; the article itself still requires a Boise State login.
+        #
+        # The change list comes from RELEASE_NOTES.md (checked above) and goes straight after
+        # the download link: someone deciding whether to reinstall wants to know what they
+        # would get before they read how to install it.
         run: |
           cat > notes.md <<'NOTES'
           ## Download
@@ -129,6 +154,10 @@ jobs:
           The Assets section further down holds the same file. Ignore the two "Source code"
           links beside it — GitHub adds those to every release automatically. They are not
           the app.
+
+          NOTES
+          cat RELEASE_NOTES.md >> notes.md
+          cat >> notes.md <<'NOTES'
 
           ## Installing
 
