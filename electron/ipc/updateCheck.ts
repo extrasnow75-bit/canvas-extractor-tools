@@ -99,7 +99,24 @@ async function fetchLatestVersion(): Promise<string | null> {
   }
 }
 
+/**
+ * Published releases carry a Windows .exe and nothing else — the macOS disk images are built
+ * by a separate workflow into a *draft* release, which is invisible to anyone without write
+ * access on the repo and is skipped by /releases/latest.
+ *
+ * So on macOS this check can only ever find a version whose download does not run on the
+ * user's machine, and the banner would send them to a page offering an installer for another
+ * operating system. Saying nothing is the honest outcome until Mac builds are published.
+ *
+ * Only the automatic banner is suppressed. A check the user explicitly asks for still answers
+ * truthfully — see performManualCheck — because someone who presses the button is asking
+ * whether a newer version exists, not to be handed a file.
+ */
+const AUTO_UPDATE_BANNER_SUPPORTED = process.platform !== 'darwin'
+
 async function performCheck(): Promise<UpdateInfo | null> {
+  if (!AUTO_UPDATE_BANNER_SUPPORTED) return null
+
   const latest = await fetchLatestVersion()
   if (latest === null) return null
   if (compareVersions(latest, app.getVersion()) <= 0) return null

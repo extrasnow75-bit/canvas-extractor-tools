@@ -36,6 +36,47 @@ export function cleanErrorMessage(raw: string): string {
 /** Exactly as the panel's own heading reads, so the reader is looking for the same words. */
 const PANEL_NAME = 'Initial setup'
 
+/**
+ * Trailing punctuation is part of the sentence, not the address — a message ending
+ * "…overview?project=123." would otherwise carry the full stop into the link.
+ */
+const URL_RE = /(https?:\/\/[^\s]+?)([.,;:)\]]*)(?=\s|$)/g
+
+/**
+ * Some errors exist to tell the reader where to go — the Sheets API one hands over a Google
+ * Cloud console URL to click. Rendered as plain text that link is unusable: not reachable by
+ * keyboard or screen reader, and ninety characters to select by hand. It is opened through
+ * `window.open`, matching the "Open again" button on a finished extraction; main.ts refuses
+ * the popup and hands the URL to the real browser, and only for http(s).
+ */
+function LinkedText({ text }: { text: string }) {
+  const parts: React.ReactNode[] = []
+  let cursor = 0
+
+  for (const match of text.matchAll(URL_RE)) {
+    const [, url, trailing] = match
+    const start = match.index ?? 0
+    if (start > cursor) parts.push(text.slice(cursor, start))
+    parts.push(
+      <button
+        key={start}
+        onClick={() => window.open(url, '_blank')}
+        /* break-all so a long URL wraps inside the tile instead of forcing the card wider
+           than the window — the same treatment long strings get in HelpCenter and
+           SetupPanel. */
+        className="underline underline-offset-2 font-bold text-blue-700 hover:text-blue-900 break-all text-left rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+      >
+        {url}
+      </button>,
+    )
+    parts.push(trailing)
+    cursor = start + match[0].length
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor))
+
+  return <>{parts}</>
+}
+
 export function ErrorText({ message }: { message: string }) {
   const clean = cleanErrorMessage(message)
   const segments = clean.split(PANEL_NAME)
@@ -44,7 +85,7 @@ export function ErrorText({ message }: { message: string }) {
     <>
       {segments.map((segment, i) => (
         <React.Fragment key={i}>
-          {segment}
+          <LinkedText text={segment} />
           {i < segments.length - 1 && <em>{PANEL_NAME}</em>}
         </React.Fragment>
       ))}

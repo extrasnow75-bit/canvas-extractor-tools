@@ -8,6 +8,14 @@ import { ZoomControl } from './components/ZoomControl'
 import { cleanErrorMessage } from './components/ErrorText'
 import type { GoogleStatus } from './types'
 
+/**
+ * Read once at module scope: the platform cannot change while the app is running.
+ * Optional-chained so that loading the renderer without the preload bridge attached — opening
+ * the dev server straight in a browser — degrades to the Windows layout instead of throwing
+ * before the app can render at all.
+ */
+const isMac = window.api?.app?.platform === 'darwin'
+
 export default function App() {
   const [canvasToken, setCanvasToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -113,9 +121,14 @@ export default function App() {
     <div className="flex flex-col h-screen bg-slate-50">
       {/* Everything except the Help drawer, so the drawer can mark it inert while open. */}
       <div id="app-shell" className="flex flex-col flex-1 min-h-0">
-        {/* Draggable title bar */}
+        {/* Draggable title bar.
+            On macOS the window keeps its traffic-light buttons, which sit at the left of this
+            same strip (positioned in main.ts) — so the title is pushed clear of them there.
+            Windows draws its caption buttons on the right, where nothing collides. */}
         <header
-          className="flex items-center justify-between px-4 bg-[#0033a0] text-white flex-shrink-0"
+          className={`flex items-center justify-between pr-4 bg-[#0033a0] text-white flex-shrink-0 ${
+            isMac ? 'pl-20' : 'pl-4'
+          }`}
           style={{ height: 36, WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <h1 className="text-sm font-black tracking-wide">Canvas Extractor Tools</h1>

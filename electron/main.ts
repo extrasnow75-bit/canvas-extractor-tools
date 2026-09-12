@@ -81,6 +81,8 @@ async function openExternalSafely(url: string): Promise<void> {
   await shell.openExternal(url)
 }
 
+const IS_MAC = process.platform === 'darwin'
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 900,
@@ -93,12 +95,26 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       sandbox: true,
     },
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#0033a0',
-      symbolColor: '#ffffff',
-      height: 36,
-    },
+    /**
+     * The app draws its own 36px blue title bar (see the <header> in App.tsx), so the native
+     * one is hidden on both platforms — but the two need different arrangements.
+     *
+     * macOS keeps its traffic-light buttons whatever the style, and under plain 'hidden' they
+     * sit in the top-left corner directly on top of the app's own title. 'hiddenInset' plus an
+     * explicit position places them deliberately, centred in that 36px strip, and App.tsx
+     * leaves room for them. titleBarOverlay is a Windows/Linux feature — it styles the caption
+     * buttons, which macOS does not have — so it is not passed there at all.
+     */
+    titleBarStyle: IS_MAC ? 'hiddenInset' : 'hidden',
+    ...(IS_MAC
+      ? { trafficLightPosition: { x: 13, y: 11 } }
+      : {
+          titleBarOverlay: {
+            color: '#0033a0',
+            symbolColor: '#ffffff',
+            height: 36,
+          },
+        }),
     backgroundColor: '#f8fafc',
   })
 

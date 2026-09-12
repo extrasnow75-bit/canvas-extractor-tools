@@ -850,9 +850,12 @@ export function ToolTile({
       {status === 'error' && (
         <div className="mt-2.5 flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" aria-hidden="true" />
-          <div>
+          {/* flex-1 min-w-0 so a long message can shrink inside the flex row rather than
+              pushing the card wider than the window. Without it an unbroken string — the
+              console URL in the Sheets-API error is ninety characters — overflowed the tile. */}
+          <div className="flex-1 min-w-0">
             <p className="font-black">{label} failed</p>
-            <p className="text-gray-700 mt-0.5">
+            <p className="text-gray-700 mt-0.5 break-words">
               <ErrorText message={message} />
             </p>
           </div>

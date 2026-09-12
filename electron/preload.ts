@@ -3,6 +3,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 // Expose a narrow, typed API to the renderer — no direct Node/Electron access
 contextBridge.exposeInMainWorld('api', {
   app: {
+    /**
+     * 'darwin' | 'win32' | 'linux'. A plain value rather than a call, because the layout
+     * decides on it during the first render — the title bar has to leave room for macOS's
+     * traffic lights immediately, not after a round trip that would show a visible jump.
+     */
+    platform: process.platform,
     version: (): Promise<string> => ipcRenderer.invoke('app:version'),
     /** Resolves to null when up to date, offline, or the check fails. */
     checkUpdate: (): Promise<{ version: string } | null> => ipcRenderer.invoke('app:checkUpdate'),

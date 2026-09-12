@@ -2,25 +2,33 @@
 #
 # ─── Read this before using anything it produces ──────────────────────────────
 #
-# This build has never been launched on a Mac. It compiles, and that is the whole
-# of what is known about it. It exists so that the macOS work has a starting point
-# on GitHub rather than living only in package.json, and it is deliberately kept
-# where no ordinary user can reach it.
+# Two of the problems this file used to list have since been fixed in the source,
+# and the rest have not. Keep the two apart when reading a build from here.
 #
-# Known or near-certain problems for whoever picks this up:
+# Addressed, but never confirmed on a Mac (there is no Mac to confirm them on):
+#
+#   * The title bar. electron/main.ts now uses 'hiddenInset' with an explicit
+#     trafficLightPosition on darwin and drops titleBarOverlay (a Windows/Linux
+#     feature), and App.tsx pads the header left so the title clears the
+#     traffic-light buttons. The 13/11 offset is a considered guess, not a
+#     measurement — if the buttons sit off-centre in the 36px strip, that constant
+#     is what to nudge.
+#   * The update check. updateCheck.ts no longer raises the automatic banner on
+#     darwin, because published releases carry only the Windows .exe and the banner
+#     would have sent a Mac user to it. A check the user presses the button for
+#     still answers honestly.
+#
+# Still unknown or unfixed:
 #
 #   * Unsigned and un-notarized. A .dmg downloaded through a browser carries the
 #     quarantine attribute, so on Apple Silicon this typically reports "the app is
 #     damaged and can't be opened" rather than offering a way through. Removing it
 #     by hand (`xattr -dr com.apple.quarantine`) is the usual workaround. This is a
-#     much worse first run than the Windows SmartScreen click-through.
-#   * The title bar. `titleBarStyle: 'hidden'` plus `titleBarOverlay` in
-#     electron/main.ts is a Windows arrangement; on macOS the traffic-light buttons
-#     land on top of the app's own 36px blue header at top left.
+#     much worse first run than the Windows SmartScreen click-through, and it is the
+#     one problem here that cannot be fixed in source — it needs a paid Apple
+#     Developer identity and a notarization step in this workflow.
 #   * safeStorage against the macOS Keychain is untested.
 #   * The Google OAuth loopback redirect is untested.
-#   * The in-app update check points at the same releases/latest as Windows, so it
-#     would offer a Mac user the .exe.
 #
 # ─── Why this is a separate file ──────────────────────────────────────────────
 #
@@ -116,28 +124,43 @@ jobs:
           gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || true
 
           cat > mac-notes.md <<'NOTES'
-          ## Untested build — do not distribute
+          ## Draft build — for testing, not for course staff
 
-          These disk images compile from the same source as the Windows release. Beyond
-          that, nothing about them is known: **no one has launched this app on a Mac.**
+          These disk images compile from the same source as the Windows release. The
+          macOS-specific parts of the app have been written deliberately, but **they have
+          not been confirmed on an actual Mac** — treat anything below as expected
+          behaviour to check, not behaviour that is known to work.
 
-          This release is a draft on purpose. It is here so the macOS port has somewhere
-          to start, not because it is ready for anyone to use.
+          This release is a draft on purpose, so an unverified build cannot reach people
+          browsing the Releases page.
 
-          ### What a maintainer should expect to fix first
+          ### Getting past Gatekeeper — do this first
 
-          - **Gatekeeper.** The build is unsigned and un-notarized. A `.dmg` downloaded
-            through a browser is quarantined, which on Apple Silicon usually surfaces as
-            "the app is damaged and can't be opened." `xattr -dr com.apple.quarantine`
-            on the installed app is the usual way through while testing.
-          - **The title bar.** `titleBarStyle: 'hidden'` with a `titleBarOverlay`
-            (`electron/main.ts`) is a Windows arrangement. On macOS the traffic-light
-            buttons will sit on top of the app's own blue header.
-          - **Keychain.** Canvas token storage goes through Electron's `safeStorage`,
-            which is Windows Credential Manager on Windows and the Keychain here. Untested.
-          - **Google sign-in.** The OAuth loopback redirect is untested on macOS.
-          - **Update check.** It reads the same `releases/latest` as Windows, so it would
-            offer a Mac user the `.exe`. See `electron/ipc/updateCheck.ts`.
+          The build is unsigned and un-notarized, so a `.dmg` downloaded through a browser
+          is quarantined. On Apple Silicon that usually appears as **"the app is damaged
+          and can't be opened"**, which is misleading — the app is fine, macOS is refusing
+          it. After dragging the app to Applications:
+
+          ```
+          xattr -dr com.apple.quarantine "/Applications/Canvas Extractor Tools.app"
+          ```
+
+          This is the one problem that cannot be fixed in the source. Removing it for good
+          needs a paid Apple Developer identity and a notarization step in the build.
+
+          ### Worth checking, and reporting back on
+
+          - **The title bar.** The window's traffic-light buttons should sit centred at the
+            left of the app's blue header, with the title clear of them. If they look
+            off-centre or overlap the text, say so — it is a single coordinate to adjust.
+          - **Signing in to Google.** The OAuth sign-in opens your browser and returns to
+            the app. Untested on macOS.
+          - **Saving your Canvas token.** Stored via the macOS Keychain. If the token does
+            not survive quitting and reopening the app, that is the thing that failed.
+
+          The in-app update banner is switched off on macOS on purpose: published releases
+          carry only the Windows installer, so a banner here could only have offered you a
+          file that will not run.
 
           Two images are attached: `APPLE-SILICON` for M-series Macs, `INTEL` for older ones.
           NOTES

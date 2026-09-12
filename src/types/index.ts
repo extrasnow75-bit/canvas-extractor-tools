@@ -53,6 +53,8 @@ declare global {
   interface Window {
     api: {
       app: {
+        /** 'darwin' | 'win32' | 'linux' — read synchronously during the first render. */
+        platform: string
         version(): Promise<string>
         /** Resolves to null when up to date, offline, or the check fails. */
         checkUpdate(): Promise<{ version: string } | null>
