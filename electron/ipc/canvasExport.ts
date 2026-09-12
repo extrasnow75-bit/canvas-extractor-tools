@@ -25,6 +25,7 @@ import {
   moduleHeader,
   itemTitle,
   toolLabel,
+  type CanvasToolName,
   isDueHeader,
   dueHeader,
   subHeader,
@@ -74,6 +75,16 @@ interface CanvasAssignment {
    * the `Quiz` case below.
    */
   is_quiz_lti_assignment?: boolean
+  /** 'not_graded' is its own Blueprint tool, "Assignment (Not Graded)"; anything else is graded. */
+  grading_type?: string | null
+}
+
+/** The Blueprint tool name for an assignment record, New Quizzes included. */
+export function assignmentToolName(asgn: CanvasAssignment): CanvasToolName {
+  // A New Quiz lands here rather than in the `Quiz` case: Canvas models it as an assignment
+  // submitted through the Quizzes.Next LTI tool, so it arrives as an `Assignment` module item.
+  if (asgn.is_quiz_lti_assignment) return 'Quiz (New)'
+  return asgn.grading_type === 'not_graded' ? 'Assignment (Not Graded)' : 'Assignment'
 }
 
 interface CanvasDiscussion {
@@ -224,10 +235,7 @@ async function renderModuleItem(
       return {
         parts: [
           itemTitle(asgn.name),
-          // A New Quiz lands here rather than in the `Quiz` case. Canvas labels it "Quiz"
-          // on the Modules page, and the tool label is the cue QA reads, so match Canvas
-          // rather than the underlying object type.
-          toolLabel(asgn.is_quiz_lti_assignment ? 'Quiz' : 'Assignment', true),
+          toolLabel(assignmentToolName(asgn)),
           await formatBody(asgn.description, ref, files),
         ],
       }
@@ -240,7 +248,7 @@ async function renderModuleItem(
       return {
         parts: [
           itemTitle(disc.title),
-          toolLabel('Discussion', true),
+          toolLabel('Discussion'),
           await formatBody(disc.message, ref, files),
         ],
       }
@@ -256,7 +264,7 @@ async function renderModuleItem(
       return {
         parts: [
           itemTitle(quiz.title),
-          toolLabel('Quiz', true),
+          toolLabel('Quiz (Classic)'),
           await formatBody(quiz.description, ref, files),
         ],
       }

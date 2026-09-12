@@ -8,17 +8,27 @@
  * Two details QA treats as critical:
  *   1. The blue horizontal rules above AND below every "Due by …" header.
  *   2. The black circle marker after every Canvas tool name (Page, Assignment, …),
- *      plus "; Link to settings tab" for the tools that have one.
+ *      followed by "Link to settings tab" in red.
  */
 
 // MAX_SCANNED_BODY_BYTES guards the scans below for the same reason it guards the one in
 // styledHtml: `<img\b…>` restarts at every `<img` and runs to end-of-string when no closing
 // `>` follows, so a body of unterminated tags costs quadratic time on the main process
 // thread. See the constant's own comment for the measurements that set the number.
-import { annotateStyledHtml, MAX_SCANNED_BODY_BYTES } from './styledHtml'
+import { annotateStyledHtml, background, hasClass, MAX_SCANNED_BODY_BYTES, styleOf } from './styledHtml'
 
 export const DEEP_BLUE = '#0033a0' // due-header text
 export const RED = '#ff0000' // Canvas tool labels + heading-level tags
+/**
+ * Highlight on links back into Canvas — files, pages, discussions, assignments, anything on
+ * the course's own host. QA, Build and CAS have no access to reference courses, so such a
+ * link opens on a course they cannot see — and short of clicking every link, an IDC cannot
+ * tell which ones those are. The cyan marks the links that need re-pointing (a Drive copy
+ * of the file, the rebuilt course's own page). External links — YouTube, publisher sites,
+ * Drive — work for everyone and are left alone, and so are the template's navigation
+ * buttons (see isButton): those are part of the page design, not a link to be re-pointed.
+ */
+export const CANVAS_LINK_HIGHLIGHT = '#00ffff'
 export const BORDER_BLUE = '#0000e7' // due-header rules (Code.gs: rgb(0, 0, 0.90588))
 export const BLACK = '#000000'
 export const FONT = 'Arial'
@@ -128,21 +138,40 @@ const TOOL_MARKER = '⏺'
 const TOOL_MARKER_COLOR = BLACK
 
 /**
- * Canvas tool label (Page, Assignment, Discussion, …) — Blueprint spec (Code.gs
- * TOOL_MARKER/TOOL_SUFFIX): Arial 11pt bold red, followed by a black circle marker.
- * Tools with a Canvas Settings tab to link to (Assignment, Discussion, Quiz — classic
- * and New) also get "; Link to settings tab" after the marker, red like the tool name.
- * Page, File, and External Link have no Settings tab, so they get the marker alone.
+ * The text after the marker, in the tool's red. It goes on every tool line, Page and File
+ * included (QA's 2026-09 template change — before that, only tools with a Canvas Settings
+ * tab carried it). No semicolon between the marker and the phrase: the same change dropped
+ * it, and Blueprint Tools' TOOL_SUFFIX in Code.gs matches.
  */
-export function toolLabel(label: string, hasSettingsTab = false): string {
-  const suffix = hasSettingsTab
-    ? `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">; Link to settings tab</span>`
-    : ''
+export const SETTINGS_TAB_PHRASE = 'Link to settings tab'
+
+/**
+ * The tool names the line may carry — Blueprint Tools' CANVAS_TOOL_OPTIONS, plus the two
+ * module-item types that suite never tags. Kept as a union so a call site cannot invent
+ * a spelling that Code2.gs's directions deployer, which reads this line back out of the
+ * document, would not recognise.
+ */
+export type CanvasToolName =
+  | 'Assignment'
+  | 'Assignment (Not Graded)'
+  | 'Discussion'
+  | 'Page'
+  | 'Quiz (Classic)'
+  | 'Quiz (New)'
+  | 'File'
+  | 'External Link'
+
+/**
+ * Canvas tool line — Blueprint spec (Code.gs TOOL_MARKER/TOOL_SUFFIX): the tool name in
+ * Arial 11pt bold red, a black circle marker, then "Link to settings tab" in the same red.
+ */
+export function toolLabel(label: CanvasToolName): string {
+  const red = `font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};`
   return (
     `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;">` +
-    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">${escapeHtml(label)}</span>` +
-    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${TOOL_MARKER_COLOR};"> ${TOOL_MARKER}</span>` +
-    suffix +
+    `<span style="${red}">${escapeHtml(label)}</span>` +
+    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${TOOL_MARKER_COLOR};"> ${TOOL_MARKER} </span>` +
+    `<span style="${red}">${SETTINGS_TAB_PHRASE}</span>` +
     '</p>'
   )
 }
@@ -442,6 +471,76 @@ function normalizeCanvasImages(
 }
 
 /**
+ * ─── Canvas links ──────────────────────────────────────────────────────────────
+ */
+
+// Quote-aware like IMG_TAG_RE, and bounded by the same size guard, for the same reason.
+const ANCHOR_RE = /<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/a\s*>/gi
+const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']*))/i
+// The RCE stamps every course link it inserts with the API object it resolves to — File,
+// Page, Discussion, Assignment, Quiz, Module — so the stamp alone says "this is Canvas",
+// whatever the href happens to look like.
+const API_RETURNTYPE_RE = /\sdata-api-returntype\s*=/i
+
+/**
+ * True when `href` points back into Canvas: a course-relative path, or an absolute URL on
+ * the course's own host or on any Instructure-hosted Canvas (a reference course sometimes
+ * links into an older course on the institution's other Canvas instance; that link opens on
+ * Canvas just the same, and fails for QA just the same).
+ */
+export function isCanvasHref(href: string, baseUrl?: string): boolean {
+  const raw = href.replace(/&amp;/g, '&').trim()
+  // A single leading slash: `//host/path` is a foreign origin, not a course-relative path.
+  if (/^\/[^/\\]/.test(raw)) return true
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  const host = url.hostname.toLowerCase()
+  if (host.endsWith('.instructure.com')) return true
+  if (!baseUrl) return false
+  try {
+    return host === new URL(baseUrl).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * True for a link drawn as a button — the home page's "Instructor Information / Course
+ * Resources / Course Questions" row. Those are part of the template, always point at the
+ * course's own pages, and are rebuilt with the course rather than re-pointed by hand, so
+ * they are not the kind of link the highlight exists to flag. Recognised by Canvas' own
+ * button classes or by the anchor painting its own background, which body-text links never
+ * do.
+ */
+function isButton(attrs: string): boolean {
+  const tag = `<a${attrs}>`
+  if (hasClass(tag, 'Button') || hasClass(tag, 'btn')) return true
+  return background(styleOf(tag)).trim() !== ''
+}
+
+/**
+ * Wrap the text of every link back into Canvas in the cyan highlight. The highlight is a
+ * span inside the anchor rather than a style on the anchor itself, because a text run's
+ * background is what the Google Docs importer reads; it does not carry an <a>'s own style
+ * across. The anchor and its href are left exactly as they were.
+ */
+export function highlightCanvasLinks(html: string, baseUrl?: string): string {
+  if (html.length > MAX_SCANNED_BODY_BYTES) return html
+  return html.replace(ANCHOR_RE, (whole, attrs: string, inner: string) => {
+    const m = HREF_RE.exec(attrs)
+    const href = m?.[1] ?? m?.[2] ?? m?.[3]
+    const onCanvas = (href !== undefined && isCanvasHref(href, baseUrl)) || API_RETURNTYPE_RE.test(attrs)
+    if (!onCanvas || isButton(attrs)) return whole
+    return `<a${attrs}><span style="background-color:${CANVAS_LINK_HIGHLIGHT};">${inner}</span></a>`
+  })
+}
+
+/**
  * Stylized-HTML marker — Arial 11pt bold red, in square brackets, matching the icon markers
  * and the (H1)…(H6) level tags. No grey chip: that highlight is the Canvas tool cue and QA
  * reads it as one, so giving it to a second kind of label would dilute it.
@@ -505,7 +604,10 @@ export function formatCanvasBody(
   if (!html) {
     return '<p style="color:purple;font-weight:bold;">This item had no text — it may be unparseable by the API or empty by design. Please check manually.</p>'
   }
-  let out = annotateStyledHtml(normalizeCanvasImages(html, baseUrl, fileNames), styledHtmlMarker)
+  let out = annotateStyledHtml(
+    highlightCanvasLinks(normalizeCanvasImages(html, baseUrl, fileNames), baseUrl),
+    styledHtmlMarker,
+  )
   // Same ceiling, same reason as the passes above: the quote-aware alternation scans to
   // end-of-string from every `<hN` when no closing `>` follows, and six passes over 176KB of
   // unterminated heading tags measured 3.4s. Over the limit the body still comes through in

@@ -1,5 +1,51 @@
 import { describe, it, expect } from 'vitest'
-import { formatCanvasBody, escapeHtml, htmlDocument, LANDSCAPE_PAGE } from './blueprintFormat'
+import {
+  formatCanvasBody,
+  escapeHtml,
+  htmlDocument,
+  LANDSCAPE_PAGE,
+  CANVAS_LINK_HIGHLIGHT,
+  highlightCanvasLinks,
+  RED,
+  SETTINGS_TAB_PHRASE,
+  toolLabel,
+} from './blueprintFormat'
+
+/**
+ * The Canvas tool line, as the Blueprint template now draws it (QA change, 2026-09): the
+ * tool name, the black circle, and "Link to settings tab" — on every tool, Page included,
+ * with no semicolon between marker and phrase.
+ */
+describe('toolLabel', () => {
+  const text = (html: string) => html.replace(/<[^>]+>/g, '')
+
+  it('reads "<Tool> ⏺ Link to settings tab", with no semicolon', () => {
+    expect(text(toolLabel('Assignment'))).toBe(`Assignment ⏺ ${SETTINGS_TAB_PHRASE}`)
+    expect(text(toolLabel('Assignment'))).not.toContain(';')
+  })
+
+  it('puts the phrase on Page, File and External Link too, not just tools with a settings table', () => {
+    for (const tool of ['Page', 'File', 'External Link'] as const) {
+      expect(text(toolLabel(tool)), tool).toBe(`${tool} ⏺ ${SETTINGS_TAB_PHRASE}`)
+    }
+  })
+
+  it('sets the phrase in red bold Arial 11, and keeps the marker black', () => {
+    const html = toolLabel('Discussion')
+    const spans = [...html.matchAll(/<span style="([^"]*)">([^<]*)<\/span>/g)].map((m) => [m[1], m[2]])
+    expect(spans).toHaveLength(3)
+    const [name, marker, phrase] = spans
+    for (const [style] of [name, phrase]) {
+      expect(style).toContain('font-family:Arial')
+      expect(style).toContain('font-size:11pt')
+      expect(style).toContain('font-weight:bold')
+      expect(style).toContain(`color:${RED}`)
+    }
+    expect(phrase[1]).toBe(SETTINGS_TAB_PHRASE)
+    expect(marker[1].trim()).toBe('⏺')
+    expect(marker[0]).toContain('color:#000000')
+  })
+})
 
 describe('formatCanvasBody headings', () => {
   it('converts a heading to a marked paragraph', () => {
@@ -123,5 +169,89 @@ describe('htmlDocument', () => {
 
   it('escapes the title', () => {
     expect(htmlDocument('A & B', [])).toContain('<title>A &amp; B</title>')
+  })
+})
+
+/**
+ * Links back into Canvas — files, pages, discussions, anything on the course host — get the
+ * cyan highlight, so an IDC can see which links QA/CAS will not be able to open without
+ * clicking each one. External links do not; those work for everyone.
+ */
+describe('highlightCanvasLinks', () => {
+  const base = 'https://boisestatecanvas.instructure.com'
+  const mark = `<span style="background-color:${CANVAS_LINK_HIGHLIGHT};">`
+
+  it('highlights a link into the course, relative or absolute, whatever it points at', () => {
+    for (const href of [
+      '/courses/123/files/456/download?download_frd=1',
+      '/files/456/preview',
+      '/courses/123/pages/welcome',
+      '/courses/123/discussion_topics/77',
+      '/courses/123/assignments/9',
+      '/courses/123/modules',
+      '/courses/123',
+      `${base}/courses/123/files/456/download?verifier=abc&amp;wrap=1`,
+      `${base}/courses/123/quizzes/5`,
+    ]) {
+      const html = `<p>See <a href="${href}">the thing</a>.</p>`
+      expect(highlightCanvasLinks(html, base), href).toBe(
+        `<p>See <a href="${href}">${mark}the thing</span></a>.</p>`,
+      )
+    }
+  })
+
+  it('leaves external links alone', () => {
+    for (const href of [
+      'https://www.youtube.com/watch?v=abc',
+      'https://example.edu/files/handbook.pdf',
+      'https://drive.google.com/file/d/xyz/view',
+      'https://docs.google.com/document/d/1/edit',
+      'mailto:someone@example.edu',
+      '#top',
+      '//evil.example/courses/1',
+    ]) {
+      const html = `<a href="${href}">watch</a>`
+      expect(highlightCanvasLinks(html, base), href).toBe(html)
+    }
+  })
+
+  it('highlights another Instructure-hosted Canvas, and a self-hosted one only when it is the course host', () => {
+    const other = '<a href="https://old.instructure.com/courses/1/pages/x">old</a>'
+    expect(highlightCanvasLinks(other, base)).toContain(mark)
+    const own = '<a href="https://canvas.boisestate.edu/courses/1/files/2">own</a>'
+    expect(highlightCanvasLinks(own, 'https://canvas.boisestate.edu')).toContain(mark)
+    expect(highlightCanvasLinks(own, base)).toBe(own)
+  })
+
+  it('trusts the RCE stamp even when the href is unusual', () => {
+    const html = '<a href="https://cdn.example/x" data-api-returntype="Page">page</a>'
+    expect(highlightCanvasLinks(html, base)).toContain(mark)
+  })
+
+  it('keeps the anchor and its attributes exactly as they were', () => {
+    const html =
+      '<a class="instructure_file_link" title="a &gt; b" href=\'/files/1\' target="_blank"><img src="/files/2/preview"></a>'
+    const out = highlightCanvasLinks(html, base)
+    expect(out.startsWith('<a class="instructure_file_link" title="a &gt; b" href=\'/files/1\' target="_blank">')).toBe(true)
+    expect(out).toContain(`${mark}<img src="/files/2/preview"></span></a>`)
+  })
+
+  it('leaves the template navigation buttons alone, however they are drawn', () => {
+    for (const html of [
+      '<a class="Button" href="/courses/1/pages/instructor-information">Instructor Information</a>',
+      '<a class="btn btn-primary" href="/courses/1/modules/2">Course Resources</a>',
+      '<a style="background-color: #0033a0; color: #fff; padding: 8px;" href="/courses/1/discussion_topics/3">Course Questions</a>',
+      '<a href="/courses/1/pages/x" style="background: linear-gradient(#0033a0, #002060);">Go</a>',
+    ]) {
+      expect(highlightCanvasLinks(html, base), html).toBe(html)
+    }
+    // A body-text link that merely carries some other inline style is still a link.
+    const styled = '<a style="font-weight: bold;" href="/courses/1/pages/x">read</a>'
+    expect(highlightCanvasLinks(styled, base)).toContain(mark)
+  })
+
+  it('is applied by formatCanvasBody', () => {
+    const out = formatCanvasBody('<p><a href="/courses/1/discussion_topics/2">f</a></p>', base)
+    expect(out).toContain(mark)
   })
 })

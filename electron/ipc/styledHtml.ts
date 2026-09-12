@@ -98,7 +98,7 @@ function attr(tag: string, re: RegExp): string {
  * an author retyping it by hand will not — the templates are pasted, but they are also
  * repaired by hand afterwards.
  */
-function hasClass(tag: string, name: string): boolean {
+export function hasClass(tag: string, name: string): boolean {
   return attr(tag, CLASS_RE).toLowerCase().split(/\s+/).includes(name.toLowerCase())
 }
 
@@ -112,7 +112,7 @@ function hasClass(tag: string, name: string): boolean {
  */
 type Style = Map<string, string>
 
-function styleOf(tag: string): Style {
+export function styleOf(tag: string): Style {
   const out: Style = new Map()
   const raw = attr(tag, STYLE_RE)
   if (!raw) return out
@@ -126,7 +126,7 @@ function styleOf(tag: string): Style {
 }
 
 /** Whatever paints the element's background, whichever of the two properties was used. */
-function background(s: Style): string {
+export function background(s: Style): string {
   return `${s.get('background') ?? ''} ${s.get('background-color') ?? ''}`
 }
 
