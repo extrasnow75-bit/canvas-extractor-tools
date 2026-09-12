@@ -1,6 +1,6 @@
 import { getAccessToken } from './googleAuth'
 import { SettingsData } from './settingsExport'
-import { cellValue, sheetRangeA1, validationRuns } from './sheetsLayout'
+import { cellValue, sheetRangeA1, sheetsFormatRequests, validationRuns } from './sheetsLayout'
 import { apiNotEnabledMessage } from './googleSheetsErrors'
 
 /**
@@ -76,25 +76,7 @@ export async function createSettingsSpreadsheet(
   data.tabs.forEach((tab, i) => {
     const sheetId = created.sheets[i].properties.sheetId
 
-    formatRequests.push(
-      { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 340 }, fields: 'pixelSize' } },
-      { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 260 }, fields: 'pixelSize' } },
-      { mergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 }, mergeType: 'MERGE_ALL' } },
-      {
-        repeatCell: {
-          range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
-          cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 13 } } },
-          fields: 'userEnteredFormat.textFormat',
-        },
-      },
-      {
-        repeatCell: {
-          range: { sheetId, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
-          cell: { userEnteredFormat: { textFormat: { bold: true } } },
-          fields: 'userEnteredFormat.textFormat',
-        },
-      },
-    )
+    formatRequests.push(...sheetsFormatRequests(sheetId, tab.template.rows, tab.values))
 
     for (const run of validationRuns(tab.template.rows)) {
       const range = {
@@ -138,9 +120,22 @@ export async function createSettingsSpreadsheet(
     })
   }
 
+  // RAW, deliberately, not USER_ENTERED.
+  //
+  // USER_ENTERED parses every string cell as though a person had typed it, so a leading =, +,
+  // - or @ starts a formula. Half the values here are Canvas free text a course author
+  // controls — item titles (which become the tab heading), assignment group names, the quiz
+  // access code — so an assignment named `=HYPERLINK(…)` or `=IMPORTXML(…)` would run the
+  // moment a reviewer opened the sheet: a spoofed link, or a way to read other cells back out
+  // to another host. These files are made to be passed round for QA, which is exactly the
+  // audience that would trust them.
+  //
+  // Nothing here needs Sheets to parse anything. Checkbox rows send real JSON booleans, which
+  // are stored as booleans under RAW too and still render as tick boxes via the BOOLEAN
+  // validation set above; the cost is only that a number like "50" is stored as text.
   await sheetsFetch(`${SHEETS_BASE}/${spreadsheetId}/values:batchUpdate`, accessToken, {
     method: 'POST',
-    body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: valueRanges }),
+    body: JSON.stringify({ valueInputOption: 'RAW', data: valueRanges }),
   })
 
   return { id: spreadsheetId, webViewLink: created.spreadsheetUrl }

@@ -23,6 +23,13 @@ export type CellValue = boolean | string
 export type GroupNameLookup = Map<number, string>
 
 export interface CanvasAssignmentFull {
+  /**
+   * Present on every assignment Canvas returns. Optional here only because a graded
+   * discussion's embedded `assignment` is typed as this same shape, and the id is what lets
+   * settingsExport.ts recognise that embedded record as the one it also saw in the
+   * assignments list.
+   */
+  id?: number | null
   points_possible?: number | null
   grading_type?: string | null
   omit_from_final_grade?: boolean | null

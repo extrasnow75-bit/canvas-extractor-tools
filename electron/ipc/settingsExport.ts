@@ -16,7 +16,7 @@ import {
 } from './canvasUtils'
 import { makeProgressReporter } from './canvasExport'
 import { consumeSavePath } from './savePaths'
-import { cellValue } from './sheetsLayout'
+import { cellValue, CellStyle, FONT, PALETTE, rowLayout, ruleRows, titleLayout } from './sheetsLayout'
 import {
   SettingsTemplate,
   COURSE_SETTINGS_TEMPLATE,
@@ -24,6 +24,7 @@ import {
   DISCUSSION_TEMPLATE,
   CLASSIC_QUIZ_TEMPLATE,
   NEW_QUIZ_TEMPLATE,
+  UNSET_DROPDOWN,
 } from './settingsTemplates'
 import {
   CellValue,
@@ -88,6 +89,12 @@ interface CanvasAssignmentRaw extends CanvasAssignmentFull {
 interface CanvasDiscussionRaw extends CanvasDiscussionFull {
   id: number
   title: string
+  /**
+   * Set on a graded discussion. Canvas also embeds the whole assignment under `assignment`,
+   * and which of the two arrives depends on the include[] parameters in play, so
+   * resolveItems reads both.
+   */
+  assignment_id?: number | null
 }
 
 interface CanvasQuizRaw extends CanvasQuizFull {
@@ -104,8 +111,125 @@ interface CanvasAssignmentGroup {
 
 const COURSE_SETTINGS_ID = 'course-settings'
 
-function itemKey(kind: 'asgn' | 'disc' | 'quiz' | 'newquiz', id: number): string {
-  return `${kind}-${id}`
+/**
+ * `nqa` is a New Quiz recognised from its assignment record rather than a quiz record — see
+ * resolveItems. It needs a prefix of its own because the id it carries is an assignment id,
+ * and assignment ids and quiz ids are separate Canvas sequences that can collide numerically.
+ */
+type ItemPrefix = 'asgn' | 'disc' | 'quiz' | 'newquiz' | 'nqa'
+
+function itemKey(prefix: ItemPrefix, id: number): string {
+  return `${prefix}-${id}`
+}
+
+/**
+ * One settings-bearing thing in the course, after the three listings have been reconciled
+ * against each other. `kind` picks the template; the attached record is what the tab is
+ * built from.
+ */
+export type ResolvedItem =
+  | { key: string; kind: 'asgn'; label: string; group: string; assignment: CanvasAssignmentRaw }
+  | { key: string; kind: 'disc'; label: string; group: string; discussion: CanvasDiscussionRaw }
+  | { key: string; kind: 'quiz'; label: string; group: string; quiz: CanvasQuizRaw }
+  | {
+      key: string
+      kind: 'newquiz'
+      label: string
+      group: string
+      /** Absent only when a quiz record names an assignment the assignments list did not return. */
+      assignment?: CanvasAssignmentRaw
+    }
+
+/**
+ * Decide, once, which listing owns each item — and therefore which settings template it gets.
+ *
+ * `/courses/:id/assignments` is the gradebook's view of a course, not a list of tools. It
+ * returns a record for every classic quiz (`submission_types: ['online_quiz']`), every graded
+ * discussion (`['discussion_topic']`) and every New Quiz, alongside the ordinary assignments.
+ * Treating it as a peer of the other two listings is what produced two tabs for one object: a
+ * classic quiz came out as both a Classic Quiz table and an Assignment table, the second one
+ * describing submission types, file uploads and Turnitin rows that a quiz does not have.
+ *
+ * The rule here is *claim*, not *skip*. An assignment is dropped only when a quiz or
+ * discussion record actually turned up to represent it. Dropping by submission type instead
+ * would make an item disappear from the picker altogether whenever the owning listing does not
+ * return it — not hypothetical for New Quizzes, which `/quizzes` omits entirely on instances
+ * that do not surface them there. A New Quiz reaching this function only as an assignment is
+ * still identifiable from `is_quiz_lti_assignment`, and its template maps the Assignments-API
+ * fields anyway, so it keeps its own tab rather than falling back to an Assignment one.
+ *
+ * Ordering is assignments, then discussions, then quizzes, which is the tab order the export
+ * had before this function existed.
+ */
+export function resolveItems(
+  assignments: CanvasAssignmentRaw[],
+  discussions: CanvasDiscussionRaw[],
+  quizzes: CanvasQuizRaw[],
+): ResolvedItem[] {
+  const claimed = new Set<number>()
+  for (const q of quizzes) {
+    if (q.assignment_id != null) claimed.add(q.assignment_id)
+  }
+  for (const d of discussions) {
+    const id = d.assignment_id ?? d.assignment?.id
+    if (id != null) claimed.add(id)
+  }
+
+  const assignmentsById = new Map(assignments.map((a) => [a.id, a]))
+  const out: ResolvedItem[] = []
+
+  for (const a of assignments) {
+    if (claimed.has(a.id)) continue
+    if (a.is_quiz_lti_assignment) {
+      out.push({
+        key: itemKey('nqa', a.id),
+        kind: 'newquiz',
+        label: a.name,
+        group: 'New Quizzes',
+        assignment: a,
+      })
+    } else {
+      out.push({
+        key: itemKey('asgn', a.id),
+        kind: 'asgn',
+        label: a.name,
+        group: 'Assignments',
+        assignment: a,
+      })
+    }
+  }
+
+  for (const d of discussions) {
+    out.push({
+      key: itemKey('disc', d.id),
+      kind: 'disc',
+      label: d.title,
+      group: 'Discussions',
+      discussion: d,
+    })
+  }
+
+  for (const q of quizzes) {
+    if (q.quiz_type === 'quizzes.next') {
+      out.push({
+        key: itemKey('newquiz', q.id),
+        kind: 'newquiz',
+        label: q.title,
+        group: 'New Quizzes',
+        assignment: q.assignment_id != null ? assignmentsById.get(q.assignment_id) : undefined,
+      })
+    } else {
+      out.push({
+        key: itemKey('quiz', q.id),
+        kind: 'quiz',
+        label: q.title,
+        group: 'Classic Quizzes',
+        quiz: q,
+      })
+    }
+  }
+
+  return out
 }
 
 /**
@@ -157,29 +281,22 @@ export async function listSettingsItems(ref: CourseRef): Promise<PickerItem[]> {
     canvasGet<CanvasQuizRaw>(`/courses/${ref.courseId}/quizzes`, ref),
   ])
 
-  const out: PickerItem[] = [
+  // The same resolveItems the builder walks, so what the picker offers and what the export
+  // produces cannot drift apart. Keeping those two rules in step by hand is what let a classic
+  // quiz be listed twice under different headings with no way to tell the entries apart.
+  return [
     { id: COURSE_SETTINGS_ID, label: 'Course Settings (whole-course settings, not tied to one item)' },
+    ...resolveItems(assignments, discussions, quizzes).map((item) => ({
+      id: item.key,
+      label: item.label,
+      group: item.group,
+    })),
   ]
-  for (const a of assignments) {
-    if (a.is_quiz_lti_assignment) continue // surfaced under New Quizzes below instead
-    out.push({ id: itemKey('asgn', a.id), label: a.name, group: 'Assignments' })
-  }
-  for (const d of discussions) {
-    out.push({ id: itemKey('disc', d.id), label: d.title, group: 'Discussions' })
-  }
-  for (const q of quizzes) {
-    const isNewQuiz = q.quiz_type === 'quizzes.next'
-    out.push({
-      id: itemKey(isNewQuiz ? 'newquiz' : 'quiz', q.id),
-      label: q.title,
-      group: isNewQuiz ? 'New Quizzes' : 'Classic Quizzes',
-    })
-  }
-  return out
 }
 
 function heading(template: SettingsTemplate, name: string): string {
-  return template.heading.replace('{name}', name)
+  const title = template.heading.replace('{name}', name)
+  return template.headingNote ? `${title}\n${template.headingNote}` : title
 }
 
 /**
@@ -231,69 +348,61 @@ export async function buildSettingsData(
   ])
   throwIfCancelled(cancel)
 
-  const assignmentsById = new Map(assignments.map((a) => [a.id, a]))
+  const selected = resolveItems(assignments, discussions, quizzes).filter((item) => wants(item.key))
 
-  // Counted before the building loops so the progress bar has a real total to work from.
+  // Counted before the building loop so the progress bar has a real total to work from.
   // Without this the bar sat at 0% through every paginated fetch above and then jumped
   // straight to 100%, which the other extractors deliberately avoid.
-  const total =
-    tabs.length +
-    assignments.filter((a) => !a.is_quiz_lti_assignment && wants(itemKey('asgn', a.id))).length +
-    discussions.filter((d) => wants(itemKey('disc', d.id))).length +
-    quizzes.filter((q) => wants(itemKey(q.quiz_type === 'quizzes.next' ? 'newquiz' : 'quiz', q.id))).length +
-    reservedSteps
+  const total = tabs.length + selected.length + reservedSteps
   progress?.(tabs.length, total)
 
-  for (const a of assignments) {
-    if (a.is_quiz_lti_assignment) continue
-    if (!wants(itemKey('asgn', a.id))) continue
-    tabs.push({
-      template: ASSIGNMENT_TEMPLATE,
-      // Short prefixes, because the whole title has to fit Excel's 31-character worksheet
-      // limit and the item's own name is the part worth the room. See safeTabTitle.
-      title: safeTabTitle(`A - ${a.name}`, usedTitles),
-      heading: heading(ASSIGNMENT_TEMPLATE, a.name),
-      values: mapAssignment(a, groups),
-    })
-    progress?.(tabs.length, total)
-  }
-
-  for (const d of discussions) {
-    if (!wants(itemKey('disc', d.id))) continue
-    tabs.push({
-      template: DISCUSSION_TEMPLATE,
-      title: safeTabTitle(`D - ${d.title}`, usedTitles),
-      heading: heading(DISCUSSION_TEMPLATE, d.title),
-      values: mapDiscussion(d, groups),
-    })
-    progress?.(tabs.length, total)
-  }
-
   let containsAccessCode = false
-  for (const q of quizzes) {
-    const isNewQuiz = q.quiz_type === 'quizzes.next'
-    const key = itemKey(isNewQuiz ? 'newquiz' : 'quiz', q.id)
-    if (!wants(key)) continue
-    if (isNewQuiz) {
-      // New Quizzes run on an external LTI engine; only the fields Canvas exposes through
-      // the ordinary Assignments API are mappable. The rest of the tab stays at the
-      // template's own defaults — see NEW_QUIZ_TEMPLATE's comment.
-      const pairedAssignment = q.assignment_id != null ? assignmentsById.get(q.assignment_id) : undefined
-      tabs.push({
-        template: NEW_QUIZ_TEMPLATE,
-        title: safeTabTitle(`NQ - ${q.title}`, usedTitles),
-        heading: heading(NEW_QUIZ_TEMPLATE, q.title),
-        values: pairedAssignment ? mapNewQuiz(pairedAssignment, groups) : new Map(),
-      })
-    } else {
-      const values = mapClassicQuiz(q, groups)
-      if (values.has('access_code_password')) containsAccessCode = true
-      tabs.push({
-        template: CLASSIC_QUIZ_TEMPLATE,
-        title: safeTabTitle(`CQ - ${q.title}`, usedTitles),
-        heading: heading(CLASSIC_QUIZ_TEMPLATE, q.title),
-        values,
-      })
+
+  for (const item of selected) {
+    switch (item.kind) {
+      case 'asgn':
+        tabs.push({
+          template: ASSIGNMENT_TEMPLATE,
+          // Short prefixes, because the whole title has to fit Excel's 31-character worksheet
+          // limit and the item's own name is the part worth the room. See safeTabTitle.
+          title: safeTabTitle(`A - ${item.label}`, usedTitles),
+          heading: heading(ASSIGNMENT_TEMPLATE, item.label),
+          values: mapAssignment(item.assignment, groups),
+        })
+        break
+
+      case 'disc':
+        tabs.push({
+          template: DISCUSSION_TEMPLATE,
+          title: safeTabTitle(`D - ${item.label}`, usedTitles),
+          heading: heading(DISCUSSION_TEMPLATE, item.label),
+          values: mapDiscussion(item.discussion, groups),
+        })
+        break
+
+      case 'newquiz':
+        // New Quizzes run on an external LTI engine; only the fields Canvas exposes through
+        // the ordinary Assignments API are mappable. The rest of the tab stays at the
+        // template's own defaults — see NEW_QUIZ_TEMPLATE's comment.
+        tabs.push({
+          template: NEW_QUIZ_TEMPLATE,
+          title: safeTabTitle(`NQ - ${item.label}`, usedTitles),
+          heading: heading(NEW_QUIZ_TEMPLATE, item.label),
+          values: item.assignment ? mapNewQuiz(item.assignment, groups) : new Map(),
+        })
+        break
+
+      case 'quiz': {
+        const values = mapClassicQuiz(item.quiz, groups)
+        if (values.has('access_code_password')) containsAccessCode = true
+        tabs.push({
+          template: CLASSIC_QUIZ_TEMPLATE,
+          title: safeTabTitle(`CQ - ${item.label}`, usedTitles),
+          heading: heading(CLASSIC_QUIZ_TEMPLATE, item.label),
+          values,
+        })
+        break
+      }
     }
     progress?.(tabs.length, total)
   }
@@ -310,37 +419,75 @@ export async function buildSettingsData(
  * notice tells people this before they save. Dropdown rows still get their exact option
  * list as native Excel data validation, so the file is not just static text.
  */
+const THIN: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: `FF${PALETTE.black}` } }
+
+function applyStyle(cell: ExcelJS.Cell, style: CellStyle, link?: string): void {
+  cell.font = {
+    name: FONT.family,
+    size: FONT.size,
+    bold: style.bold,
+    color: { argb: `FF${style.color}` },
+    ...(link ? { underline: true } : {}),
+  }
+  if (style.fill) {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${style.fill}` } }
+  }
+  cell.alignment = { horizontal: style.align, vertical: 'middle', wrapText: true }
+}
+
 export async function buildSettingsWorkbook(data: SettingsData): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
 
   for (const tab of data.tabs) {
     const sheet = workbook.addWorksheet(tab.title)
-    sheet.getColumn(1).width = 46
-    sheet.getColumn(2).width = 34
+    // Character widths, matching the workbook's own columns (A 38–46 wide, B 36–42).
+    sheet.getColumn(1).width = 44
+    sheet.getColumn(2).width = 40
 
+    const title = titleLayout()
     const headingRow = sheet.addRow([tab.heading])
-    headingRow.font = { bold: true, size: 13 }
+    applyStyle(headingRow.getCell(1), title.label)
     sheet.mergeCells(headingRow.number, 1, headingRow.number, 2)
 
     for (const row of tab.template.rows) {
+      const layout = rowLayout(row, tab.values)
       const excelRow = sheet.addRow([row.label])
-      excelRow.getCell(1).font = { bold: row.kind !== 'note' }
+      applyStyle(excelRow.getCell(1), layout.label)
+      applyStyle(excelRow.getCell(2), layout.value, layout.link)
+      if (layout.merged) sheet.mergeCells(excelRow.number, 1, excelRow.number, 2)
       if (row.kind === 'note') continue
 
       const value = cellValue(row, tab.values)
       const cell = excelRow.getCell(2)
       if (row.kind === 'checkbox') {
         cell.value = value === true
+      } else if (layout.link) {
+        cell.value = { text: String(value), hyperlink: layout.link }
       } else {
         cell.value = String(value)
         if (row.kind === 'dropdown' && row.options) {
           cell.dataValidation = {
             type: 'list',
             allowBlank: true,
-            formulae: [`"Choose from dropdown,${row.options.join(',')}"`],
+            formulae: [`"${UNSET_DROPDOWN},${row.options.join(',')}"`],
           }
         }
       }
+    }
+
+    // Borders: a box round the whole block with a line between the columns, and a rule
+    // along the top of every row rowLayout says gets one — so a primary setting and the
+    // sub-options beneath it read as one group.
+    const rowCount = tab.template.rows.length + 1
+    const rules = new Set(ruleRows(tab.template.rows, tab.values))
+    for (let i = 0; i < rowCount; i++) {
+      const top = i === 0 || rules.has(i) ? THIN : undefined
+      const bottom = i === rowCount - 1 ? THIN : undefined
+      const merged = i > 0 && rowLayout(tab.template.rows[i - 1], tab.values).merged
+      const a = sheet.getCell(i + 1, 1)
+      const b = sheet.getCell(i + 1, 2)
+      a.border = { left: THIN, top, bottom, ...(merged || i === 0 ? {} : { right: THIN }) }
+      b.border = { right: THIN, top, bottom }
     }
   }
 

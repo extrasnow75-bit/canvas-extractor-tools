@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
-import { buildSettingsWorkbook, safeTabTitle, SettingsData } from './settingsExport'
-import { sheetRangeA1, validationRuns } from './sheetsLayout'
+import { buildSettingsWorkbook, resolveItems, safeTabTitle, SettingsData } from './settingsExport'
+import {
+  FONT,
+  PALETTE,
+  cellValue,
+  rowLayout,
+  ruleRows,
+  sheetRangeA1,
+  sheetsFormatRequests,
+  validationRuns,
+} from './sheetsLayout'
 import { apiNotEnabledMessage } from './googleSheetsErrors'
 import {
   ASSIGNMENT_TEMPLATE,
@@ -9,6 +18,7 @@ import {
   COURSE_SETTINGS_TEMPLATE,
   DISCUSSION_TEMPLATE,
   NEW_QUIZ_TEMPLATE,
+  UNSET_DROPDOWN,
 } from './settingsTemplates'
 import { CellValue } from './settingsMapping'
 
@@ -80,7 +90,11 @@ describe('buildSettingsWorkbook', () => {
   it('keeps the template placeholder for rows Canvas had no value for', async () => {
     const sheet = (await readBack()).getWorksheet('A - Essay 1')!
     const linkToRubric = ASSIGNMENT_TEMPLATE.rows.findIndex((r) => r.key === 'link_to_rubric') + 2
-    expect(sheet.getCell(`B${linkToRubric}`).value).toBe('Template Rubrics')
+    // The workbook attaches a hyperlink to this placeholder, so it comes back as a link cell.
+    expect(sheet.getCell(`B${linkToRubric}`).value).toEqual({
+      text: 'Template Rubrics',
+      hyperlink: ASSIGNMENT_TEMPLATE.rows.find((r) => r.key === 'link_to_rubric')!.link,
+    })
   })
 
   it('gives dropdown rows their exact option list as data validation', async () => {
@@ -225,5 +239,402 @@ describe('apiNotEnabledMessage', () => {
 
   it('leaves other failures alone, so they keep their real detail', () => {
     expect(apiNotEnabledMessage('{ "error": { "code": 400, "message": "Invalid range" } }')).toBe(null)
+  })
+})
+
+/**
+ * Which listing owns an item, and therefore which template it gets.
+ *
+ * The case that motivated all of this: Canvas returns a classic quiz twice — once from
+ * /quizzes and once from /assignments, where it looks like an ordinary online assignment —
+ * and the export built a tab from each, so one quiz produced both a Classic Quiz table and an
+ * Assignment table full of submission-type and Turnitin rows a quiz does not have.
+ */
+describe('resolveItems', () => {
+  const asgn = (id: number, name: string, extra: Record<string, unknown> = {}) =>
+    ({ id, name, ...extra }) as never
+  const disc = (id: number, title: string, extra: Record<string, unknown> = {}) =>
+    ({ id, title, ...extra }) as never
+  const quiz = (id: number, title: string, extra: Record<string, unknown> = {}) =>
+    ({ id, title, ...extra }) as never
+
+  it('gives a classic quiz one tab, not one per listing', () => {
+    const items = resolveItems(
+      [asgn(10, '1.01 Syllabus Quiz', { submission_types: ['online_quiz'] })],
+      [],
+      [quiz(500, '1.01 Syllabus Quiz', { quiz_type: 'assignment', assignment_id: 10 })],
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('quiz')
+  })
+
+  it('gives a graded discussion one tab, not one per listing', () => {
+    const items = resolveItems(
+      [asgn(11, 'Week 1 Discussion', { submission_types: ['discussion_topic'] })],
+      [disc(700, 'Week 1 Discussion', { assignment_id: 11 })],
+      [],
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('disc')
+  })
+
+  it('recognises a discussion that carries its assignment embedded rather than by id', () => {
+    // Whether Canvas sends assignment_id, the whole embedded assignment, or both depends on
+    // the include[] parameters, so neither one alone can be relied on.
+    const items = resolveItems(
+      [asgn(12, 'Week 2 Discussion', { submission_types: ['discussion_topic'] })],
+      [disc(701, 'Week 2 Discussion', { assignment: { id: 12, points_possible: 10 } })],
+      [],
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('disc')
+  })
+
+  it('keeps a New Quiz that only the assignments listing returned', () => {
+    // /quizzes omits New Quizzes entirely on some instances. Dropping quiz-shaped assignments
+    // outright — rather than only when something else claimed them — would delete this item
+    // from the picker with no sign it ever existed.
+    const items = resolveItems(
+      [asgn(13, '2.01 Unit Quiz', { is_quiz_lti_assignment: true })],
+      [],
+      [],
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('newquiz')
+  })
+
+  it('pairs a New Quiz with its assignment record when both listings return it', () => {
+    const items = resolveItems(
+      [asgn(14, '2.02 Unit Quiz', { is_quiz_lti_assignment: true, points_possible: 25 })],
+      [],
+      [quiz(501, '2.02 Unit Quiz', { quiz_type: 'quizzes.next', assignment_id: 14 })],
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('newquiz')
+    // The mappable fields live on the assignment, so the pairing has to survive.
+    expect(items[0].kind === 'newquiz' && items[0].assignment?.points_possible).toBe(25)
+  })
+
+  it('keeps an ungraded quiz, which has no assignment to be claimed by', () => {
+    const items = resolveItems([], [], [quiz(502, 'Practice Quiz', { quiz_type: 'practice_quiz' })])
+
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('quiz')
+  })
+
+  it('leaves an ordinary assignment alone', () => {
+    const items = resolveItems(
+      [asgn(15, 'Essay 1', { submission_types: ['online_upload'] })],
+      [],
+      [],
+    )
+
+    expect(items.map((i) => i.kind)).toEqual(['asgn'])
+  })
+
+  it('keeps keys unique when an assignment id and a quiz id collide', () => {
+    // Assignment ids and quiz ids are separate Canvas sequences, so the same number can name
+    // one of each. Both of these resolve to a New Quiz, and a shared 'newquiz-55' key would
+    // make selecting one in the picker select the other too.
+    const items = resolveItems(
+      [asgn(55, 'Unclaimed New Quiz', { is_quiz_lti_assignment: true })],
+      [],
+      [quiz(55, 'Paired New Quiz', { quiz_type: 'quizzes.next', assignment_id: 999 })],
+    )
+
+    expect(items).toHaveLength(2)
+    expect(new Set(items.map((i) => i.key)).size).toBe(2)
+  })
+
+  it('produces one unique key per item across a mixed course', () => {
+    const items = resolveItems(
+      [
+        asgn(10, '1.01 Syllabus Quiz', { submission_types: ['online_quiz'] }),
+        asgn(11, 'Week 1 Discussion', { submission_types: ['discussion_topic'] }),
+        asgn(12, 'Essay 1', { submission_types: ['online_upload'] }),
+        asgn(13, '2.01 Unit Quiz', { is_quiz_lti_assignment: true }),
+      ],
+      [disc(700, 'Week 1 Discussion', { assignment_id: 11 })],
+      [
+        quiz(500, '1.01 Syllabus Quiz', { quiz_type: 'assignment', assignment_id: 10 }),
+        quiz(501, '2.01 Unit Quiz', { quiz_type: 'quizzes.next', assignment_id: 13 }),
+      ],
+    )
+
+    // Four real things in the course, four tabs — down from six before ownership was resolved.
+    expect(items).toHaveLength(4)
+    expect(new Set(items.map((i) => i.key)).size).toBe(4)
+    expect(items.map((i) => i.kind).sort()).toEqual(['asgn', 'disc', 'newquiz', 'quiz'])
+  })
+})
+
+/**
+ * What lands in a cell the mappers never set. The template's own default is the blank design
+ * document's starting state, and writing it out unchanged made an extracted tab assert things
+ * nobody had read from Canvas.
+ */
+describe('cellValue for rows the extraction did not fill', () => {
+  const rowFor = (template: typeof ASSIGNMENT_TEMPLATE, key: string) => {
+    const row = template.rows.find((r) => r.key === key)
+    if (!row) throw new Error(`no such row: ${key}`)
+    return row
+  }
+
+  it('reports a mapped value, true or false', () => {
+    const row = rowFor(ASSIGNMENT_TEMPLATE, 'Group Assignment')
+    expect(cellValue(row, new Map<string, CellValue>([['Group Assignment', true]]))).toBe(true)
+    expect(cellValue(row, new Map<string, CellValue>([['Group Assignment', false]]))).toBe(false)
+  })
+
+  it('does not tick a checkbox the template ships ticked', () => {
+    // 'Index all submissions' has default: true in the workbook and no mapper behind it, so it
+    // arrived ticked on every assignment tab — under a Turnitin block reported as switched off.
+    const row = rowFor(ASSIGNMENT_TEMPLATE, 'Index all submissions')
+    expect(row.default).toBe(true)
+    expect(cellValue(row, new Map())).toBe(false)
+  })
+
+  it('does not answer a dropdown the template ships with a real answer', () => {
+    // Submission Type defaults to 'Online'. For a classic quiz the mapper returns nothing —
+    // 'online_quiz' is not one of the workbook's four options — and 'Online' stood there
+    // looking extracted.
+    const row = rowFor(ASSIGNMENT_TEMPLATE, 'Submission Type')
+    expect(row.default).toBe('Online')
+    expect(cellValue(row, new Map())).toBe(UNSET_DROPDOWN)
+  })
+
+  it('keeps a text row placeholder, which already reads as unfilled', () => {
+    expect(cellValue(rowFor(ASSIGNMENT_TEMPLATE, 'Points'), new Map())).toBe('XX')
+  })
+
+  it('asserts nothing positive on any template when nothing was mapped', () => {
+    const templates = [
+      COURSE_SETTINGS_TEMPLATE,
+      ASSIGNMENT_TEMPLATE,
+      DISCUSSION_TEMPLATE,
+      CLASSIC_QUIZ_TEMPLATE,
+      NEW_QUIZ_TEMPLATE,
+    ]
+
+    for (const template of templates) {
+      for (const row of template.rows) {
+        if (row.kind === 'note') continue
+        const value = cellValue(row, new Map())
+        if (row.kind === 'checkbox') expect(value).toBe(false)
+        if (row.kind === 'dropdown') expect(value).toBe(UNSET_DROPDOWN)
+      }
+    }
+  })
+})
+
+/**
+ * Formatting, read out of the eCampus workbook's own cell styles. What matters is that the
+ * landmarks a reviewer knows from the template — the blue "finalized" bar, the grey primary
+ * rows, purple for anything still unfilled — turn up in the same places on an extracted tab.
+ */
+describe('rowLayout', () => {
+  const row = (key: string) => {
+    const r = ASSIGNMENT_TEMPLATE.rows.find((r) => r.key === key)
+    if (!r) throw new Error(`no such row: ${key}`)
+    return r
+  }
+  const none = new Map<string, CellValue>()
+
+  it('draws a primary setting bold on the pale grey fill, with a rule above it', () => {
+    const l = rowLayout(row('Points'), none)
+    expect(l.label.bold).toBe(true)
+    expect(l.label.fill).toBe(PALETTE.primaryFill)
+    expect(l.value.fill).toBe(PALETTE.primaryFill)
+    expect(l.ruleAbove).toBe(true)
+    expect(l.merged).toBe(false)
+  })
+
+  it('draws a sub-option plain, with no rule, so it boxes together with its parent', () => {
+    const l = rowLayout(row('Text Entry'), none)
+    expect(l.label.bold).toBe(false)
+    expect(l.label.fill).toBeUndefined()
+    expect(l.ruleAbove).toBe(false)
+  })
+
+  it('draws the finalized bar solid blue with white text', () => {
+    const l = rowLayout(row('finalized'), none)
+    expect(l.label.fill).toBe(PALETTE.finalizedFill)
+    expect(l.label.color).toBe(PALETTE.white)
+    expect(l.value.color).toBe(PALETTE.white)
+    expect(l.label.bold).toBe(true)
+  })
+
+  it('merges and centres the group-set warning in red', () => {
+    const l = rowLayout(row('group_note'), none)
+    expect(l.merged).toBe(true)
+    expect(l.label.align).toBe('center')
+    expect(l.label.color).toBe(PALETTE.warning)
+  })
+
+  it('leaves a text placeholder purple, and turns an extracted value black', () => {
+    expect(rowLayout(row('Points'), none).value.color).toBe(PALETTE.placeholder)
+    expect(rowLayout(row('Points'), new Map([['Points', '50']])).value.color).toBe(PALETTE.black)
+  })
+
+  it('attaches the workbook hyperlink only while the placeholder is still showing', () => {
+    const unfilled = rowLayout(row('link_to_rubric'), none)
+    expect(unfilled.link).toBe(row('link_to_rubric').link)
+    expect(unfilled.value.color).toBe(PALETTE.link)
+
+    const filled = rowLayout(row('link_to_rubric'), new Map([['link_to_rubric', 'Essay rubric']]))
+    expect(filled.link).toBeUndefined()
+    expect(filled.value.color).toBe(PALETTE.black)
+  })
+
+  it('does not colour a dropdown placeholder — the workbook leaves those black', () => {
+    expect(rowLayout(row('Display Grade as'), none).value.color).toBe(PALETTE.black)
+  })
+
+  it('rules between a setting and its first sub-option, but not between the sub-options', () => {
+    const idx = (key: string) => ASSIGNMENT_TEMPLATE.rows.findIndex((r) => r.key === key) + 1
+    const rules = ruleRows(ASSIGNMENT_TEMPLATE.rows, none)
+    expect(rules).toContain(idx('Submission Type'))
+    expect(rules).toContain(idx('Text Entry')) // directly beneath it
+    expect(rules).not.toContain(idx('Website URL')) // beneath Text Entry
+  })
+
+  it('keeps a settled default black rather than treating it as a placeholder', () => {
+    const settled = DISCUSSION_TEMPLATE.rows.find((r) => r.key === 'reply_submission_type')!
+    expect(settled.fixed).toBe(true)
+    expect(rowLayout(settled, none).value.color).toBe(PALETTE.black)
+  })
+
+  it('always rules off the first row from the title, whatever its own style', () => {
+    // Classic Quiz's first row is 'Score', a bare bold label with no rule of its own.
+    expect(CLASSIC_QUIZ_TEMPLATE.rows[0].style).toBe('label')
+    expect(ruleRows(CLASSIC_QUIZ_TEMPLATE.rows, none)).toContain(1)
+  })
+})
+
+describe('template style annotations', () => {
+  const templates = [
+    COURSE_SETTINGS_TEMPLATE,
+    ASSIGNMENT_TEMPLATE,
+    DISCUSSION_TEMPLATE,
+    CLASSIC_QUIZ_TEMPLATE,
+    NEW_QUIZ_TEMPLATE,
+  ]
+
+  it("marks every 'finalized' checkbox, and nothing else, as the blue bar", () => {
+    for (const t of templates) {
+      for (const r of t.rows) {
+        expect(r.style === 'finalized', `${t.kind}: ${r.key}`).toBe(r.key.endsWith('finalized'))
+      }
+    }
+  })
+
+  it('only merges rows that carry no value of their own', () => {
+    for (const t of templates) {
+      for (const r of t.rows) {
+        if (rowLayout(r, new Map()).merged) expect(r.kind, `${t.kind}: ${r.key}`).toBe('note')
+      }
+    }
+  })
+
+  it('only links rows whose placeholder is a document pointer', () => {
+    for (const t of templates) {
+      for (const r of t.rows) {
+        if (r.link) {
+          expect(r.kind, `${t.kind}: ${r.key}`).toBe('text')
+          expect(r.link).toMatch(/^https:\/\/docs\.google\.com\//)
+        }
+      }
+    }
+  })
+})
+
+describe('sheetsFormatRequests', () => {
+  const values = new Map<string, CellValue>([['Points', '50']])
+  const requests = sheetsFormatRequests(7, ASSIGNMENT_TEMPLATE.rows, values) as Array<
+    Record<string, { range?: { startRowIndex?: number }; rows?: unknown[]; top?: unknown }>
+  >
+  const of = (kind: string) => requests.filter((r) => kind in r).map((r) => r[kind])
+
+  it('formats every row, title included, in one updateCells', () => {
+    const [cells] = of('updateCells')
+    expect(of('updateCells')).toHaveLength(1)
+    expect(cells.rows).toHaveLength(ASSIGNMENT_TEMPLATE.rows.length + 1)
+  })
+
+  it('merges the title and each merged template row, nothing else', () => {
+    const merged = of('mergeCells').map((m) => m.range!.startRowIndex)
+    const expected = [
+      0,
+      ...ASSIGNMENT_TEMPLATE.rows.flatMap((r, i) => (rowLayout(r, values).merged ? [i + 1] : [])),
+    ]
+    expect(merged).toEqual(expected)
+  })
+
+  it('boxes the block, then rules above the rows rowLayout says', () => {
+    const borders = of('updateBorders')
+    const [box, ...rules] = borders
+    expect(box.range!.startRowIndex).toBe(0)
+    expect(rules.map((r) => r.range!.startRowIndex)).toEqual(ruleRows(ASSIGNMENT_TEMPLATE.rows, values))
+    for (const r of rules) expect(r.top).toBeDefined()
+  })
+
+  it('never emits a formula — links go through textFormat, not =HYPERLINK', () => {
+    expect(JSON.stringify(requests)).not.toContain('formulaValue')
+    expect(JSON.stringify(requests)).not.toContain('HYPERLINK')
+    expect(JSON.stringify(requests)).toContain('"link":{"uri":"https://docs.google.com/')
+  })
+})
+
+describe('buildSettingsWorkbook formatting', () => {
+  const rowOf = (key: string) => ASSIGNMENT_TEMPLATE.rows.findIndex((r) => r.key === key) + 2
+
+  it('writes the title bold, blue, centred and merged across A:B', async () => {
+    const sheet = (await readBack()).getWorksheet('A - Essay 1')!
+    const a1 = sheet.getCell('A1')
+    expect(a1.font.bold).toBe(true)
+    expect(a1.font.color?.argb).toBe(`FF${PALETTE.heading}`)
+    expect(a1.alignment.horizontal).toBe('center')
+    expect(a1.isMerged).toBe(true)
+  })
+
+  it('gives a primary row the bold label and grey fill on both cells', async () => {
+    const sheet = (await readBack()).getWorksheet('A - Essay 1')!
+    const r = rowOf('Rubric')
+    expect(sheet.getCell(`A${r}`).font.bold).toBe(true)
+    expect(sheet.getCell(`A${r}`).fill).toMatchObject({ fgColor: { argb: `FF${PALETTE.primaryFill}` } })
+    expect(sheet.getCell(`B${r}`).fill).toMatchObject({ fgColor: { argb: `FF${PALETTE.primaryFill}` } })
+  })
+
+  it('gives the finalized row its blue fill and white text', async () => {
+    const sheet = (await readBack()).getWorksheet('A - Essay 1')!
+    const r = rowOf('finalized')
+    expect(sheet.getCell(`A${r}`).fill).toMatchObject({ fgColor: { argb: `FF${PALETTE.finalizedFill}` } })
+    expect(sheet.getCell(`A${r}`).font.color?.argb).toBe(`FF${PALETTE.white}`)
+  })
+
+  it('colours an unfilled placeholder purple and an extracted value black', async () => {
+    const sheet = (await readBack()).getWorksheet('A - Essay 1')!
+    // 'Points' is in the fixture's values; 'External Tool URL' is not.
+    expect(sheet.getCell(`B${rowOf('Points')}`).font.color?.argb).toBe(`FF${PALETTE.black}`)
+    expect(sheet.getCell(`B${rowOf('External Tool URL')}`).font.color?.argb).toBe(`FF${PALETTE.placeholder}`)
+  })
+
+  it('uses Arial 11 throughout, as the workbook does', async () => {
+    const sheet = (await readBack()).getWorksheet('A - Essay 1')!
+    for (const addr of ['A1', `A${rowOf('Points')}`, `B${rowOf('Text Entry')}`]) {
+      expect(sheet.getCell(addr).font.name, addr).toBe(FONT.family)
+      expect(sheet.getCell(addr).font.size, addr).toBe(FONT.size)
+    }
+  })
+
+  it('rules above primary rows but not between the sub-options beneath them', async () => {
+    const sheet = (await readBack()).getWorksheet('A - Essay 1')!
+    expect(sheet.getCell(`A${rowOf('Submission Type')}`).border.top?.style).toBe('thin')
+    expect(sheet.getCell(`A${rowOf('Website URL')}`).border.top).toBeUndefined()
   })
 })
