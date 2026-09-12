@@ -7,5 +7,5 @@ Since v1.0.1:
 - **Links back into Canvas are highlighted cyan** in the content export — files, pages, discussions, assignments, anything on the course site — so designers can see at a glance which links QA, Build and CAS will not be able to open and need re-pointing. External links (YouTube, publishers, Drive) and the template's Instructor Information / Course Resources / Course Questions buttons are left alone.
 - **Grey highlight on tool names replaced by the ⏺ marker,** which stays visible when a paragraph is later highlighted green for QA.
 - **Web addresses inside error messages are now clickable** and reachable by keyboard, and long messages wrap inside the tile instead of stretching it.
-- **Groundwork for a future Mac version:** title-bar layout and the update check now behave correctly on macOS, though no Mac build is published yet.
+- **Mac version now available** for both Apple Silicon and Intel Macs, with the title bar and update check adjusted for macOS. The build is unsigned, so see the Mac install steps below for the one-time first-launch step.
 - Build-tool dependency updates flagged by Dependabot.
