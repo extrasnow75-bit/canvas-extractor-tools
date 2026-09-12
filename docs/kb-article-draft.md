@@ -8,11 +8,13 @@
 
 The purpose of this tool is to save the IDC time copying and pasting out of Canvas when an instructor would like to reuse material from a previously-taught course.
 
-Canvas Extractor Tools does what the old Content Export notebook did, and adds two more extractions: **quiz questions** and **rubrics**. Those used to require a separate app, separate code, or manual copy and paste.
+Canvas Extractor Tools does what the old Content Export notebook did, and adds three more extractions: **quiz questions**, **rubrics**, and **settings tables**. Those used to require a separate app, separate code, or manual copy and paste.
+
+**What changed in the latest version** is listed on the [release page](https://github.com/extrasnow75-bit/canvas-extractor-tools/releases/latest), so this article does not carry version history.
 
 What the tool produces is a **starting point** for the IDC to organize the blueprint and easily copy/paste the components the FD has indicated as wanting to keep or review. **The extracted content in the blueprint will be reviewed by the IDC and FD.**
 
-The tool is **read-only against Canvas**. It never edits, publishes, or deletes anything in a course. The only thing it creates is a Google Doc in your own Drive.
+The tool is **read-only against Canvas**. It never edits, publishes, or deletes anything in a course. The only thing it creates is a Google Doc or Google Sheet in your own Drive.
 
 # **⚒️The Tool**
 
@@ -20,11 +22,23 @@ The old tool was a Google Colab Notebook that ran in a browser tab. **This one i
 
 **Download:** [Canvas Extractor Tools releases page](https://github.com/extrasnow75-bit/canvas-extractor-tools/releases/latest)
 
-Download `Canvas-Extractor-Tools-WINDOWS-<version>.exe` and double-click it to install.
+The release page offers three files. Download the one for your computer:
 
-**This app is Windows only.** There is no Mac version. If you work on a Mac, contact the eCampus Center.
+* **Windows:** `Canvas-Extractor-Tools-WINDOWS-<version>.exe`
+* **Mac with Apple Silicon (M1 or later):** `Canvas-Extractor-Tools-MAC-APPLE-SILICON-<version>.dmg`
+* **Mac with an Intel processor:** `Canvas-Extractor-Tools-MAC-INTEL-<version>.dmg`
 
-**You will see a security warning the first time you open it** — *"Windows protected your PC"*. Click **More info**, then **Run anyway**. The app is distributed directly rather than through the Microsoft Store, so Windows does not recognize the publisher yet. This is expected and it goes away after the first launch.
+Not sure which Mac you have? Click the Apple menu, then **About This Mac** — the **Chip** line says Apple M1/M2/M3/M4 for Apple Silicon, or Intel.
+
+**On Windows:** double-click the `.exe` to install. **You will see a security warning** — *"Windows protected your PC"*. Click **More info**, then **Run anyway**. The app is distributed directly rather than through the Microsoft Store, so Windows does not recognize the publisher. This is expected; you will see it again each time you install a new version.
+
+**On a Mac:** open the `.dmg` and drag **Canvas Extractor Tools** into the Applications folder shown beside it. The first time you open it, macOS will refuse — usually saying the app *"is damaged and can't be opened"* or is from an unidentified developer. The app is fine; macOS says this about anything not distributed through the App Store. Open **Terminal** (Applications → Utilities), paste this line, and press Return:
+
+```
+xattr -dr com.apple.quarantine "/Applications/Canvas Extractor Tools.app"
+```
+
+Then open the app normally. You need to do this once for each version you install.
 
 ## 🔑What You Need Before You Start
 
@@ -34,29 +48,29 @@ Download `Canvas-Extractor-Tools-WINDOWS-<version>.exe` and double-click it to i
 
 The token gives the app exactly the Canvas access you already have — no more. It is stored encrypted on your own computer and is never sent anywhere except Canvas.
 
-**2\. Google sign-in access — only if you want the Google Doc output.** Google sign-in is currently limited to an approved list of accounts. **Contact the eCampus Center to be added before your first use**, or sign-in will fail with a message about the app not being verified. The alternative output, a local HTML file, needs no Google account at all.
+**2\. Google sign-in access — only if you want the Google Doc or Google Sheet output.** Google sign-in is currently limited to an approved list of accounts. **Contact the eCampus Center to be added before your first use**, or sign-in will fail with a message about the app not being verified. The alternative output — a local HTML file for content, quizzes and rubrics, or a local `.xlsx` file for settings — needs no Google account at all.
 
 ## 🖥️Why a Desktop App and Not a Notebook?
 
 A Canvas token is sensitive: anyone holding it can act as you in Canvas. When a tool like this runs in a web browser — a web app or a Colab Notebook — that token has to live in the browser, alongside every extension, tab, and script that browser is running.
 
-This app keeps the token on your own computer instead, encrypted and tied to your sign-in, and talks to Canvas directly.
+This app keeps the token on your own computer instead, encrypted in the Windows or macOS keychain and tied to your sign-in, and talks to Canvas directly.
 
 # **✅What Is Extracted**
 
-You choose **one** of three extractions each time you run the app. Each one produces its own document.
+You choose **one** of four extractions each time you run the app. Each one produces its own document.
 
 ## Course content
 
 * Content from pages and assignments in the order they appear on the course's **Modules** page
 * Home page and syllabus
 * Discussions and quiz **instructions** (not quiz questions — that is the second extraction)
-* Blueprint markup tags (e.g. **H2**, **H3**, **Assignment**, **Page**...)
+* Blueprint markup tags (e.g. **H2**, **H3**) and a tool line above every item, in the form the Blueprint template uses: **Assignment ⏺ Link to settings tab**. Tool names match the Blueprint dropdown — Assignment, Assignment (Not Graded), Discussion, Page, Quiz (Classic), Quiz (New) — and the phrase is where the link to that item's settings tab goes later.
 * Stylized HTML, named in red bold above the block it applies to (e.g. **\[Callout Box\]**, **\[Styled Dropdown\]**, **\[Styled Table\]**, **\[Alert Box\]**). The styling itself does not survive the trip out of Canvas, so the marker is what tells you a template was used. Anything not built from a template in the **HTML Templates** article — hand-written styling, buttons — comes through unmarked.
 * Due-date headers, with the blue Blueprint rules
 * Images
 * Video URLs
-* Links (*not access to*) Canvas Files, course links, etc.
+* Links (*not access to*) Canvas Files, course pages, discussions, and so on. **Every link that points back into the reference course is highlighted cyan**, so you can see at a glance which links QA, Build and CAS will not be able to open — those need re-pointing. External links (YouTube, publisher sites, Drive) and the template's Instructor Information / Course Resources / Course Questions buttons are not highlighted.
 
 ## Quiz questions *(new)*
 
@@ -75,11 +89,21 @@ Any other question type is skipped, and a note at the end of each quiz tells you
 
 ## Rubrics *(new)*
 
-Every rubric in the course, as a table — criteria down the side, rating levels across the top, points per criterion, and a total.
+Every rubric in the course, as a table — criteria down the side, rating levels across the top, points per criterion, and a total. Each rating cell shows its points at the top, centred and bold, the way the eCampus rubric template lays them out.
+
+## Settings tables *(new)*
+
+Course, assignment, discussion and quiz settings, written into the eCampus **Settings Table** layout — one tab per item — as a Google Sheet with working checkboxes and dropdowns, or as a local `.xlsx`.
+
+* Tabs are formatted like the workbook: the blue "finalized" bar, grey primary rows, and purple placeholder text that turns black once a value has been filled in from Canvas.
+* Where the app cannot confirm a setting from Canvas, the cell keeps the purple template placeholder rather than showing a guessed value. Those are yours to check.
+* The **"Check when settings are finalized"** boxes are left unticked on purpose — that tick belongs to QA.
+* **New Quizzes** get only the assignment-level settings Canvas exposes (points, due dates and the like). Their quiz-engine settings live inside the New Quizzes tool and are not extracted.
+* Tab names are shortened to 31 characters so the file also opens in Excel; when two would collide, the second gets a number. The full item name is in the title row inside the tab.
 
 # **🛑What Is Not Extracted**
 
-* Settings associated with assignments, quizzes, etc.
+* New Quizzes engine settings, and the handful of settings the app cannot confirm from Canvas (these keep the template placeholder)
 * **New Quizzes** questions — Canvas stores New Quizzes differently, and the app does not extract their questions. Each one appears in the document with a note saying so, and the summary tells you how many were found, so none go by unnoticed. Classic quizzes are fully supported.
 * Alt tags on images
 * H5P content; content stored in Perusall or other LTI apps
@@ -91,22 +115,26 @@ Every rubric in the course, as a table — criteria down the side, rating levels
 * Add paragraph breaks within pages and assignments
 * Clean up some formatting (bold heading text within pages and assignments, for example)
 * Get New Quizzes questions through another method or by manual copy and paste
-* Add build notes for links that point to Canvas files or course content (e.g.: Add link to Discussion Guidelines page in Course Resources)
+* Re-point every **cyan-highlighted** link — to a Drive copy of the file, or to the rebuilt course's own page — and add a build note where one is needed (e.g.: Add link to Discussion Guidelines page in Course Resources)
+* Turn each tool line's **Link to settings tab** into a link to the matching tab in the settings sheet
+* Review the purple placeholders in the settings sheet and fill in what the app could not confirm
 * Check any item marked with a purple **"check manually"** note — that item's text came back empty from Canvas
 
 # **📋How To Use It**
 
-**First run only:** paste your Canvas token into the setup panel, and — if you want Google Doc output — click **Sign in with Google**. Both are remembered.
+**First run only:** paste your Canvas token into the setup panel, and — if you want Google Doc or Google Sheet output — click **Sign in with Google**. Both are remembered.
 
 **Every run:**
 
 1. Paste the course URL, e.g. `https://boisestatecanvas.instructure.com/courses/12345`. Copy it from your browser's address bar while you are in the course. The course name appears once the app confirms it.
-2. Pick an extraction: **Course content**, **Classic quizzes**, or **Rubrics**.
+2. Pick an extraction: **Course content**, **Classic quizzes**, **Rubrics**, or **Settings tables**.
 3. Extract everything, or tick specific items.
-4. Choose **Extract all to a Google Doc** or **or save a local copy (.html)**.
+4. Choose **Extract all to a Google Doc** (a Google Sheet, for settings) or **save a local copy** — `.html` for content, quizzes and rubrics; `.xlsx` for settings. A local `.xlsx` shows checkboxes as TRUE/FALSE text; upload it to Drive and choose **Open with → Google Sheets** to get tickable boxes.
 5. Wait. A progress line names each item as it is fetched, and **Stop** cancels between items. A large course takes a few minutes.
 
-When it finishes, the Google Doc opens in your browser. It is a normal Doc in your own Drive — edit, share, or move it however you like.
+When it finishes, the Google Doc or Sheet opens in your browser. It is a normal file in your own Drive — edit, share, or move it however you like.
+
+**If a classic quiz has a student access code**, the completion message says so: the code — the password students type to start the exam — is written into that quiz's tab. Treat the file the way you would that password, or remove the code before sharing the sheet.
 
 # **🔧Troubleshooting**
 
@@ -119,14 +147,20 @@ When it finishes, the Google Doc opens in your browser. It is a normal Doc in yo
 | The extraction stops partway | Read the message it shows — rate limiting alone no longer stops a run. Try again, and if it stops the same way, send that message to the eCampus Center. |
 | A rubric looks blank | If a rubric genuinely could not be loaded, the document says so in its place. A rubric with no criteria in Canvas comes through empty because it is empty. |
 | Text is too small to read | Use the text size buttons in the app's top bar. |
+| macOS says the app "is damaged and can't be opened" | The app is fine — macOS is refusing an app that did not come through the App Store. Run the Terminal line under **The Tool** above, then open it again. |
+| Settings extraction fails with "Sheets API request failed (403)" | The Google Sheets API has not been switched on for the app's Google Cloud project. This is a one-time admin fix, not something on your computer — send the message (it contains a link) to the eCampus Center. |
+| A link inside an error message | Links in error messages are clickable and open in your browser. |
+| Two settings tabs have similar names | Tab names are cut to 31 characters and numbered when they collide. The title row inside each tab has the full item name. |
 
 # **🔄Updates**
 
 The app checks for a newer version when it starts and shows a bar at the top if one exists. You can also check any time from **Help Center → Updates → Check for updates**.
 
-Updates are never installed automatically. Download the new installer and run it over the top of the old version — your token and Google sign-in are kept.
+Updates are never installed automatically. Download the new version and install it over the top of the old one — your token and Google sign-in are kept either way.
 
-**Do not uninstall the old version first, and accept the folder the installer offers.** The installer finds the existing copy and replaces it. If you browse to a different folder instead, you end up with two versions installed side by side and no way to tell which one you are opening. Close the app before you run the installer.
+**On Windows: do not uninstall the old version first, and accept the folder the installer offers.** The installer finds the existing copy and replaces it. If you browse to a different folder instead, you end up with two versions installed side by side and no way to tell which one you are opening. Close the app before you run the installer.
+
+**On a Mac:** drag the new app into Applications and choose **Replace** when asked, then run the Terminal line under **The Tool** again — it is needed once per version.
 
 # **📄Related References**
 
@@ -134,6 +168,7 @@ Updates are never installed automatically. Download the new installer and run it
 * [Quiz Questions Extraction Template](https://docs.google.com/document/d/1zm9yRGtg4u9C3ddOVX7iNGrGp8gxDCrj9rbFY4GUtDM/edit?tab=t.0#heading=h.qet84pprm5t9) — quiz extraction
 * [Required Formatting for Quiz Questions](https://docs.google.com/document/d/1SrLp9OKCKJJm86jJEFGnClhvS86MI6qp1YqhI1jHA4M/edit?usp=drivesdk) — quiz extraction
 * [Rubric Example Point Ranges (MS Word version)](https://docs.google.com/document/d/1YAs6TdSfRIpRXyKyQWSFc-VtgZ39gbYgnWdVtHZBDT4/edit?tab=t.0#heading=h.4v5p1vp9zrcz) — rubric extraction
+* eCampus Settings Table workbook *(add link)* — the layout the settings extraction reproduces, one tab per item
 
 # **💭Feedback**
 
@@ -307,9 +342,10 @@ Two consequences:
 ## Releasing a new version
 
 1. Bump `version` in `package.json`.
-2. Commit, then tag it: `git tag v0.12.0` and `git push origin v0.12.0`.
-3. Pushing the tag triggers `.github/workflows/release.yml`, which builds the Windows installer, renames it to the friendly name users see, writes the release notes, and publishes. Takes about three minutes.
-4. Check the release page afterwards.
+2. Rewrite `RELEASE_NOTES.md` as a "What's new in vX.Y.Z" bulleted list of what changed since the previous release, written for the people installing the app — what they will see differently in the app or in the exported document, not file names. `git log vPREV..HEAD` is the source. **The release job refuses to publish unless this file names the tag being released**, so a stale list cannot ship under a new heading.
+3. Commit, then tag it: `git tag v1.1.0` and `git push origin v1.1.0`.
+4. Pushing the tag triggers `.github/workflows/release.yml`, which builds the Windows installer and both macOS disk images (a windows/macos matrix), renames them to the friendly names users see, splices `RELEASE_NOTES.md` into the release notes, and publishes all three on one release. Takes about five minutes.
+5. Check the release page afterwards.
 
 The version number and the tag must match, and **the tag is what actually triggers the build** — pushing a version bump without a tag does nothing.
 
@@ -317,7 +353,7 @@ The version number and the tag must match, and **the tag is what actually trigge
 
 The workflow runs `npm run typecheck` and `npm test` before it builds, so a broken parser fails the release instead of shipping inside an installer. If a release fails at the Test step, read the failure rather than working around it — those tests exist because each one corresponds to a bug that reached a real document.
 
-If the build job stalls (it has), you can publish by hand: download the workflow artifact, rename it the way the workflow does, create the release, and upload the asset. When there were three assets, uploading them all in a single `gh release create` timed out and left a broken draft behind; with one this is less likely, but upload separately if it happens again.
+If the build job stalls (it has), you can publish by hand: download the workflow artifacts, rename them the way the workflow does, create the release, and upload the assets. Uploading all three in a single `gh release create` once timed out and left a broken draft behind — upload them separately with `gh release upload` if that happens again. To change the notes on a release that is already out, edit them with `gh release edit vX.Y.Z --notes-file` rather than cutting a new release.
 
 The in-app update check (`electron/ipc/updateCheck.ts`) reads GitHub's releases API and compares the newest tag against the installed version. It only *notifies* — it never downloads or installs. Real auto-update would need code signing, and the build is unsigned, so an install prompt would appear either way. That's the only reason it isn't there.
 
@@ -325,7 +361,7 @@ The in-app update check (`electron/ipc/updateCheck.ts`) reads GitHub's releases 
 
 * **New Quizzes questions are not extracted, but not because Canvas can't.** Canvas does publish a New Quizzes API at `/api/quiz/v1/courses/:course_id/quizzes/:assignment_id/items` — a different API surface from the `/api/v1/` one this app uses everywhere else, and keyed by the **assignment** id rather than a quiz id. The app simply doesn't call it yet. Other people have reported difficulty getting these calls to work, so treat feasibility as unproven until someone tests it against Boise State's Canvas with a real token.
 * **Classic question banks genuinely have no public API.** Unlike New Quizzes, there's no supported way to list a bank or its contents. Note also that a quiz using a random-draw question group doesn't *contain* questions at all — it stores a rule ("draw 5 from Bank X"), so there's no fixed list to extract. Those quizzes currently come through looking empty, which is misleading.
-* **macOS is not supported, and the CI no longer builds for it.** The Mac builds were published for several releases and never worked; nobody has launched one successfully. Keychain-based token storage and the Google sign-in loopback are both untested there, and whether an unsigned build opens at all is unknown. The `mac` target is still configured in `package.json`, so anyone with a Mac to test on can still build one locally — reviving it means restoring the os matrix in `release.yml`.
+* **macOS builds ship but are unsigned.** A colleague confirmed the 1.0.0 disk images run on a real Mac (September 2026), so `release.yml` now builds and publishes them alongside Windows. Gatekeeper refuses an unsigned app on first launch, hence the `xattr` instruction in the release notes and under **The Tool** above; removing that step for good needs a paid Apple Developer identity and a notarization step in the workflow. Each new release's Mac images should get a quick open-and-sign-in check on a Mac, since CI cannot launch them.
 * **Transfer to the eCampus GitHub org** — remember the Actions secret.
 * **Rate-limit backoff and rubric failure reporting are both done.** `canvasUtils` retries on a rate-limit 403 with a backoff that sleeps in slices, so Stop is noticed during a wait rather than after it, and a rubric that cannot be retrieved gets an explicit note in the document saying it is not an empty rubric. Extractions also run four requests at a time rather than strictly serially.
 * **The per-rubric detail fetch is redundant and should go.** `buildRubricsHtml` calls the rubrics list endpoint and then fetches each rubric again for its criteria. The list response already carries full `data` — see `electron/ipc/__fixtures__/rubrics-list-response.json`, captured from the demo course. Worse than wasteful: the two endpoints resolve rubrics differently (`index` over the course's own rubrics, `show` through bookmarked rubric associations), so the detail call can 404 on a rubric the list returned fine, producing a "could not be retrieved" note for criteria the app was already holding. Verify that against Canvas source before changing it.
