@@ -1,12 +1,11 @@
-# Builds the Windows installer and attaches it to a GitHub Release.
+# Builds the Windows installer and the two macOS disk images and attaches all three to
+# one GitHub Release.
 #
-# Windows only, deliberately. The macOS builds were produced by a matrix here for several
-# releases and were never made to work — unsigned, never launched on a real Mac, Keychain
-# storage and the OAuth loopback both untested. Shipping them meant offering course staff a
-# download that fails, above the one that works. The `mac` target is still configured in
-# package.json, so `npm run build` on a Mac still produces a .dmg; what changed is that CI
-# no longer publishes one. Bringing it back means restoring the os matrix on the build job,
-# adding release/*.dmg to the upload path and the rename step, and a Mac row in the notes.
+# The Mac builds were kept out of this pipeline until 2026-09 (built by a separate workflow
+# into a draft, never launched on a real Mac). A colleague has since run the 1.0.0 images
+# on a Mac and confirmed they work, so they ship here alongside Windows. They are still
+# unsigned and un-notarized — that needs a paid Apple Developer identity — so the notes
+# tell Mac users how to get past Gatekeeper on first launch.
 #
 # Triggered by pushing a version tag:
 #
@@ -31,7 +30,13 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      # fail-fast off so a Mac build failing does not cancel a Windows build that is fine;
+      # the release job still needs both, so nothing half-built gets published.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v7
@@ -59,17 +64,25 @@ jobs:
         # `--publish never` is essential: electron-builder detects CI and otherwise tries to
         # publish the artifacts itself, failing with "GitHub Personal Access Token is not set"
         # *after* the installer has already been built. Publishing is the release job's work.
+        #
+        # CSC_IDENTITY_AUTO_DISCOVERY=false stops electron-builder hunting the Mac runner's
+        # keychain for a signing certificate it will not find; harmless on Windows.
         run: npm run build -- --publish never
         env:
           MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: installer-windows
-          # Only the installer itself — release/ also holds the unpacked app directory, which
-          # is hundreds of megabytes and of no use to anyone downloading a build.
-          path: release/*.exe
+          name: installer-${{ matrix.os }}
+          # Only the installers themselves — release/ also holds the unpacked app directory,
+          # which is hundreds of megabytes and of no use to anyone downloading a build. The
+          # .exe glob matches nothing on the Mac runner and the .dmg glob nothing on Windows;
+          # if-no-files-found only fires when neither matches.
+          path: |
+            release/*.exe
+            release/*.dmg
           if-no-files-found: error
 
   release:
@@ -105,22 +118,30 @@ jobs:
             exit 1
           fi
 
-      - name: Rename installer
-        # electron-builder names the file after the version and arch, which asks the reader to
-        # know what that means. The people installing this are course staff, not developers,
-        # so the filename itself should say which machine it is for. The glob is expanded once,
-        # before any renaming, so this cannot reprocess its output.
+      - name: Rename installers
+        # electron-builder names the files after the version and arch, which asks the reader
+        # to know what that means. The people installing this are course staff, not
+        # developers, so the filename itself should say which machine it is for. Each glob is
+        # expanded once, before any renaming, so this cannot reprocess its output.
         #
-        # No numeric prefix any more: it existed only to keep the Windows installer at the top
-        # of an Assets list that GitHub sorts by filename, above two Mac files. With one
-        # installer there is nothing to sort.
+        # The Download section of the notes links each file by name, so the order GitHub
+        # sorts the Assets list into does not matter. The final count check catches a build
+        # job that uploaded fewer files than expected before anything is published.
         run: |
           ver="${GITHUB_REF_NAME#v}"
           cd artifacts
           for f in *.exe; do
             mv -- "$f" "Canvas-Extractor-Tools-WINDOWS-$ver.exe"
           done
+          for f in *.dmg; do
+            case "$f" in
+              *arm64*) arch="APPLE-SILICON" ;;
+              *)       arch="INTEL" ;;
+            esac
+            mv -- "$f" "Canvas-Extractor-Tools-MAC-$arch-$ver.dmg"
+          done
           ls -1
+          test "$(ls -1 | wc -l)" -eq 3
 
       - name: Write release notes
         # Quoted heredoc so the markdown's backticks are not run as command substitution;
@@ -146,20 +167,24 @@ jobs:
           cat > notes.md <<'NOTES'
           ## Download
 
-          **[Download for Windows — Canvas-Extractor-Tools-WINDOWS-__VER__.exe](https://github.com/__REPO__/releases/download/v__VER__/Canvas-Extractor-Tools-WINDOWS-__VER__.exe)**
+          **Windows:** [Canvas-Extractor-Tools-WINDOWS-__VER__.exe](https://github.com/__REPO__/releases/download/v__VER__/Canvas-Extractor-Tools-WINDOWS-__VER__.exe)
 
-          This app is Windows-only. There is no Mac version — if you work on a Mac, contact
-          the eCampus Center.
+          **Mac with Apple Silicon (M1 or later):** [Canvas-Extractor-Tools-MAC-APPLE-SILICON-__VER__.dmg](https://github.com/__REPO__/releases/download/v__VER__/Canvas-Extractor-Tools-MAC-APPLE-SILICON-__VER__.dmg)
 
-          The Assets section further down holds the same file. Ignore the two "Source code"
-          links beside it — GitHub adds those to every release automatically. They are not
+          **Mac with an Intel processor:** [Canvas-Extractor-Tools-MAC-INTEL-__VER__.dmg](https://github.com/__REPO__/releases/download/v__VER__/Canvas-Extractor-Tools-MAC-INTEL-__VER__.dmg)
+
+          Not sure which Mac you have? Click the Apple menu, then **About This Mac** — the
+          Chip line says Apple M1/M2/M3/M4 for Apple Silicon, or Intel.
+
+          The Assets section further down holds the same files. Ignore the two "Source code"
+          links beside them — GitHub adds those to every release automatically. They are not
           the app.
 
           NOTES
           cat RELEASE_NOTES.md >> notes.md
           cat >> notes.md <<'NOTES'
 
-          ## Installing
+          ## Installing on Windows
 
           Download the `.exe` file and double-click it to install.
 
@@ -168,13 +193,31 @@ jobs:
           in-house rather than distributed through the Microsoft Store — not because anything
           is wrong with it. You will see it again each time you install a new version.
 
+          ## Installing on a Mac
+
+          Open the `.dmg` file and drag **Canvas Extractor Tools** into the Applications
+          folder shown beside it.
+
+          The first time you open the app, macOS will refuse it — usually with a message
+          saying the app **"is damaged and can't be opened"** or is from an unidentified
+          developer. The app is fine; macOS says this about anything built in-house rather
+          than through the App Store. To get past it, open **Terminal** (in Applications →
+          Utilities), paste this line, and press Return:
+
+          ```
+          xattr -dr com.apple.quarantine "/Applications/Canvas Extractor Tools.app"
+          ```
+
+          Then open the app normally. You will need to do this once per version you install.
+
           ## Already have an earlier version?
 
-          **You do not need to uninstall it first.** Run this installer over the top of it —
-          it finds the existing copy and replaces it. Your Canvas token and Google sign-in are
-          kept, so there is nothing to set up again.
+          **You do not need to uninstall it first.** On Windows, run the installer over the
+          top of it — it finds the existing copy and replaces it. On a Mac, drag the new app
+          into Applications and choose **Replace** when asked. Your Canvas token and Google
+          sign-in are kept either way, so there is nothing to set up again.
 
-          Two things to get right:
+          Two things to get right on Windows:
 
           - **Close Canvas Extractor Tools before you run the installer**, or Windows reports
             that files are in use and the install fails.

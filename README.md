@@ -16,9 +16,9 @@ Output goes to Google Drive as a native Google Doc (opened in your browser), or 
 
 ## Requirements
 
-- Windows 10 or later. **Windows only** — CI publishes no macOS build. The `mac` target is
-  still configured in `package.json`, so `npm run build` on a Mac still produces a `.dmg`,
-  but nobody has ever launched one successfully; treat it as unverified, not as a release.
+- Windows 10 or later, or macOS (Apple Silicon and Intel disk images are both published).
+  The Mac builds are unsigned, so macOS refuses them on first launch until the quarantine
+  flag is cleared — the release notes give the one-line Terminal command.
 - A Canvas API access token
   ([how to create one](https://community.instructure.com/en/kb/articles/662901-how-do-i-manage-api-access-tokens-in-my-user-account))
 - A Google account, only if you want the Drive extraction
@@ -82,8 +82,9 @@ only the Python standard library. Edit the SVG, then re-run the script.
   through the Quizzes.Next LTI tool, and the questions sit behind an API this app does not use.
   In a content extraction the same item arrives as an assignment, so what you get is whatever
   the instructor put in its description.
-- **Builds are unsigned**, so Windows SmartScreen warns on first run: **More info → Run anyway**.
-  (Windows-only support is covered under [Requirements](#requirements).)
+- **Builds are unsigned**, so Windows SmartScreen warns on first run (**More info → Run
+  anyway**) and macOS Gatekeeper refuses the app until its quarantine flag is cleared (see
+  [Requirements](#requirements)).
 - **Item bodies over 100 KB skip annotation.** Above that ceiling a body is passed through
   without heading conversion or stylized-HTML markers. The text itself is complete; only the
   markers are missing. The limit exists because the tag scans degrade quadratically on
