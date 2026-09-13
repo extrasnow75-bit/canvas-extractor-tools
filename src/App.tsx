@@ -143,7 +143,7 @@ export default function App() {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <span className="text-xs text-gray-600 truncate">
-            Extract Canvas course content, quizzes, and rubrics
+            Extract Canvas course content, quizzes, rubrics, and settings
           </span>
           <div className="flex items-center gap-3 flex-shrink-0">
             <ZoomControl />
