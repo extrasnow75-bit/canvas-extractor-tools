@@ -32,7 +32,7 @@ Not sure which Mac you have? Click the Apple menu, then **About This Mac** — t
 
 **On Windows:** double-click the `.exe` to install. **You will see a security warning** — *"Windows protected your PC"*. Click **More info**, then **Run anyway**. The app is distributed directly rather than through the Microsoft Store, so Windows does not recognize the publisher. This is expected; you will see it again each time you install a new version.
 
-**On a Mac:** open the `.dmg` and drag **Canvas Extractor Tools** into the Applications folder shown beside it. The first time you open it, macOS will refuse — usually saying the app *"is damaged and can't be opened"* or is from an unidentified developer. The app is fine; macOS says this about anything not distributed through the App Store. Open **Terminal** (Applications → Utilities), paste this line, and press Return:
+**On a Mac:** open the `.dmg` and drag **Canvas Extractor Tools** into the Applications folder shown beside it. The first time you open it, Apple hasn't verified this app, so your Mac will initially refuse to open it — usually saying the app *"is damaged and can't be opened"* or is from an unidentified developer. The app is fine; macOS says this about anything not distributed through the App Store. Open **Terminal** (Applications → Utilities), paste this line, and press Return:
 
 ```
 xattr -dr com.apple.quarantine "/Applications/Canvas Extractor Tools.app"
@@ -147,7 +147,7 @@ When it finishes, the Google Doc or Sheet opens in your browser. It is a normal 
 | The extraction stops partway | Read the message it shows — rate limiting alone no longer stops a run. Try again, and if it stops the same way, send that message to the eCampus Center. |
 | A rubric looks blank | If a rubric genuinely could not be loaded, the document says so in its place. A rubric with no criteria in Canvas comes through empty because it is empty. |
 | Text is too small to read | Use the text size buttons in the app's top bar. |
-| macOS says the app "is damaged and can't be opened" | The app is fine — macOS is refusing an app that did not come through the App Store. Run the Terminal line under **The Tool** above, then open it again. |
+| macOS says the app "is damaged and can't be opened" | The app is fine — Apple hasn't verified this app, so your Mac refuses it by default. Run the Terminal line under **The Tool** above, then open it again. |
 | Settings extraction fails with "Sheets API request failed (403)" | The Google Sheets API has not been switched on for the app's Google Cloud project. This is a one-time admin fix, not something on your computer — send the message (it contains a link) to the eCampus Center. |
 | A link inside an error message | Links in error messages are clickable and open in your browser. |
 | Two settings tabs have similar names | Tab names are cut to 31 characters and numbered when they collide. The title row inside each tab has the full item name. |
