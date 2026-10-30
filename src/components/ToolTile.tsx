@@ -8,7 +8,7 @@ import {
   ExternalLink,
   Square,
 } from 'lucide-react'
-import type { PickerItem, Tool } from '../types'
+import type { CleanOptions, PickerItem, Tool } from '../types'
 import { ErrorText, cleanErrorMessage } from './ErrorText'
 
 interface Props {
@@ -44,6 +44,7 @@ function formatDuration(seconds: number): string {
 
 const LOCAL_FILE_NAMES: Record<Tool, string> = {
   content: 'course_content_extraction.html',
+  clean: 'course_document.html',
   quizzes: 'quiz_questions.html',
   rubrics: 'course_rubrics.html',
   settings: 'course_settings_tables.xlsx',
@@ -52,6 +53,7 @@ const LOCAL_FILE_NAMES: Record<Tool, string> = {
 /** File-save-dialog extension + filter label per tool. Every tool but Settings writes HTML. */
 const LOCAL_FILE_KIND: Record<Tool, { ext: string; label: string }> = {
   content: { ext: 'html', label: 'HTML File' },
+  clean: { ext: 'html', label: 'HTML File' },
   quizzes: { ext: 'html', label: 'HTML File' },
   rubrics: { ext: 'html', label: 'HTML File' },
   settings: { ext: 'xlsx', label: 'Excel File' },
@@ -60,6 +62,7 @@ const LOCAL_FILE_KIND: Record<Tool, { ext: string; label: string }> = {
 /** The Drive file type each tool produces — drives the badge and the button wording. */
 const GOOGLE_KIND: Record<Tool, { badge: string; noun: string }> = {
   content: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
+  clean: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
   quizzes: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
   rubrics: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
   settings: { badge: 'GOOGLE SHEET', noun: 'Google Sheet' },
@@ -89,9 +92,11 @@ const LOCAL_HANDLERS: Record<
     savePath: string
     selectedIds?: string[]
     jobId?: string
+    options?: CleanOptions
   }) => Promise<{ ok: boolean; message: string; cancelled?: boolean }>
 > = {
   content: (args) => window.api.canvas.exportContent(args),
+  clean: (args) => window.api.canvas.exportClean(args),
   quizzes: (args) => window.api.canvas.exportQuizzes(args),
   rubrics: (args) => window.api.canvas.exportRubrics(args),
   settings: (args) => window.api.canvas.exportSettings(args),
@@ -150,6 +155,10 @@ export function ToolTile({
   const [itemsError, setItemsError] = useState<string | null>(null)
   const [loadingItems, setLoadingItems] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Only the clean course document has options. On by default: a page per activity is what
+  // makes the document easy to hand to one reader at a time.
+  const [pageBreaks, setPageBreaks] = useState(true)
+  const toolOptions: CleanOptions | undefined = tool === 'clean' ? { pageBreaks } : undefined
 
   /**
    * A selection belongs to the course it was made in. Without this, picking items in one
@@ -241,6 +250,7 @@ export function ToolTile({
         token,
         selectedIds,
         jobId: id,
+        options: toolOptions,
       })
       if (result.ok) {
         setStatus('success')
@@ -282,7 +292,7 @@ export function ToolTile({
   const [localNoticeOpen, setLocalNoticeOpen] = useState(false)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const pendingLocalSave = useRef<string[] | undefined>(undefined)
-  const noticeApplies = tool === 'content' || tool === 'settings'
+  const noticeApplies = tool === 'content' || tool === 'clean' || tool === 'settings'
 
   // The notice appears below the button that was just pressed, so focus has to be moved into
   // it — otherwise it is silent to a screen reader and easy to miss with the keyboard.
@@ -357,7 +367,14 @@ export function ToolTile({
     setMessage('')
     setWebViewLink(null)
     try {
-      const result = await LOCAL_HANDLERS[tool]({ courseUrl, token, savePath, selectedIds, jobId: id })
+      const result = await LOCAL_HANDLERS[tool]({
+        courseUrl,
+        token,
+        savePath,
+        selectedIds,
+        jobId: id,
+        options: toolOptions,
+      })
       if (result.cancelled) {
         setStatus('cancelled')
         setMessage('')
@@ -570,6 +587,18 @@ export function ToolTile({
             </p>
           )}
 
+          {tool === 'clean' && (
+            <label className="flex items-center gap-2 mt-3 text-[12.5px] text-gray-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={pageBreaks}
+                onChange={(e) => setPageBreaks(e.target.checked)}
+                className="w-3.5 h-3.5 accent-[#0033a0]"
+              />
+              Start each activity on a new page
+            </label>
+          )}
+
           {/* Settings tables are one whole tab per item, so a full course turns into dozens of
               tabs and a correspondingly long run. Nudging people toward the picker up front is
               cheaper than letting them discover that after a five-minute extraction. */}
@@ -640,6 +669,13 @@ export function ToolTile({
                         /<span className="font-bold">FALSE</span> text rather than the tickable
                         boxes the Google Sheets version has. Everything else — labels, values,
                         and the dropdown option lists — comes across as normal.
+                      </p>
+                    ) : tool === 'clean' ? (
+                      <p className="text-[12.5px] text-gray-700 mt-1">
+                        In a local file the contents list at the top is not linked to the
+                        headings until you open it in Google Docs, and Docs may link it only
+                        partly. Everything else — headings, dates, icons, callout boxes — comes
+                        across as normal.
                       </p>
                     ) : (
                       <p className="text-[12.5px] text-gray-700 mt-1">

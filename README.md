@@ -11,6 +11,14 @@ Three extractions, each producing one document:
 | Classic quizzes | Every question and answer, with correct-answer designations |
 | Rubrics | Every rubric as a table, with criteria and rating levels |
 
+A fourth card, **Clean course document**, makes a reader's version of the course content: the
+same modules, pages, assignments, discussions and quiz instructions, but with the Blueprint
+markup removed — no "(H2)" tags, red template markers or highlighted links. Modules are Heading 1
+and activities Heading 2, with a linked contents list at the top, the real due and availability
+dates from Canvas in grey, the module's "Due by" text under the tool label, the Blueprint icons
+as pictures, and the eCampus templates (callouts, accordions, quotes, tables) drawn as they look
+in Canvas. Each activity can start on a new page.
+
 Output goes to Google Drive as a native Google Doc (opened in your browser), or to a local
 `.html` file if you would rather not sign in to Google.
 
@@ -65,6 +73,12 @@ that asymmetry as intentional and keep the Google side of it intact.
 Google sign-in is OAuth 2.0 with PKCE per RFC 8252 — the system browser plus a short-lived
 `127.0.0.1` listener. The only scope requested is `drive.file`, so the app can touch only
 the documents it creates, never the rest of your Drive.
+
+The clean document is built by `electron/ipc/cleanExport.ts` (fetching and ordering) and
+`electron/ipc/cleanFormat.ts` (the markup-free formatting). It shares template recognition with
+the QA extraction: `styledHtml.ts` decides which template an element is; the QA extraction
+labels it in red, the clean one redraws it. Icons are fetched once each as pictures by
+`iconImages.ts` (SVGs are drawn to PNG in a hidden window, because Google Docs cannot show SVG).
 
 Blueprint formatting lives in one place, `electron/ipc/blueprintFormat.ts`. One piece of it
 cannot be done in HTML: Google Docs' HTML importer drops paragraph borders, and the blue

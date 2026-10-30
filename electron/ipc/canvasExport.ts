@@ -41,12 +41,12 @@ interface ExportContentArgs {
   jobId?: string
 }
 
-interface CanvasModule {
+export interface CanvasModule {
   id: number
   name: string
 }
 
-interface CanvasModuleItem {
+export interface CanvasModuleItem {
   id: number
   title: string
   type: string
@@ -55,20 +55,25 @@ interface CanvasModuleItem {
   external_url?: string
 }
 
-interface CanvasCourse {
+export interface CanvasCourse {
   id: number
   name: string
   syllabus_body?: string
+  /** IANA zone name, e.g. "America/Denver". Dates in the clean extraction are shown in it. */
+  time_zone?: string | null
 }
 
-interface CanvasPage {
+export interface CanvasPage {
   title: string
   body: string
 }
 
-interface CanvasAssignment {
+export interface CanvasAssignment {
   name: string
   description: string
+  due_at?: string | null
+  unlock_at?: string | null
+  lock_at?: string | null
   /**
    * True for a New Quiz. Canvas models those as an assignment submitted through the
    * Quizzes.Next LTI tool, so they arrive as an `Assignment` module item and never reach
@@ -87,13 +92,21 @@ export function assignmentToolName(asgn: CanvasAssignment): CanvasToolName {
   return asgn.grading_type === 'not_graded' ? 'Assignment (Not Graded)' : 'Assignment'
 }
 
-interface CanvasDiscussion {
+export interface CanvasDiscussion {
   title: string
   message: string
+  /** "Available from" for a discussion; Canvas calls it delayed_post_at. */
+  delayed_post_at?: string | null
+  lock_at?: string | null
+  /** Present on a graded discussion; carries the due date. */
+  assignment?: { due_at?: string | null; unlock_at?: string | null; lock_at?: string | null } | null
 }
 
-interface CanvasQuiz {
+export interface CanvasQuiz {
   title: string
+  due_at?: string | null
+  unlock_at?: string | null
+  lock_at?: string | null
   /**
    * The Rich Content Editor instructions shown above the questions. This is body content
    * like a page's, so it belongs in the content extraction; the questions themselves belong to
@@ -102,7 +115,7 @@ interface CanvasQuiz {
   description?: string
 }
 
-interface CanvasFile {
+export interface CanvasFile {
   display_name?: string
   filename?: string
 }
@@ -119,9 +132,9 @@ interface CanvasFile {
  * Promises rather than names, so that concurrent items asking for the same id share one
  * request instead of racing to make their own.
  */
-type FileNameCache = Map<string, Promise<string | null>>
+export type FileNameCache = Map<string, Promise<string | null>>
 
-function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promise<string | null> {
+export function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promise<string | null> {
   let pending = cache.get(id)
   if (!pending) {
     pending = canvasGetOne<CanvasFile>(`/files/${id}`, ref)
@@ -150,7 +163,7 @@ function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promis
  * doubled the extraction's Canvas traffic. Courses where the token cannot list files fall back
  * to the per-id path, which is why a failure here is swallowed rather than raised.
  */
-async function seedFileNames(ref: CourseRef, cache: FileNameCache): Promise<void> {
+export async function seedFileNames(ref: CourseRef, cache: FileNameCache): Promise<void> {
   try {
     const files = await canvasGet<CanvasFile & { id?: number }>(
       `/courses/${ref.courseId}/files`,
@@ -187,7 +200,7 @@ async function formatBody(
 }
 
 /** Stable key for a module item, used by the "choose specific items" picker. */
-function itemKey(item: CanvasModuleItem): string {
+export function itemKey(item: CanvasModuleItem): string {
   return `mi-${item.id}`
 }
 

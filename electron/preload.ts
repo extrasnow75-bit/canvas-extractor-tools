@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
       courseUrl?: string
     }): Promise<'valid' | 'expired' | 'unknown'> => ipcRenderer.invoke('canvas:verifyToken', args),
     exportContent: (args: unknown) => ipcRenderer.invoke('canvas:exportContent', args),
+    exportClean: (args: unknown) => ipcRenderer.invoke('canvas:exportClean', args),
     exportQuizzes: (args: unknown) => ipcRenderer.invoke('canvas:exportQuizzes', args),
     exportRubrics: (args: unknown) => ipcRenderer.invoke('canvas:exportRubrics', args),
     exportSettings: (args: unknown) => ipcRenderer.invoke('canvas:exportSettings', args),

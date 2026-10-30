@@ -35,7 +35,7 @@ export const FONT = 'Arial'
 
 /** Blueprint has no hanging/left indents — force them off, since Google Docs' named
  *  heading styles can otherwise introduce their own indentation. */
-const NO_INDENT = 'margin-left:0;text-indent:0;padding-left:0;'
+export const NO_INDENT = 'margin-left:0;text-indent:0;padding-left:0;'
 
 /** Base run style for ordinary text: black Arial 11pt (Blueprint's NORMAL paragraph). */
 export const BODY_RUN = `font-family:${FONT};font-size:11pt;color:${BLACK};`
@@ -193,7 +193,7 @@ const LEADING_DECOR_RE = /^[^\p{L}\p{N}]+/u
 const DUE_RE = /^due\s+by\b/i
 
 /** Strip leading whitespace, emoji, arrows and punctuation so matching sees the words. */
-function undecorate(title: string): string {
+export function undecorate(title: string): string {
   return title.replace(LEADING_DECOR_RE, '')
 }
 
@@ -368,7 +368,7 @@ export function matchIconLabelFromFileName(fileName: string): string | null {
 const API_ENDPOINT_FILE_RE = /\sdata-api-endpoint\s*=\s*(?:"|')[^"']*\/files\/(\d+)/i
 const SRC_FILE_RE = /\ssrc\s*=\s*(?:"|')[^"']*\/files\/(\d+)/i
 
-function canvasFileId(tag: string): string | null {
+export function canvasFileId(tag: string): string | null {
   return (API_ENDPOINT_FILE_RE.exec(tag) ?? SRC_FILE_RE.exec(tag))?.[1] ?? null
 }
 
@@ -388,7 +388,7 @@ export function collectImageFileIds(html: string): string[] {
  * to whatever the tag itself carries. The fallback matters for bodies whose images were
  * embedded by URL rather than uploaded, where the name is in the `src` path.
  */
-function matchIconLabel(tag: string, fileNames?: Map<string, string>): string | null {
+export function matchIconLabel(tag: string, fileNames?: Map<string, string>): string | null {
   const id = canvasFileId(tag)
   const fetched = id ? fileNames?.get(id) : undefined
   if (fetched) return matchIconLabelFromFileName(fetched)
@@ -415,17 +415,48 @@ function iconMarker(label: string): string {
   )
 }
 
-function normalizeCanvasImages(
+/** The icon's plain name, "Tip", from the "[Tip Icon]" label the matcher returns. */
+export function iconNameFromLabel(label: string): string {
+  return label.replace(/^\[/, '').replace(/ Icon\]$/, '')
+}
+
+/**
+ * Canvas file ids of the Blueprint icons used in this body. The clean extraction fetches these
+ * as real images, so it needs to know which ids are icons before it formats the body.
+ */
+export function collectIconFileIds(html: string, fileNames: Map<string, string>): string[] {
+  if (html.length > MAX_SCANNED_BODY_BYTES) return []
+  const ids = new Set<string>()
+  for (const tag of html.match(IMG_TAG_RE) ?? []) {
+    const id = canvasFileId(tag)
+    if (id && matchIconLabel(tag, fileNames)) ids.add(id)
+  }
+  return Array.from(ids)
+}
+
+/**
+ * What to put where a recognised Blueprint icon was. Given the icon's name ("Tip") and the
+ * Canvas file id when the tag had one. The default is the red text marker the QA extraction
+ * uses; the clean extraction supplies its own, which shows the picture.
+ */
+export type IconRenderer = (name: string, fileId: string | null) => string
+
+export function normalizeCanvasImages(
   html: string,
   baseUrl?: string,
   fileNames?: Map<string, string>,
+  renderIcon?: IconRenderer,
 ): string {
   if (html.length > MAX_SCANNED_BODY_BYTES) return html
   return html.replace(IMG_TAG_RE, (tag) => {
     // A recognised icon becomes text and the image is dropped; everything below applies to
     // the ordinary images that remain.
     const iconLabel = matchIconLabel(tag, fileNames)
-    if (iconLabel) return iconMarker(iconLabel)
+    if (iconLabel) {
+      return renderIcon
+        ? renderIcon(iconNameFromLabel(iconLabel), canvasFileId(tag))
+        : iconMarker(iconLabel)
+    }
 
     const wasDecorative =
       DATA_DECORATIVE_RE.test(tag) || ROLE_PRESENTATION_RE.test(tag) || ARIA_HIDDEN_RE.test(tag)
@@ -475,12 +506,12 @@ function normalizeCanvasImages(
  */
 
 // Quote-aware like IMG_TAG_RE, and bounded by the same size guard, for the same reason.
-const ANCHOR_RE = /<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/a\s*>/gi
-const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']*))/i
+export const ANCHOR_RE = /<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/a\s*>/gi
+export const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']*))/i
 // The RCE stamps every course link it inserts with the API object it resolves to — File,
 // Page, Discussion, Assignment, Quiz, Module — so the stamp alone says "this is Canvas",
 // whatever the href happens to look like.
-const API_RETURNTYPE_RE = /\sdata-api-returntype\s*=/i
+export const API_RETURNTYPE_RE = /\sdata-api-returntype\s*=/i
 
 /**
  * True when `href` points back into Canvas: a course-relative path, or an absolute URL on
@@ -517,7 +548,7 @@ export function isCanvasHref(href: string, baseUrl?: string): boolean {
  * button classes or by the anchor painting its own background, which body-text links never
  * do.
  */
-function isButton(attrs: string): boolean {
+export function isButton(attrs: string): boolean {
   const tag = `<a${attrs}>`
   if (hasClass(tag, 'Button') || hasClass(tag, 'btn')) return true
   return background(styleOf(tag)).trim() !== ''

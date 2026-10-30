@@ -1,4 +1,5 @@
 import { getAccessToken } from './googleAuth'
+import { DocsHeadingElement, planContentsLinks } from './docsContents'
 
 /**
  * Post-pass that draws the blue horizontal rules above and below every
@@ -112,5 +113,46 @@ export async function applyDueHeaderBorders(documentId: string): Promise<number>
     throw new Error(`Docs API update failed (${updRes.status}). ${detail.slice(0, 200)}`)
   }
 
+  return requests.length
+}
+
+/**
+ * Turn the clean document's contents list into working links.
+ *
+ * Google Docs' HTML import cannot create a table of contents, and does not reliably keep
+ * in-page links either. The contents list is therefore uploaded as ordinary paragraphs, and
+ * this pass links each one to the heading with the same text using the Docs API's
+ * `headingId` link — the same kind of link Docs' own contents uses.
+ *
+ * The list is the run of paragraphs between the "Contents" label and the first Heading 1.
+ * Entries are matched to headings in order, so two headings with the same name each get
+ * their own link. Returns how many entries were linked.
+ */
+export async function linkContentsToHeadings(documentId: string): Promise<number> {
+  const accessToken = await getAccessToken()
+
+  const getRes = await fetch(`https://docs.googleapis.com/v1/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!getRes.ok) {
+    const detail = await getRes.text().catch(() => '')
+    throw new Error(`Docs API read failed (${getRes.status}). ${detail.slice(0, 200)}`)
+  }
+  const doc = (await getRes.json()) as { body?: { content?: DocsHeadingElement[] } }
+  const requests = planContentsLinks(doc.body?.content ?? [])
+  if (requests.length === 0) return 0
+
+  const updRes = await fetch(
+    `https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    },
+  )
+  if (!updRes.ok) {
+    const detail = await updRes.text().catch(() => '')
+    throw new Error(`Docs API update failed (${updRes.status}). ${detail.slice(0, 200)}`)
+  }
   return requests.length
 }

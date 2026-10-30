@@ -19,7 +19,8 @@ import {
 } from './ipc/canvasUtils'
 import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
-import { applyDueHeaderBorders } from './ipc/googleDocs'
+import { applyDueHeaderBorders, linkContentsToHeadings } from './ipc/googleDocs'
+import { buildCleanHtml, handleCleanExport, DEFAULT_CLEAN_OPTIONS } from './ipc/cleanExport'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, checkNow, RELEASES_PAGE } from './ipc/updateCheck'
 import { rememberSavePath } from './ipc/savePaths'
@@ -245,6 +246,7 @@ ipcMain.handle('canvas:verifyToken', (_e, args: { token: string; courseUrl?: str
 })
 
 ipcMain.handle('canvas:exportContent', handleCanvasExport)
+ipcMain.handle('canvas:exportClean', handleCleanExport)
 ipcMain.handle('canvas:exportQuizzes', handleQuizExport)
 ipcMain.handle('canvas:exportRubrics', handleRubricExport)
 ipcMain.handle('canvas:exportSettings', handleSettingsExport)
@@ -303,11 +305,12 @@ ipcMain.handle(
   async (
     e,
     args: {
-      tool: 'content' | 'quizzes' | 'rubrics' | 'settings'
+      tool: 'content' | 'clean' | 'quizzes' | 'rubrics' | 'settings'
       courseUrl: string
       token: string
       selectedIds?: string[]
       jobId?: string
+      options?: { pageBreaks?: boolean }
     },
   ) => {
     const parsed = parseCourseUrl(args.courseUrl)
@@ -359,6 +362,13 @@ ipcMain.handle(
         const built = await buildContentHtml(ref, selectedIds, cancel, progress, false)
         html = built.html
         docName = `${built.courseName} — Course Content`
+      } else if (args.tool === 'clean') {
+        const built = await buildCleanHtml(ref, selectedIds, cancel, progress, {
+          ...DEFAULT_CLEAN_OPTIONS,
+          ...args.options,
+        })
+        html = built.html
+        docName = `${built.courseName} — Course Document`
       } else if (args.tool === 'quizzes') {
         const built = await buildQuizzesHtml(ref, selectedIds, cancel, progress)
         if (!built) return { ok: false, message: 'No quizzes found in this course.' }
@@ -391,6 +401,19 @@ ipcMain.handle(
       } catch (e) {
         borderNote =
           ' Note: the blue due-date rules could not be applied — ' +
+          'check that the Google Docs API is enabled for this project. ' +
+          (e instanceof Error ? e.message : '')
+      }
+    }
+
+    // The clean document's contents list is plain paragraphs until this links them to the
+    // headings. Cosmetic like the borders: the document is saved, so a failure is a note.
+    if (args.tool === 'clean') {
+      try {
+        await linkContentsToHeadings(id)
+      } catch (e) {
+        borderNote =
+          ' Note: the contents list could not be linked to the headings — ' +
           'check that the Google Docs API is enabled for this project. ' +
           (e instanceof Error ? e.message : '')
       }

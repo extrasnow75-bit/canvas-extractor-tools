@@ -2,7 +2,13 @@ export interface Credentials {
   canvasToken: string
 }
 
-export type Tool = 'content' | 'quizzes' | 'rubrics' | 'settings'
+export type Tool = 'content' | 'clean' | 'quizzes' | 'rubrics' | 'settings'
+
+/** Options only the clean course document has. */
+export interface CleanOptions {
+  /** Start each activity on a new page. */
+  pageBreaks: boolean
+}
 
 export interface ExportResult {
   ok: boolean
@@ -89,6 +95,14 @@ declare global {
           selectedIds?: string[]
           jobId?: string
         }): Promise<ExportResult>
+        exportClean(args: {
+          courseUrl: string
+          token: string
+          savePath: string
+          selectedIds?: string[]
+          jobId?: string
+          options?: CleanOptions
+        }): Promise<ExportResult>
         exportQuizzes(args: {
           courseUrl: string
           token: string
@@ -116,6 +130,7 @@ declare global {
           token: string
           selectedIds?: string[]
           jobId?: string
+          options?: CleanOptions
         }): Promise<ExportResult>
         cancelExport(jobId: string): Promise<boolean>
         onExportProgress(

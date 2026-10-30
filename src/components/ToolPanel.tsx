@@ -42,6 +42,31 @@ const CanvasIcon = () => (
   </svg>
 )
 
+// The Canvas mark with a star in the corner, marking the reader's version of the content
+// extraction. The star is a placeholder shape until the Rubric Creator app's "edit existing
+// rubrics" star is copied in.
+const CleanIcon = () => (
+  <div className="relative">
+    <CanvasIcon />
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      className="absolute -right-2.5 -bottom-2.5"
+    >
+      <path
+        d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"
+        fill="#FBBC05"
+        stroke="#ffffff"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </div>
+)
+
 const QuizIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f2937" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
     <path d="M13.5 3.5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-6" />
@@ -80,6 +105,14 @@ const TOOLS = [
     description: 'Modules, pages, assignments, discussions → Blueprint-formatted HTML',
     icon: <CanvasIcon />,
     tileBg: '#EA4335',
+  },
+  {
+    id: 'clean' as const,
+    label: 'Clean course document',
+    description: 'Course content without Blueprint markup → readable Google Doc',
+    icon: <CleanIcon />,
+    // A darker red than the content tile it is a variant of.
+    tileBg: '#C5221F',
   },
   {
     id: 'quizzes' as const,

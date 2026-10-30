@@ -73,10 +73,24 @@ export const MAX_SCANNED_BODY_BYTES = 100_000
 const OPEN_TAG_RE = /<([a-zA-Z][a-zA-Z0-9-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/g
 
 /** Tags a signature can key on. Everything else is matched only to be skipped over. */
-const INTERESTING = new Set(['div', 'table', 'details', 'figure', 'dl', 'ol', 'p', 'img'])
+const INTERESTING = new Set([
+  'div',
+  'table',
+  'details',
+  'figure',
+  'dl',
+  'ol',
+  'p',
+  'img',
+  // The 2026 KB templates moved several of the boxes onto semantic elements.
+  'aside',
+  'section',
+  'nav',
+  'h2',
+])
 
 /** How far past a `<details>` or `<figure>` to look for the child that identifies it. */
-const LOOKAHEAD = 600
+export const LOOKAHEAD = 600
 
 const ATTR_RE = (name: string) =>
   new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]*))`, 'i')
@@ -84,6 +98,8 @@ const ATTR_RE = (name: string) =>
 const CLASS_RE = ATTR_RE('class')
 const STYLE_RE = ATTR_RE('style')
 const ID_RE = ATTR_RE('id')
+const ARIA_LABEL_RE = ATTR_RE('aria-label')
+const TYPE_RE = ATTR_RE('type')
 
 function attr(tag: string, re: RegExp): string {
   const m = re.exec(tag)
@@ -149,12 +165,15 @@ function borders(s: Style): string {
  * than "the rest of the body" because this is called once per tag: slicing the remainder
  * each time made a long page cost quadratic memory to annotate.
  */
-function classify(tagName: string, tag: string, after: string): string | null {
+export function classifyTemplate(tagName: string, tag: string, after: string): string | null {
   switch (tagName) {
     case 'div': {
       const s = styleOf(tag)
       const bg = background(s)
       const left = s.get('border-left') ?? ''
+
+      // The current alert template carries a class as well as the style.
+      if (hasClass(tag, 'callout-warning')) return 'Alert Box'
 
       // Brand orange rule down the side. The two that use it are told apart by their fill:
       // deep blue for the branded header, near-white pink for the alert.
@@ -172,6 +191,36 @@ function classify(tagName: string, tag: string, after: string): string | null {
       return null
     }
 
+    case 'aside': {
+      // The callout-with-heading template, and the footnote block, are both <aside>.
+      const s = styleOf(tag)
+      if (/footnotes/i.test(attr(tag, ARIA_LABEL_RE))) return 'Footnotes'
+      if (hasClass(tag, 'callout-left')) return 'Callout Box'
+      if ((s.get('border-left') ?? '').includes('#0033a0') && background(s).includes('#f6f7f9')) {
+        return 'Callout Box'
+      }
+      return null
+    }
+
+    case 'section': {
+      const s = styleOf(tag)
+      if (borders(s).includes('#0033a0') && s.has('border-radius')) return 'Styled Border'
+      if (/image gallery/i.test(attr(tag, ARIA_LABEL_RE))) return 'Side-by-Side Images'
+      return null
+    }
+
+    case 'nav':
+      // "Select Next to continue" bar. It was a <p> in the old template.
+      return background(styleOf(tag)).includes('#0033a0') ? 'Horizontal Bar' : null
+
+    case 'h2': {
+      // Branded border: a heading painted as a blue bar with an orange rule down its side.
+      const s = styleOf(tag)
+      return (s.get('border-left') ?? '').includes('#d64309') && background(s).includes('#0033a0')
+        ? 'Branded Border'
+        : null
+    }
+
     case 'table':
       // Canvas' own table class. It is what the template is built on and what the striping
       // and hover styling come from, so its absence means the author built the table by hand.
@@ -182,7 +231,11 @@ function classify(tagName: string, tag: string, after: string): string | null {
       // the <summary> inside it, so the child has to be read to tell them apart.
       const summary = /<summary\b(?:[^>"']|"[^"]*"|'[^']*')*>/i.exec(after)
       const s = summary ? styleOf(summary[0]) : new Map<string, string>()
-      const styled = background(s).includes('linear-gradient') || s.has('border-radius')
+      // The multi-step accordion puts its radius on the <details> rather than the <summary>.
+      const styled =
+        background(s).includes('linear-gradient') ||
+        s.has('border-radius') ||
+        styleOf(tag).has('border-radius')
       return styled ? 'Styled Dropdown' : 'Dropdown'
     }
 
@@ -192,12 +245,20 @@ function classify(tagName: string, tag: string, after: string): string | null {
       return /<blockquote\b/i.test(after) ? 'Quote' : null
 
     case 'dl':
-      return hasClass(tag, 'dl-horizontal') ? 'Horizontal Definition List' : 'Definition List'
+      // The current template is told apart by inline <dt> elements rather than a class.
+      return hasClass(tag, 'dl-horizontal') || /<dt\b[^>]*display:\s*inline/i.test(after)
+        ? 'Horizontal Definition List'
+        : 'Definition List'
 
-    case 'ol':
-      return (styleOf(tag).get('list-style-type') ?? '').includes('lower-alpha')
-        ? 'Lettered List'
-        : null
+    case 'ol': {
+      if ((styleOf(tag).get('list-style-type') ?? '').includes('lower-alpha')) return 'Lettered List'
+      // The templates pick the numbering with type="a", "A", "I" or "i"; plain "1" is an
+      // ordinary numbered list and gets no marker.
+      const type = attr(tag, TYPE_RE)
+      if (type === 'a' || type === 'A') return 'Lettered List'
+      if (type === 'i' || type === 'I') return 'Roman Numeral List'
+      return null
+    }
 
     case 'p': {
       // Full-width blue bar with reversed text, used for "Select Next to continue".
@@ -249,7 +310,7 @@ export function annotateStyledHtml(html: string, marker: MarkerRenderer): string
     }
 
     const start = offset + tag.length
-    const label = classify(name, tag, html.slice(start, start + LOOKAHEAD))
+    const label = classifyTemplate(name, tag, html.slice(start, start + LOOKAHEAD))
     return label ? marker(label, INLINE_LABELS.has(label)) + tag : tag
   })
 }
