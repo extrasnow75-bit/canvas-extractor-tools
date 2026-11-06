@@ -53,11 +53,13 @@ contextBridge.exposeInMainWorld('api', {
       courseUrl?: string
     }): Promise<'valid' | 'expired' | 'unknown'> => ipcRenderer.invoke('canvas:verifyToken', args),
     exportContent: (args: unknown) => ipcRenderer.invoke('canvas:exportContent', args),
+    exportClean: (args: unknown) => ipcRenderer.invoke('canvas:exportClean', args),
     exportQuizzes: (args: unknown) => ipcRenderer.invoke('canvas:exportQuizzes', args),
     exportRubrics: (args: unknown) => ipcRenderer.invoke('canvas:exportRubrics', args),
     exportSettings: (args: unknown) => ipcRenderer.invoke('canvas:exportSettings', args),
     exportToDrive: (args: unknown) => ipcRenderer.invoke('canvas:exportToDrive', args),
     getCourseName: (args: unknown) => ipcRenderer.invoke('canvas:getCourseName', args),
+    listCourses: (args: unknown) => ipcRenderer.invoke('canvas:listCourses', args),
     listItems: (args: unknown) => ipcRenderer.invoke('canvas:listItems', args),
     cancelExport: (jobId: string): Promise<boolean> =>
       ipcRenderer.invoke('canvas:cancelExport', jobId),
@@ -79,6 +81,8 @@ contextBridge.exposeInMainWorld('api', {
     signOut: () => ipcRenderer.invoke('google:signOut'),
     status: (): Promise<{ signedIn: boolean; email?: string; name?: string; picture?: string }> =>
       ipcRenderer.invoke('google:status'),
+    /** Whether the stored sign-in still works: 'valid', 'expired', 'unknown' (could not ask) or 'none'. */
+    verify: (): Promise<'valid' | 'expired' | 'unknown' | 'none'> => ipcRenderer.invoke('google:verify'),
     /** Fires when a stored sign-in turns out to be dead. Returns an unsubscribe function. */
     onSignedOut: (callback: () => void): (() => void) => {
       const listener = () => callback()

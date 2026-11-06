@@ -19,6 +19,7 @@ import {
 import {
   FONT,
   htmlDocument,
+  withReadingLayout,
   escapeHtml,
   formatCanvasBody,
   stripEdgeRules,
@@ -32,6 +33,11 @@ import {
   safeLinkHref,
   collectImageFileIds,
 } from './blueprintFormat'
+import { extractionStampText } from './cleanFormat'
+import { fetchLooseItems, selectedLooseItems, LOOSE_GROUP } from './looseContent'
+
+/** What each kind of out-of-module item is called beside its name in the picker. */
+const LOOSE_KINDS: Record<string, string> = { Page: 'page', Assignment: 'assignment', Discussion: 'discussion', Quiz: 'quiz' }
 
 interface ExportContentArgs {
   courseUrl: string
@@ -41,34 +47,41 @@ interface ExportContentArgs {
   jobId?: string
 }
 
-interface CanvasModule {
+export interface CanvasModule {
   id: number
   name: string
 }
 
-interface CanvasModuleItem {
+export interface CanvasModuleItem {
   id: number
   title: string
   type: string
   content_id?: number
   page_url?: string
   external_url?: string
+  /** Picker key for an item that no module holds (see looseContent.ts); module items use mi-<id>. */
+  key?: string
 }
 
-interface CanvasCourse {
+export interface CanvasCourse {
   id: number
   name: string
   syllabus_body?: string
+  /** IANA zone name, e.g. "America/Denver". Dates in the clean extraction are shown in it. */
+  time_zone?: string | null
 }
 
-interface CanvasPage {
+export interface CanvasPage {
   title: string
   body: string
 }
 
-interface CanvasAssignment {
+export interface CanvasAssignment {
   name: string
   description: string
+  due_at?: string | null
+  unlock_at?: string | null
+  lock_at?: string | null
   /**
    * True for a New Quiz. Canvas models those as an assignment submitted through the
    * Quizzes.Next LTI tool, so they arrive as an `Assignment` module item and never reach
@@ -87,13 +100,21 @@ export function assignmentToolName(asgn: CanvasAssignment): CanvasToolName {
   return asgn.grading_type === 'not_graded' ? 'Assignment (Not Graded)' : 'Assignment'
 }
 
-interface CanvasDiscussion {
+export interface CanvasDiscussion {
   title: string
   message: string
+  /** "Available from" for a discussion; Canvas calls it delayed_post_at. */
+  delayed_post_at?: string | null
+  lock_at?: string | null
+  /** Present on a graded discussion; carries the due date. */
+  assignment?: { due_at?: string | null; unlock_at?: string | null; lock_at?: string | null } | null
 }
 
-interface CanvasQuiz {
+export interface CanvasQuiz {
   title: string
+  due_at?: string | null
+  unlock_at?: string | null
+  lock_at?: string | null
   /**
    * The Rich Content Editor instructions shown above the questions. This is body content
    * like a page's, so it belongs in the content extraction; the questions themselves belong to
@@ -102,7 +123,7 @@ interface CanvasQuiz {
   description?: string
 }
 
-interface CanvasFile {
+export interface CanvasFile {
   display_name?: string
   filename?: string
 }
@@ -119,9 +140,9 @@ interface CanvasFile {
  * Promises rather than names, so that concurrent items asking for the same id share one
  * request instead of racing to make their own.
  */
-type FileNameCache = Map<string, Promise<string | null>>
+export type FileNameCache = Map<string, Promise<string | null>>
 
-function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promise<string | null> {
+export function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promise<string | null> {
   let pending = cache.get(id)
   if (!pending) {
     pending = canvasGetOne<CanvasFile>(`/files/${id}`, ref)
@@ -150,7 +171,7 @@ function fetchFileName(id: string, ref: CourseRef, cache: FileNameCache): Promis
  * doubled the extraction's Canvas traffic. Courses where the token cannot list files fall back
  * to the per-id path, which is why a failure here is swallowed rather than raised.
  */
-async function seedFileNames(ref: CourseRef, cache: FileNameCache): Promise<void> {
+export async function seedFileNames(ref: CourseRef, cache: FileNameCache): Promise<void> {
   try {
     const files = await canvasGet<CanvasFile & { id?: number }>(
       `/courses/${ref.courseId}/files`,
@@ -187,8 +208,8 @@ async function formatBody(
 }
 
 /** Stable key for a module item, used by the "choose specific items" picker. */
-function itemKey(item: CanvasModuleItem): string {
-  return `mi-${item.id}`
+export function itemKey(item: CanvasModuleItem): string {
+  return item.key ?? `mi-${item.id}`
 }
 
 /**
@@ -304,6 +325,54 @@ async function renderModuleItem(
 }
 
 /** List every module item in the course, grouped by module, for the picker UI. */
+/**
+ * The picker's id for the course home page. The home page is not a module item, so it needs an id
+ * of its own. It cannot collide with a module item's, which all start "mi-".
+ */
+export const HOME_ITEM_ID = 'home'
+
+/** Whether the home page is wanted. No selection at all means everything is. */
+export function includesHome(selectedIds?: Set<string> | null): boolean {
+  return !selectedIds || selectedIds.has(HOME_ITEM_ID)
+}
+
+/** The picker's id for the course syllabus, outside any module for the same reason as the home page. */
+export const SYLLABUS_ITEM_ID = 'syllabus'
+
+/** Whether the syllabus is wanted. No selection at all means everything is. */
+export function includesSyllabus(selectedIds?: Set<string> | null): boolean {
+  return !selectedIds || selectedIds.has(SYLLABUS_ITEM_ID)
+}
+
+/**
+ * Whether the course has a home page to offer. Only a definite "there is none" removes the choice:
+ * if Canvas could not be asked, the choice stays, because a choice that disappeared by accident
+ * would leave the home page out of the document without anyone having decided that.
+ */
+async function hasFrontPage(ref: CourseRef): Promise<boolean> {
+  try {
+    await canvasGetOne(`/courses/${ref.courseId}/front_page`, ref)
+    return true
+  } catch (err) {
+    if (isCancellation(err)) throw err
+    return !(err instanceof Error && /Canvas API error 404/.test(err.message))
+  }
+}
+
+/** Whether the course has a syllabus to offer. Same rule as the home page: only a definite "none" removes the choice. */
+async function hasSyllabus(ref: CourseRef): Promise<boolean> {
+  try {
+    const course = await canvasGetOne<{ syllabus_body?: string | null }>(
+      `/courses/${ref.courseId}?include[]=syllabus_body`,
+      ref,
+    )
+    return Boolean(course.syllabus_body && course.syllabus_body.trim())
+  } catch (err) {
+    if (isCancellation(err)) throw err
+    return true
+  }
+}
+
 export async function listContentItems(ref: CourseRef): Promise<PickerItem[]> {
   const modules = await canvasGet<CanvasModule>(`/courses/${ref.courseId}/modules`, ref)
 
@@ -318,12 +387,21 @@ export async function listContentItems(ref: CourseRef): Promise<PickerItem[]> {
       canvasGet<CanvasModuleItem>(`/courses/${ref.courseId}/modules/${modules[i].id}/items`, ref),
   )
 
-  const out: PickerItem[] = []
+  // First, and outside any module: neither has a heading of its own in the picker.
+  const [home, syllabus] = await Promise.all([hasFrontPage(ref), hasSyllabus(ref)])
+  const out: PickerItem[] = [
+    ...(home ? [{ id: HOME_ITEM_ID, label: 'Home page' }] : []),
+    ...(syllabus ? [{ id: SYLLABUS_ITEM_ID, label: 'Syllabus' }] : []),
+  ]
   modules.forEach((mod, i) => {
     for (const item of perModule[i]) {
       out.push({ id: itemKey(item), label: item.title, group: mod.name })
     }
   })
+  // Last: published content that no module holds, offered but never part of "Extract all".
+  for (const item of await fetchLooseItems(ref, perModule.flat())) {
+    out.push({ id: itemKey(item), label: `${item.title} (${LOOSE_KINDS[item.type] ?? item.type})`, group: LOOSE_GROUP })
+  }
   return out
 }
 
@@ -357,19 +435,28 @@ export async function buildContentHtml(
   const files: FileNameCache = new Map()
   await seedFileNames(ref, files)
   parts.push(`<h1 style="font-family:${FONT};">${escapeHtml(course.name)}</h1>`)
-
-  // Front page (home)
-  parts.push(`<h2 style="font-family:${FONT};">Home Page</h2>`)
-  try {
-    const fp = await canvasGetOne<CanvasPage>(`/courses/${ref.courseId}/front_page`, ref)
-    parts.push(await formatBody(fp.body, ref, files))
-  } catch {
-    parts.push('<p>No front page found.</p>')
+  {
+    const url = escapeHtml(`${ref.baseUrl}/courses/${ref.courseId}`)
+    parts.push(`<p style="font-family:${FONT};"><a href="${url}">${url}</a></p>`)
+    parts.push(`<p style="font-family:${FONT};">${escapeHtml(extractionStampText())}</p>`)
   }
 
-  // Syllabus
-  parts.push(`<h2 style="font-family:${FONT};">Syllabus</h2>`)
-  parts.push(await formatBody(course.syllabus_body ?? '<p>No syllabus found.</p>', ref, files))
+  // Front page (home), unless the person left it out in the picker
+  if (includesHome(selectedIds)) {
+    parts.push(`<h2 style="font-family:${FONT};">Home Page</h2>`)
+    try {
+      const fp = await canvasGetOne<CanvasPage>(`/courses/${ref.courseId}/front_page`, ref)
+      parts.push(await formatBody(fp.body, ref, files))
+    } catch {
+      parts.push('<p>No front page found.</p>')
+    }
+  }
+
+  // Syllabus, unless the person left it out in the picker
+  if (includesSyllabus(selectedIds)) {
+    parts.push(`<h2 style="font-family:${FONT};">Syllabus</h2>`)
+    parts.push(await formatBody(course.syllabus_body ?? '<p>No syllabus found.</p>', ref, files))
+  }
 
   // Modules, in module-page order
   const modules = await canvasGet<CanvasModule>(`/courses/${ref.courseId}/modules`, ref)
@@ -391,6 +478,8 @@ export async function buildContentHtml(
     if (selectedIds && items.length === 0) return
     plan.push({ mod, items })
   })
+  const loose = await selectedLooseItems(ref, listed.flat(), selectedIds)
+  if (loose.length > 0) plan.push({ mod: { id: 0, name: LOOSE_GROUP }, items: loose })
 
   const total = plan.reduce((n, p) => n + p.items.length, 0)
   let done = 0
@@ -432,7 +521,7 @@ export async function buildContentHtml(
   }
 
   return {
-    html: htmlDocument(`${course.name} — Course Content`, parts),
+    html: htmlDocument(`${course.name} — Course Content Extraction`, parts),
     courseName: course.name,
     moduleCount: plan.length,
   }
@@ -475,7 +564,7 @@ export async function handleCanvasExport(
       // The UI says so before the file is written, and the Help Center repeats it.
       false,
     )
-    writeFileSync(consumeSavePath(args.savePath), html, 'utf-8')
+    writeFileSync(consumeSavePath(args.savePath), withReadingLayout(html), 'utf-8')
     return {
       ok: true,
       message: `Extracted "${courseName}" — ${moduleCount} module${moduleCount === 1 ? '' : 's'}.`,

@@ -3,6 +3,7 @@ import {
   formatCanvasBody,
   escapeHtml,
   htmlDocument,
+  withReadingLayout,
   LANDSCAPE_PAGE,
   CANVAS_LINK_HIGHLIGHT,
   highlightCanvasLinks,
@@ -253,5 +254,25 @@ describe('highlightCanvasLinks', () => {
   it('is applied by formatCanvasBody', () => {
     const out = formatCanvasBody('<p><a href="/courses/1/discussion_topics/2">f</a></p>', base)
     expect(out).toContain(mark)
+  })
+})
+
+describe('withReadingLayout', () => {
+  const doc = htmlDocument('T', ['<p>Hello</p>'])
+  it('adds a screen-only centred column with padding', () => {
+    const out = withReadingLayout(doc)
+    expect(out).toContain('@media screen')
+    expect(out).toContain('max-width: 50rem')
+    expect(out).toContain('margin: 0 auto !important')
+    expect(out).toContain('padding: 2.5rem 2rem !important')
+    expect(out.indexOf('<style>')).toBeLessThan(out.indexOf('</head>'))
+    expect(out).toContain('<p>Hello</p>')
+  })
+  it('takes a different width, and leaves a document without a head alone', () => {
+    expect(withReadingLayout(doc, '80rem')).toContain('max-width: 80rem')
+    expect(withReadingLayout('<p>x</p>')).toBe('<p>x</p>')
+  })
+  it('is not part of the document the Google upload uses', () => {
+    expect(doc).not.toContain('@media')
   })
 })

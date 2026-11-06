@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron'
+import { listMyCourses, normalizeSite } from './ipc/courseList'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { handleCanvasExport, buildContentHtml, makeProgressReporter } from './ipc/canvasExport'
@@ -9,6 +10,7 @@ import { createSettingsSpreadsheet } from './ipc/googleSheets'
 import {
   parseCourseUrl,
   canvasGetOne,
+  canvasGet,
   CourseRef,
   beginJob,
   endJob,
@@ -17,9 +19,11 @@ import {
   verifyToken,
   courseCodeLabel,
 } from './ipc/canvasUtils'
-import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
+import { signIn, getStatus, clearTokens, verifySignIn } from './ipc/googleAuth'
+import { MSG_NOT_SIGNED_IN, MSG_SIGN_IN_EXPIRED } from './ipc/googleMessages'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
-import { applyDueHeaderBorders } from './ipc/googleDocs'
+import { applyDueHeaderBorders, linkContentsToHeadings, applyToolChips } from './ipc/googleDocs'
+import { buildCleanHtml, handleCleanExport, DEFAULT_CLEAN_OPTIONS } from './ipc/cleanExport'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, checkNow, RELEASES_PAGE } from './ipc/updateCheck'
 import { rememberSavePath } from './ipc/savePaths'
@@ -186,7 +190,9 @@ ipcMain.handle('credentials:clear', () => {
 
 ipcMain.handle('dialog:saveFile', async (_e, opts: { defaultName: string; ext: string; label: string }) => {
   const { filePath } = await dialog.showSaveDialog({
-    defaultPath: opts.defaultName,
+    // A bare file name opens the dialog wherever it was last used, which on a fresh install is
+    // Documents. Files that are downloads belong in Downloads, on Windows and macOS alike.
+    defaultPath: join(app.getPath('downloads'), opts.defaultName),
     filters: [{ name: opts.label, extensions: [opts.ext] }],
   })
   if (!filePath) return null
@@ -245,6 +251,7 @@ ipcMain.handle('canvas:verifyToken', (_e, args: { token: string; courseUrl?: str
 })
 
 ipcMain.handle('canvas:exportContent', handleCanvasExport)
+ipcMain.handle('canvas:exportClean', handleCleanExport)
 ipcMain.handle('canvas:exportQuizzes', handleQuizExport)
 ipcMain.handle('canvas:exportRubrics', handleRubricExport)
 ipcMain.handle('canvas:exportSettings', handleSettingsExport)
@@ -273,6 +280,18 @@ ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; tok
   }
 })
 
+// ─── The person's own courses (for the "Choose from my courses" list) ─────────
+
+ipcMain.handle('canvas:listCourses', async (_e, args: { site: string; token: string }) => {
+  const site = normalizeSite(args.site)
+  if (!site) return { ok: false, message: 'That is not a Canvas site address. It should look like yourschool.instructure.com' }
+  try {
+    return { ok: true, site, courses: await listMyCourses(site, args.token) }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not load your courses.' }
+  }
+})
+
 // ─── Picker item listing (for "choose specific items" on each extraction tool) ─
 
 ipcMain.handle(
@@ -294,6 +313,8 @@ ipcMain.handle(
 
 ipcMain.handle('google:signIn', (_e, options?: { useAnotherAccount?: boolean }) => signIn(options))
 ipcMain.handle('google:status', () => getStatus())
+// Whether the stored sign-in still works, which 'status' does not say. See verifySignIn.
+ipcMain.handle('google:verify', () => verifySignIn())
 ipcMain.handle('google:signOut', () => clearTokens())
 
 // ─── Extract to Google Drive (build HTML → upload as Google Doc → open) ────────
@@ -303,15 +324,23 @@ ipcMain.handle(
   async (
     e,
     args: {
-      tool: 'content' | 'quizzes' | 'rubrics' | 'settings'
+      tool: 'content' | 'clean' | 'quizzes' | 'rubrics' | 'settings'
       courseUrl: string
       token: string
       selectedIds?: string[]
       jobId?: string
+      options?: { pageBreaks?: boolean; toolLabels?: boolean }
     },
   ) => {
     const parsed = parseCourseUrl(args.courseUrl)
     if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+    // Checked before any Canvas work. The upload is the last step, so without this a person who
+    // is not signed in waits through the whole extraction and only then learns it cannot be saved.
+    // Google being unreachable is not a reason to stop: that is tried anyway.
+    const signedIn = await verifySignIn()
+    if (signedIn === 'none') return { ok: false, message: MSG_NOT_SIGNED_IN }
+    if (signedIn === 'expired') return { ok: false, message: MSG_SIGN_IN_EXPIRED }
+
     const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
     const cancel = beginJob(args.jobId)
     const ref: CourseRef = { ...parsed, token: args.token, cancel }
@@ -358,7 +387,14 @@ ipcMain.handle(
         // rules of its own; applyDueHeaderBorders below is what draws the blue ones.
         const built = await buildContentHtml(ref, selectedIds, cancel, progress, false)
         html = built.html
-        docName = `${built.courseName} — Course Content`
+        docName = `${built.courseName} — Course Content Extraction`
+      } else if (args.tool === 'clean') {
+        const built = await buildCleanHtml(ref, selectedIds, cancel, progress, {
+          ...DEFAULT_CLEAN_OPTIONS,
+          ...args.options,
+        })
+        html = built.html
+        docName = `${built.courseName} — Clean Course Content Extraction`
       } else if (args.tool === 'quizzes') {
         const built = await buildQuizzesHtml(ref, selectedIds, cancel, progress)
         if (!built) return { ok: false, message: 'No quizzes found in this course.' }
@@ -390,8 +426,28 @@ ipcMain.handle(
         await applyDueHeaderBorders(id)
       } catch (e) {
         borderNote =
-          ' Note: the blue due-date rules could not be applied — ' +
-          'check that the Google Docs API is enabled for this project. ' +
+          ' Your document was saved, but the blue lines above and below the “Due by” headings could not be added. ' +
+          (e instanceof Error ? e.message : '')
+      }
+      // The Canvas tool name on each tool line becomes the template's dropdown chip. Also
+      // cosmetic: if it fails the document is still saved, with the names as plain red text.
+      try {
+        await applyToolChips(id)
+      } catch (e) {
+        borderNote +=
+          ' Your document was saved, but the Canvas tool names could not be turned into dropdown menus; they are plain red text. ' +
+          (e instanceof Error ? e.message : '')
+      }
+    }
+
+    // The clean document's contents list is plain paragraphs until this links them to the
+    // headings. Cosmetic like the borders: the document is saved, so a failure is a note.
+    if (args.tool === 'clean') {
+      try {
+        await linkContentsToHeadings(id)
+      } catch (e) {
+        borderNote =
+          ' Your document was saved, but the contents list at the top could not be linked to the headings. ' +
           (e instanceof Error ? e.message : '')
       }
     }

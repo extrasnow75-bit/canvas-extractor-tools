@@ -15,7 +15,7 @@ import {
   mapWithConcurrency,
   CANVAS_CONCURRENCY,
 } from './canvasUtils'
-import { FONT, htmlDocument, escapeHtml } from './blueprintFormat'
+import { FONT, htmlDocument, escapeHtml, withReadingLayout } from './blueprintFormat'
 import { makeProgressReporter } from './canvasExport'
 import { consumeSavePath } from './savePaths'
 
@@ -295,7 +295,7 @@ export async function handleQuizExport(
     )
     if (!result) return { ok: false, message: 'No quizzes found in this course.' }
 
-    writeFileSync(consumeSavePath(args.savePath), result.html, 'utf-8')
+    writeFileSync(consumeSavePath(args.savePath), withReadingLayout(result.html), 'utf-8')
 
     const { classicCount, newQuizCount } = result
     return {

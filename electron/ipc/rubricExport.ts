@@ -13,7 +13,7 @@ import {
   endJob,
   isCancellation,
 } from './canvasUtils'
-import { FONT, htmlDocument, escapeHtml, LANDSCAPE_PAGE } from './blueprintFormat'
+import { FONT, htmlDocument, escapeHtml, LANDSCAPE_PAGE, withReadingLayout } from './blueprintFormat'
 import { MAX_SCANNED_BODY_BYTES } from './styledHtml'
 import { makeProgressReporter } from './canvasExport'
 import { consumeSavePath } from './savePaths'
@@ -396,7 +396,7 @@ export async function handleRubricExport(
     )
     if (!result) return { ok: false, message: 'No rubrics found in this course.' }
 
-    writeFileSync(consumeSavePath(args.savePath), result.html, 'utf-8')
+    writeFileSync(consumeSavePath(args.savePath), withReadingLayout(result.html, '80rem'), 'utf-8')
     return {
       ok: true,
       message: `Extracted ${result.count} rubric${result.count !== 1 ? 's' : ''} from "${result.courseName}".`,

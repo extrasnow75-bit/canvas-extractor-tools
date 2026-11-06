@@ -10,6 +10,22 @@ import {
   isGoogleConfigured,
   isGoogleSecretConfigured,
 } from './googleConfig'
+import {
+  GoogleCheck,
+  MSG_KEYCHAIN,
+  MSG_NOT_SET_UP,
+  notSetUpMessage,
+  MSG_NOT_SIGNED_IN,
+  MSG_NO_REFRESH_TOKEN,
+  MSG_SIGN_IN_EXPIRED,
+  MSG_SIGN_IN_TIMEOUT,
+  MSG_STATE_MISMATCH,
+  MSG_UNREACHABLE,
+  classifyRefreshFailure,
+  googleApiMessage,
+  signInCancelledMessage,
+  tokenExchangeMessage,
+} from './googleMessages'
 
 const TOKEN_PATH = join(app.getPath('userData'), 'google-tokens.enc')
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -54,7 +70,7 @@ function loadTokens(): StoredTokens | null {
 }
 
 function saveTokens(t: StoredTokens): void {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('OS keychain not available')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(MSG_KEYCHAIN)
   writeFileSync(TOKEN_PATH, safeStorage.encryptString(JSON.stringify(t)))
 }
 
@@ -135,15 +151,10 @@ function focusAppWindow(): void {
  * The listener runs only for the duration of the auth window, then shuts down.
  */
 export async function signIn(options?: { useAnotherAccount?: boolean }): Promise<GoogleStatus> {
-  if (!isGoogleConfigured()) {
-    throw new Error('Google sign-in is not configured yet. Add your OAuth client ID in electron/ipc/googleConfig.ts.')
-  }
-  if (!isGoogleSecretConfigured()) {
-    throw new Error(
-      'Google client secret is missing. Create a .env.local file in the project root containing ' +
-        'MAIN_VITE_GOOGLE_CLIENT_SECRET=<your secret from the Cloud Console>, then restart the app.',
-    )
-  }
+  // Both mean this copy of the app was built without Google sign-in. That is not something the
+  // person can fix, so they are told what still works rather than how to configure a build.
+  if (!isGoogleConfigured()) throw new Error(notSetUpMessage('client ID'))
+  if (!isGoogleSecretConfigured()) throw new Error(notSetUpMessage('client secret'))
 
   const verifier = base64url(randomBytes(32))
   const challenge = base64url(createHash('sha256').update(verifier).digest())
@@ -177,9 +188,9 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
         server.close()
         focusAppWindow()
 
-        if (error) return finish(() => reject(new Error(`Google sign-in was cancelled (${error}).`)))
+        if (error) return finish(() => reject(new Error(signInCancelledMessage(error))))
         if (returnedState !== state) {
-          return finish(() => reject(new Error('Sign-in state mismatch — aborted for safety.')))
+          return finish(() => reject(new Error(MSG_STATE_MISMATCH)))
         }
         finish(() => resolve({ code: returnedCode!, redirectUri }))
       })
@@ -241,7 +252,7 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
             } catch {
               /* already closed */
             }
-            reject(new Error('Google sign-in timed out.'))
+            reject(new Error(MSG_SIGN_IN_TIMEOUT))
           }),
         180_000,
       )
@@ -249,26 +260,31 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
   )
 
   // Exchange the authorization code for tokens (PKCE — no client secret).
-  const tokenRes = await fetch(TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      code,
-      code_verifier: verifier,
-      grant_type: 'authorization_code',
-      redirect_uri: redirectUri,
-    }).toString(),
-  })
+  let tokenRes: Response
+  try {
+    tokenRes = await fetch(TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        code,
+        code_verifier: verifier,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }).toString(),
+    })
+  } catch {
+    throw new Error(MSG_UNREACHABLE)
+  }
   if (!tokenRes.ok) {
     const detail = await tokenRes.text().catch(() => '')
-    throw new Error(`Google token exchange failed (${tokenRes.status}). ${detail.slice(0, 300)}`)
+    throw new Error(tokenExchangeMessage(tokenRes.status, detail))
   }
 
   const data = (await tokenRes.json()) as TokenResponse
   if (!data.refresh_token) {
-    throw new Error('Google did not return a refresh token. Try removing the app under your Google account permissions, then sign in again.')
+    throw new Error(MSG_NO_REFRESH_TOKEN)
   }
   const profile = decodeIdToken(data.id_token)
   const tokens: StoredTokens = {
@@ -282,46 +298,54 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
 }
 
 /**
- * What the user is told when the extraction cannot reach their Drive.
- *
- * Both routes here — never signed in, and a sign-in that has since died — leave them in the
- * same place and needing the same action, and the difference between the two is the app's
- * problem rather than theirs. So one sentence, naming what to do and why it is worth doing,
- * with no status code and no mention of tokens. The renderer italicises "Initial setup"
- * because it names a panel on screen.
+ * Thrown when the stored Google sign-in is gone or no longer accepted. A distinct type so that
+ * "sign in again" is never confused with "Google was briefly unavailable", which is a different
+ * problem needing a different answer.
  */
-const SIGN_IN_REQUIRED =
-  'Sign in to Google in the Initial setup section above so the file can open in your Google Drive.'
+export class SignInRequiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SignInRequiredError'
+  }
+}
 
 /** Return a valid access token, refreshing it if it has expired (or is about to). */
 export async function getAccessToken(): Promise<string> {
   const t = loadTokens()
-  if (!t?.refreshToken) throw new Error(SIGN_IN_REQUIRED)
+  if (!t?.refreshToken) throw new SignInRequiredError(MSG_NOT_SIGNED_IN)
   if (t.accessToken && Date.now() < t.expiry - 60_000) return t.accessToken
 
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: t.refreshToken,
-      grant_type: 'refresh_token',
-    }).toString(),
-  })
+  let res: Response
+  try {
+    res = await fetch(TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        refresh_token: t.refreshToken,
+        grant_type: 'refresh_token',
+      }).toString(),
+    })
+  } catch {
+    // No connection says nothing about the sign-in, so it is left alone.
+    throw new Error(MSG_UNREACHABLE)
+  }
   if (!res.ok) {
     // 400 invalid_grant means the refresh token is dead, not that the network hiccuped:
-    // revoked, the password changed, or — most often here — the seven-day expiry that
-    // Google applies to refresh tokens issued while the consent screen is in Testing.
+    // revoked, the password changed, or the seven-day expiry Google applies to apps still in
+    // Testing. Only that ends the sign-in. Anything else (Google busy, a 5xx) is Google's
+    // trouble, and signing people out for it would make them repeat the whole sign-in.
     //
-    // Drop them. Leaving them on disk is what made this confusing: getStatus() only checks
-    // that a refreshToken string exists, so the panel kept showing the user signed in while
+    // Dead tokens are dropped. Leaving them on disk is what made this confusing: getStatus()
+    // only checks that a token exists, so the panel kept showing the user signed in while
     // every Drive call failed.
-    if (res.status === 400 || res.status === 401) {
+    if (classifyRefreshFailure(res.status) === 'expired') {
       clearTokens()
       notifySignedOut()
+      throw new SignInRequiredError(MSG_SIGN_IN_EXPIRED)
     }
-    throw new Error(SIGN_IN_REQUIRED)
+    throw new Error(googleApiMessage('Google sign-in', 'checking your Google sign-in', res.status, await res.text().catch(() => '')))
   }
 
   const data = (await res.json()) as TokenResponse
@@ -332,4 +356,20 @@ export async function getAccessToken(): Promise<string> {
   }
   saveTokens(updated)
   return updated.accessToken
+}
+
+/**
+ * Whether the stored sign-in actually works, which getStatus() does not say: it only reports
+ * that something is stored. 'none' means nothing is stored, 'expired' that Google refused it
+ * (and it has been cleared), and 'unknown' that Google could not be asked, so the sign-in is
+ * neither confirmed nor ruled out.
+ */
+export async function verifySignIn(): Promise<GoogleCheck> {
+  if (!loadTokens()?.refreshToken) return 'none'
+  try {
+    await getAccessToken()
+    return 'valid'
+  } catch (err) {
+    return err instanceof SignInRequiredError ? 'expired' : 'unknown'
+  }
 }

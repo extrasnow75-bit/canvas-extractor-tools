@@ -1,4 +1,7 @@
 import { getAccessToken } from './googleAuth'
+import { googleApiMessage, googleFetch } from './googleMessages'
+import { DocsHeadingElement, planContentsLinks } from './docsContents'
+import { planToolChips, ChipElement } from './docsToolChips'
 
 /**
  * Post-pass that draws the blue horizontal rules above and below every
@@ -62,12 +65,12 @@ interface DocsElement {
 export async function applyDueHeaderBorders(documentId: string): Promise<number> {
   const accessToken = await getAccessToken()
 
-  const getRes = await fetch(`https://docs.googleapis.com/v1/documents/${documentId}`, {
+  const getRes = await googleFetch(`https://docs.googleapis.com/v1/documents/${documentId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!getRes.ok) {
     const detail = await getRes.text().catch(() => '')
-    throw new Error(`Docs API read failed (${getRes.status}). ${detail.slice(0, 200)}`)
+    throw new Error(googleApiMessage('Docs', 'adding the blue lines to the Google Doc', getRes.status, detail))
   }
 
   const doc = (await getRes.json()) as { body?: { content?: DocsElement[] } }
@@ -96,7 +99,7 @@ export async function applyDueHeaderBorders(documentId: string): Promise<number>
 
   // updateParagraphStyle does not change text length, so there is no index drift
   // and request order is irrelevant.
-  const updRes = await fetch(
+  const updRes = await googleFetch(
     `https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`,
     {
       method: 'POST',
@@ -109,8 +112,80 @@ export async function applyDueHeaderBorders(documentId: string): Promise<number>
   )
   if (!updRes.ok) {
     const detail = await updRes.text().catch(() => '')
-    throw new Error(`Docs API update failed (${updRes.status}). ${detail.slice(0, 200)}`)
+    throw new Error(googleApiMessage('Docs', 'adding the blue lines to the Google Doc', updRes.status, detail))
   }
 
   return requests.length
+}
+
+/**
+ * Turn the clean document's contents list into working links.
+ *
+ * Google Docs' HTML import cannot create a table of contents, and does not reliably keep
+ * in-page links either. The contents list is therefore uploaded as ordinary paragraphs, and
+ * this pass links each one to the heading with the same text using the Docs API's
+ * `headingId` link — the same kind of link Docs' own contents uses.
+ *
+ * The list is the run of paragraphs between the "Contents" label and the first Heading 1.
+ * Entries are matched to headings in order, so two headings with the same name each get
+ * their own link. Returns how many entries were linked.
+ */
+export async function linkContentsToHeadings(documentId: string): Promise<number> {
+  const accessToken = await getAccessToken()
+
+  const getRes = await googleFetch(`https://docs.googleapis.com/v1/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!getRes.ok) {
+    const detail = await getRes.text().catch(() => '')
+    throw new Error(googleApiMessage('Docs', 'linking the contents list in the Google Doc', getRes.status, detail))
+  }
+  const doc = (await getRes.json()) as { body?: { content?: DocsHeadingElement[] } }
+  const requests = planContentsLinks(doc.body?.content ?? [])
+  if (requests.length === 0) return 0
+
+  const updRes = await googleFetch(
+    `https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    },
+  )
+  if (!updRes.ok) {
+    const detail = await updRes.text().catch(() => '')
+    throw new Error(googleApiMessage('Docs', 'linking the contents list in the Google Doc', updRes.status, detail))
+  }
+  return requests.length
+}
+
+/**
+ * Swap the Canvas tool name on each tool line for the template's dropdown chip.
+ *
+ * Cosmetic like the blue lines: the document is already saved, so the caller turns a failure
+ * into a note. Returns how many chips were made.
+ */
+export async function applyToolChips(documentId: string): Promise<number> {
+  const accessToken = await getAccessToken()
+  const getRes = await googleFetch(`https://docs.googleapis.com/v1/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!getRes.ok) {
+    const detail = await getRes.text().catch(() => '')
+    throw new Error(googleApiMessage('Docs', 'adding the tool dropdowns to the Google Doc', getRes.status, detail))
+  }
+  const doc = (await getRes.json()) as { body?: { content?: ChipElement[] } }
+  const { requests, chips } = planToolChips(doc.body?.content ?? [])
+  if (chips === 0) return 0
+
+  const updRes = await googleFetch(`https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  })
+  if (!updRes.ok) {
+    const detail = await updRes.text().catch(() => '')
+    throw new Error(googleApiMessage('Docs', 'adding the tool dropdowns to the Google Doc', updRes.status, detail))
+  }
+  return chips
 }

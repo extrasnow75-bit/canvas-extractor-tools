@@ -1,12 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Eye, EyeOff, LogOut, SlidersHorizontal, ChevronDown, KeyRound, Shield } from 'lucide-react'
-import type { GoogleStatus } from '../types'
+import { Eye, EyeOff, LogOut, SlidersHorizontal, ChevronDown, KeyRound, Shield, Loader2, AlertCircle } from 'lucide-react'
+import type { GoogleCheckState, GoogleStatus } from '../types'
+import { googleLine, googleSignedIn } from './googleView'
 
 interface Props {
   canvasToken: string | null
   onSaveToken(token: string): void
   onRemoveToken(): void
   googleStatus: GoogleStatus
+  /** What a check of the stored sign-in found; the name is only shown once it is confirmed. */
+  googleCheck: GoogleCheckState
+  /** Counts requests from elsewhere in the app to open this panel. */
+  openRequest: number
   onGoogleSignIn(useAnotherAccount?: boolean): Promise<void>
   onGoogleSignOut(): void
   googleBusy: boolean
@@ -59,6 +64,8 @@ export function SetupPanel({
   onSaveToken,
   onRemoveToken,
   googleStatus,
+  googleCheck,
+  openRequest,
   onGoogleSignIn,
   onGoogleSignOut,
   googleBusy,
@@ -112,7 +119,8 @@ export function SetupPanel({
   const tokenValid = tokenPresent && tokenState === 'valid'
   // Signed in, or asked and declined. Either way the Google question has an answer and the
   // panel has nothing further to hold the user for.
-  const googleResolved = googleStatus.signedIn || skippedGoogle
+  const googleConfirmed = googleSignedIn(googleCheck)
+  const googleResolved = googleConfirmed || skippedGoogle
   const setupComplete = tokenValid && googleResolved
 
   /**
@@ -121,6 +129,8 @@ export function SetupPanel({
    * a glitch on every launch for a user whose setup is fine.
    */
   const tokenChecked = !tokenPresent || tokenState !== 'checking'
+  // The same holds for the Google check: the panel stays as it is until both have an answer.
+  const settled = tokenChecked && googleCheck !== 'checking'
 
   const headerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -134,13 +144,22 @@ export function SetupPanel({
   // buttons are aria-disabled rather than disabled, so pressing them no longer blurs), and
   // focus already dropped to <body> by something else.
   useEffect(() => {
-    if (!tokenChecked) return
+    if (!settled) return
     const focusWasInside =
       document.activeElement === document.body ||
       !!panelRef.current?.contains(document.activeElement)
     setIsOpen(!setupComplete)
     if (setupComplete && focusWasInside) headerRef.current?.focus()
-  }, [tokenChecked, setupComplete])
+  }, [settled, setupComplete])
+
+  // The line above the tools can ask for this panel: open it and put focus on its heading, so a
+  // person who chose "Sign in" there lands where they can.
+  useEffect(() => {
+    if (openRequest === 0) return
+    setIsOpen(true)
+    headerRef.current?.scrollIntoView({ block: 'start' })
+    headerRef.current?.focus()
+  }, [openRequest])
 
   // Same reasoning for a dropped Google sign-in: the "Sign in with Google" button is in
   // here, so collapsing the panel would hide the only way to act on the error. App renders
@@ -165,7 +184,7 @@ export function SetupPanel({
   const remaining = (tokenValid ? 0 : 1) + (googleResolved ? 0 : 1)
   const statusText = tokenExpired
     ? 'Action needed'
-    : !tokenChecked
+    : !settled
       ? 'Checking…'
       : remaining === 0
         ? 'Complete'
@@ -187,7 +206,7 @@ export function SetupPanel({
           which item is outstanding rather than how many, since the count alone leaves a
           screen reader user to work out which of the two it means. */}
       <div role="status" aria-live="polite" className="sr-only">
-        {!tokenChecked
+        {!settled
           ? ''
           : setupComplete
             ? 'Initial setup complete.'
@@ -238,12 +257,24 @@ export function SetupPanel({
               .
             </span>
             <span
-              className={`w-2 h-2 rounded-full ${googleStatus.signedIn ? 'bg-green-400' : 'bg-white/70'}`}
+              className={`w-2 h-2 rounded-full ${
+                googleCheck === 'valid' ? 'bg-green-400' : googleCheck === 'unknown' || googleCheck === 'expired' ? 'bg-amber-300' : 'bg-white/70'
+              }`}
               aria-hidden="true"
             />
             <span className="sr-only">
               Google sign-in{' '}
-              {googleStatus.signedIn ? 'complete' : skippedGoogle ? 'skipped' : 'not signed in'}.
+              {googleCheck === 'valid'
+                ? 'complete'
+                : googleCheck === 'checking'
+                  ? 'being checked'
+                  : googleCheck === 'expired'
+                    ? 'expired'
+                    : googleCheck === 'unknown'
+                      ? 'could not be checked'
+                      : skippedGoogle
+                        ? 'skipped'
+                        : 'not signed in'}.
             </span>
           </div>
           <span className="text-[11px] font-bold">{statusText}</span>
@@ -268,7 +299,7 @@ export function SetupPanel({
           {/* Google sign-in — first, because it is the step people were skipping. With the
               Canvas token above it, saving the token revealed the extraction tools further down
               the page and pulled attention past this card entirely. */}
-          <div className={`rounded-2xl border-2 p-4 ${googleStatus.signedIn ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : 'border-gray-200'}`}>
+          <div className={`rounded-2xl border-2 p-4 ${googleCheck === 'valid' ? 'border-green-200 shadow-[0_0_0_3px_rgba(240,253,244,1)]' : googleCheck === 'expired' || googleCheck === 'unknown' ? 'border-amber-300' : 'border-gray-200'}`}>
             <div className="flex items-center gap-2 mb-2">
               <GoogleIcon />
               {/* No required marker. The Canvas token genuinely is required; this is not,
@@ -281,7 +312,12 @@ export function SetupPanel({
               This allows the extraction files to open in your Google Drive.
             </p>
 
-            {googleStatus.signedIn ? (
+            {googleCheck === 'checking' ? (
+              <p role="status" className="flex items-center gap-2 text-[13px] text-gray-700">
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                {googleLine('checking').text}
+              </p>
+            ) : googleConfirmed ? (
               <div>
               <div className="flex items-center gap-3">
                 <Avatar
@@ -314,9 +350,20 @@ export function SetupPanel({
               >
                 {googleBusy ? 'Opening Google…' : 'Use a different account'}
               </button>
+              <p
+                className={`mt-2 text-[12.5px] ${googleCheck === 'valid' ? 'text-green-800' : 'text-amber-900'}`}
+              >
+                {googleLine(googleCheck, googleStatus.email ?? googleStatus.name).text}
+              </p>
               </div>
             ) : (
               <div>
+                {googleCheck === 'expired' && (
+                  <p className="mb-2.5 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-[12.5px] text-amber-900">
+                    <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                    {googleLine('expired').text}
+                  </p>
+                )}
                 {/* The purpose line above already says what signing in is for, so this keeps
                     only the part it does not cover. */}
                 <p className="text-[13px] text-gray-600 mb-2.5">
@@ -364,7 +411,7 @@ export function SetupPanel({
               for most people, and giving the way around it the same visual weight as the
               sign-in button above argued against itself. The underline (not colour alone)
               is what marks the control, and gray-600 clears 4.5:1 on white. */}
-          {tokenPresent && !googleStatus.signedIn && !skippedGoogle && (
+          {tokenPresent && !googleConfirmed && googleCheck !== 'checking' && !skippedGoogle && (
             <p className="text-[12.5px] text-gray-600 text-center px-2">
               Can&apos;t sign in?{' '}
               <button
