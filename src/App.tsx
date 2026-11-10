@@ -127,8 +127,10 @@ export default function App() {
       setGoogleStatus(status)
       setGoogleCheck('valid')
     } catch (err) {
-      // Same Electron IPC wrapper as the extraction errors — strip it before it is shown.
-      setGoogleError(err instanceof Error ? cleanErrorMessage(err.message) : 'Google sign-in failed.')
+      // Same Electron IPC wrapper as the extraction errors — strip it before it is shown. Pressing
+      // Cancel is a decision, not a fault, so it shows nothing.
+      const message = err instanceof Error ? cleanErrorMessage(err.message) : 'Google sign-in failed.'
+      if (!/^Google sign-in was cancelled\.$/.test(message)) setGoogleError(message)
     } finally {
       setGoogleBusy(false)
     }
@@ -238,6 +240,7 @@ export default function App() {
               googleCheck={googleCheck}
               openRequest={setupOpenRequest}
               onGoogleSignIn={googleSignIn}
+              onGoogleCancel={() => void window.api.google.cancelSignIn().catch(() => undefined)}
               onGoogleSignOut={googleSignOut}
               googleBusy={googleBusy}
               googleError={googleError}

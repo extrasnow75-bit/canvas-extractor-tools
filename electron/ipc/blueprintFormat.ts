@@ -111,7 +111,11 @@ export function withReadingLayout(html: string, maxWidth = '50rem'): string {
   const css =
     `@media screen { body { max-width: ${maxWidth}; margin: 0 auto !important; ` +
     'padding: 2.5rem 2rem !important; box-sizing: border-box; line-height: 1.5; } }'
-  return html.includes('</head>') ? html.replace('</head>', `<style>${css}</style>\n</head>`) : html
+  // The page is Canvas course HTML written by course authors and opened from the local disk. A
+  // policy that allows no scripts, plugins or forms means a script left in a page cannot run there.
+  const csp =
+    `<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">`
+  return html.includes('</head>') ? html.replace('</head>', `${csp}\n<style>${css}</style>\n</head>`) : html
 }
 
 /**

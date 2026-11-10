@@ -600,7 +600,7 @@ export function ToolTile({
               <button
                 onClick={() => setAdvancedOpen((o) => !o)}
                 aria-expanded={advancedOpen}
-                aria-controls="clean-advanced"
+                aria-controls={advancedOpen ? "clean-advanced" : undefined}
                 className="flex items-center gap-1 text-xs font-black text-[#0033a0] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
               >
                 <ChevronDown

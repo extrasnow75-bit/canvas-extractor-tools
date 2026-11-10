@@ -14,6 +14,7 @@ interface Props {
   /** Counts requests from elsewhere in the app to open this panel. */
   openRequest: number
   onGoogleSignIn(useAnotherAccount?: boolean): Promise<void>
+  onGoogleCancel(): void
   onGoogleSignOut(): void
   googleBusy: boolean
   googleError: string | null
@@ -68,6 +69,7 @@ export function SetupPanel({
   googleCheck,
   openRequest,
   onGoogleSignIn,
+  onGoogleCancel,
   onGoogleSignOut,
   googleBusy,
   googleError,
@@ -375,6 +377,14 @@ export function SetupPanel({
                     Waiting for Google in your browser. If it does not finish, close the Google tab and try
                     again. The app stops waiting after 3 minutes. If it keeps failing, contact {SUPPORT_CONTACT}.
                   </p>
+                )}
+                {googleBusy && (
+                  <button
+                    onClick={onGoogleCancel}
+                    className="mb-2.5 py-1.5 px-3 rounded-lg border border-gray-400 bg-white text-[12.5px] font-bold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+                  >
+                    Cancel sign-in
+                  </button>
                 )}
                 {/* aria-disabled throughout, not disabled: pressing this opens the system
                     browser for the OAuth round-trip, and a truly disabled button blurs the

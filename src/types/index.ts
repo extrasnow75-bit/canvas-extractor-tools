@@ -148,6 +148,7 @@ declare global {
       }
       google: {
         signIn(options?: { useAnotherAccount?: boolean }): Promise<GoogleStatus>
+        cancelSignIn(): Promise<boolean>
         signOut(): Promise<void>
         status(): Promise<GoogleStatus>
         verify(): Promise<GoogleCheck>

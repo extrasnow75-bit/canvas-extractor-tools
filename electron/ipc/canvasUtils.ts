@@ -1,4 +1,5 @@
 import { CanvasApiError, canvasUnreachableMessage, whatIsAsked } from './canvasMessages'
+import { SUPPORT_CONTACT } from './googleMessages'
 export interface CourseRef {
   baseUrl: string
   courseId: string
@@ -349,6 +350,9 @@ function isSameOrigin(candidate: string, expected: string): boolean {
   }
 }
 
+/** At 100 items a page this is 100,000 items, far beyond any real course. */
+const MAX_PAGES = 1000
+
 /**
  * GET a Canvas API endpoint, following pagination automatically.
  */
@@ -361,7 +365,14 @@ export async function canvasGet<T>(
   let url: string | null =
     `${ref.baseUrl}/api/v1${path}${path.includes('?') ? '&' : '?'}per_page=${perPage}`
 
+  let pages = 0
   while (url) {
+    // A site that keeps answering with another "next" page would otherwise run until memory ran out.
+    if (++pages > MAX_PAGES) {
+      throw new Error(
+        `Canvas sent far more pages of results than expected, so the app stopped. What to do: try again. If it happens again, contact ${SUPPORT_CONTACT}.`,
+      )
+    }
     const response = await canvasFetch(url, ref)
 
     const data = await response.json()

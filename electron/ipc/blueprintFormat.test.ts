@@ -276,3 +276,12 @@ describe('withReadingLayout', () => {
     expect(doc).not.toContain('@media')
   })
 })
+
+describe('withReadingLayout script policy', () => {
+  it('blocks scripts, plugins and forms in the saved page', () => {
+    const out = withReadingLayout('<html><head></head><body><script>alert(1)</script></body></html>')
+    expect(out).toContain('Content-Security-Policy')
+    expect(out).toContain("script-src 'none'")
+    expect(out).toContain("object-src 'none'")
+  })
+})

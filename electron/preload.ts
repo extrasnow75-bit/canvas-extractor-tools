@@ -74,6 +74,8 @@ contextBridge.exposeInMainWorld('api', {
     },
   },
   google: {
+    /** Stops waiting for the browser. True if a sign-in was waiting. */
+    cancelSignIn: (): Promise<boolean> => ipcRenderer.invoke('google:cancelSignIn'),
     signIn: (options?: {
       useAnotherAccount?: boolean
     }): Promise<{ signedIn: boolean; email?: string; name?: string; picture?: string }> =>

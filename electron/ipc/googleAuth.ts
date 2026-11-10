@@ -146,6 +146,17 @@ function focusAppWindow(): void {
   win.focus()
 }
 
+/** The person pressed Cancel while the app waited for the browser. The screen shows nothing for it. */
+export const SIGN_IN_STOPPED = 'Google sign-in was cancelled.'
+
+/** Stops the sign-in that is waiting for the browser, if there is one. */
+let cancelActiveSignIn: (() => void) | null = null
+export function cancelSignIn(): boolean {
+  if (!cancelActiveSignIn) return false
+  cancelActiveSignIn()
+  return true
+}
+
 /**
  * Interactive sign-in via the system browser + PKCE + a short-lived loopback listener.
  * The listener runs only for the duration of the auth window, then shuts down.
@@ -167,9 +178,21 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
       const finish = (fn: () => void): void => {
         if (!settled) {
           settled = true
+          cancelActiveSignIn = null
           fn()
         }
       }
+      // So the person can stop waiting. Google's own "Access blocked" page never returns to the
+      // app, so without this the only way out was the three-minute timeout.
+      cancelActiveSignIn = () =>
+        finish(() => {
+          try {
+            server.close()
+          } catch {
+            /* never started, or already closed */
+          }
+          reject(new Error(SIGN_IN_STOPPED))
+        })
 
       const server = createServer((req, res) => {
         const url = new URL(req.url ?? '/', redirectUri || 'http://127.0.0.1')

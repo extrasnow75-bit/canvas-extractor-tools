@@ -30,7 +30,7 @@ export function googleLine(state: GoogleCheckState, who?: string | null): Google
     case 'unknown':
       return {
         tone: 'warn',
-        text: 'Could not check your Google sign-in just now. The app could not reach Google. You can still try, or save files to your computer.',
+        text: 'Could not check your Google sign-in just now. Google may be unavailable, or your internet connection may be down. You can still try, or save files to your computer.',
         offerSignIn: false,
       }
     case 'expired':
