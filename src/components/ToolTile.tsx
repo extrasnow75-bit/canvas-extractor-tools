@@ -419,7 +419,7 @@ export function ToolTile({
       : status === 'cancelled'
         ? `${label} stopped. Nothing was saved.`
         : status === 'success'
-          ? `${label} done. ${message}`
+          ? `${label} done. ${splitDetails(message).plain}`
           : status === 'error'
             ? // Announced as plain text, so it needs the same tidying the visible copy gets.
               `${label} failed. ${splitDetails(message).plain}`
@@ -930,7 +930,8 @@ export function ToolTile({
           <div className="flex-1">
             {/* `label` already ends in "extraction" ("Course content extraction"), so no extra noun. */}
             <p className="font-black">{label} done</p>
-            <p className="text-gray-700 mt-0.5">{message}</p>
+            <p className="text-gray-700 mt-0.5">{splitDetails(message).plain}</p>
+            <ErrorDetails message={message} />
             {webViewLink && (
               <button
                 onClick={() => window.open(webViewLink, '_blank')}

@@ -315,6 +315,21 @@ export function SetupPanel({
               This allows the extraction files to open in your Google Drive.
             </p>
 
+            {googleBusy && (
+              <p role="status" className="text-[12.5px] text-gray-700 font-bold mb-2.5">
+                Waiting for Google in your browser. If it does not finish, close the Google tab and try
+                again. The app stops waiting after 3 minutes. If it keeps failing, contact {SUPPORT_CONTACT}.
+              </p>
+            )}
+            {googleBusy && (
+              <button
+                onClick={onGoogleCancel}
+                className="mb-2.5 py-1.5 px-3 rounded-lg border border-gray-400 bg-white text-[12.5px] font-bold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+              >
+                Cancel sign-in
+              </button>
+            )}
+
             {googleCheck === 'checking' ? (
               <p role="status" className="flex items-center gap-2 text-[13px] text-gray-700">
                 <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -372,20 +387,6 @@ export function SetupPanel({
                 <p className="text-[13px] text-gray-600 mb-2.5">
                   The app can only see files it creates — never the rest of your Drive.
                 </p>
-                {googleBusy && (
-                  <p role="status" className="text-[12.5px] text-gray-700 font-bold mb-2.5">
-                    Waiting for Google in your browser. If it does not finish, close the Google tab and try
-                    again. The app stops waiting after 3 minutes. If it keeps failing, contact {SUPPORT_CONTACT}.
-                  </p>
-                )}
-                {googleBusy && (
-                  <button
-                    onClick={onGoogleCancel}
-                    className="mb-2.5 py-1.5 px-3 rounded-lg border border-gray-400 bg-white text-[12.5px] font-bold text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
-                  >
-                    Cancel sign-in
-                  </button>
-                )}
                 {/* aria-disabled throughout, not disabled: pressing this opens the system
                     browser for the OAuth round-trip, and a truly disabled button blurs the
                     instant it flips — so the user came back from Google with focus on <body>.

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
 import { finishingTouchNote, type FinishingFailure } from './ipc/finishingTouches'
 import { listMyCourses, normalizeSite } from './ipc/courseList'
 import { isAllowedExternalUrl } from './ipc/externalUrls'
@@ -250,16 +250,41 @@ ipcMain.handle('app:resetZoom', (e) => {
 
 // ─── Canvas feature handlers ──────────────────────────────────────────────────
 
-ipcMain.handle('canvas:verifyToken', (_e, args: { token: string; courseUrl?: string }) => {
-  const parsed = args.courseUrl ? parseCourseUrl(args.courseUrl) : null
-  return verifyToken(args.token, parsed?.baseUrl)
-})
+/**
+ * Every call that sends the Canvas token somewhere asks first if the site is not one the person has
+ * approved (see confirmCanvasHost). Guarding only the course check would leave the other calls as
+ * a way around it, and a Cancel would not actually keep the token from the site.
+ */
+async function denyUnapprovedHost(
+  e: IpcMainInvokeEvent,
+  courseUrl: string | undefined,
+): Promise<{ ok: false; message: string } | null> {
+  const parsed = courseUrl ? parseCourseUrl(courseUrl) : null
+  if (!parsed) return null // the handler reports a bad address in its own words
+  const host = new URL(parsed.baseUrl).host
+  if (await confirmCanvasHost(BrowserWindow.fromWebContents(e.sender), host)) return null
+  return { ok: false, message: 'Cancelled. Your Canvas token was not sent to that site.' }
+}
 
-ipcMain.handle('canvas:exportContent', handleCanvasExport)
-ipcMain.handle('canvas:exportClean', handleCleanExport)
-ipcMain.handle('canvas:exportQuizzes', handleQuizExport)
-ipcMain.handle('canvas:exportRubrics', handleRubricExport)
-ipcMain.handle('canvas:exportSettings', handleSettingsExport)
+function guarded<A extends { courseUrl?: string }, R>(
+  handler: (e: IpcMainInvokeEvent, args: A) => R | Promise<R>,
+): (e: IpcMainInvokeEvent, args: A) => Promise<R | { ok: false; message: string }> {
+  return async (e, args) => (await denyUnapprovedHost(e, args?.courseUrl)) ?? handler(e, args)
+}
+
+ipcMain.handle(
+  'canvas:verifyToken',
+  guarded((_e, args: { token: string; courseUrl?: string }) => {
+    const parsed = args.courseUrl ? parseCourseUrl(args.courseUrl) : null
+    return verifyToken(args.token, parsed?.baseUrl)
+  }),
+)
+
+ipcMain.handle('canvas:exportContent', guarded(handleCanvasExport))
+ipcMain.handle('canvas:exportClean', guarded(handleCleanExport))
+ipcMain.handle('canvas:exportQuizzes', guarded(handleQuizExport))
+ipcMain.handle('canvas:exportRubrics', guarded(handleRubricExport))
+ipcMain.handle('canvas:exportSettings', guarded(handleSettingsExport))
 
 // Stop a running extraction. Cancellation is cooperative: the builders check between
 // items, so the extraction ends at its next checkpoint rather than instantly.
@@ -298,9 +323,8 @@ ipcMain.handle('canvas:getCourseName', async (e, args: { courseUrl: string; toke
   const parsed = parseCourseUrl(args.courseUrl)
   if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
   const ref: CourseRef = { ...parsed, token: args.token }
-  if (!(await confirmCanvasHost(BrowserWindow.fromWebContents(e.sender), new URL(parsed.baseUrl).host))) {
-    return { ok: false, message: 'Cancelled. Your Canvas token was not sent to that site.' }
-  }
+  const denied = await denyUnapprovedHost(e, args.courseUrl)
+  if (denied) return denied
   try {
     const course = await canvasGetOne<{ name: string; course_code?: string }>(
       `/courses/${ref.courseId}`,
@@ -334,7 +358,7 @@ ipcMain.handle('canvas:listCourses', async (e, args: { site: string; token: stri
 
 ipcMain.handle(
   'canvas:listItems',
-  async (_e, args: { tool: PickerTool; courseUrl: string; token: string }) => {
+  guarded(async (_e, args: { tool: PickerTool; courseUrl: string; token: string }) => {
     const parsed = parseCourseUrl(args.courseUrl)
     if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
     const ref: CourseRef = { ...parsed, token: args.token }
@@ -344,7 +368,7 @@ ipcMain.handle(
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : 'Could not load items.' }
     }
-  },
+  }),
 )
 
 // ─── Google sign-in ───────────────────────────────────────────────────────────

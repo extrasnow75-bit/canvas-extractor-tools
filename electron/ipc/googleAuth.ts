@@ -19,7 +19,6 @@ import {
   MSG_NO_REFRESH_TOKEN,
   MSG_SIGN_IN_EXPIRED,
   MSG_SIGN_IN_TIMEOUT,
-  MSG_STATE_MISMATCH,
   MSG_UNREACHABLE,
   classifyRefreshFailure,
   googleApiMessage,
@@ -151,10 +150,20 @@ export const SIGN_IN_STOPPED = 'Google sign-in was cancelled.'
 
 /** Stops the sign-in that is waiting for the browser, if there is one. */
 let cancelActiveSignIn: (() => void) | null = null
+let activeExchange: AbortController | null = null
+let exchangeCancelled = false
 export function cancelSignIn(): boolean {
-  if (!cancelActiveSignIn) return false
-  cancelActiveSignIn()
-  return true
+  if (cancelActiveSignIn) {
+    cancelActiveSignIn()
+    return true
+  }
+  // Google has already replied and the app is exchanging the code: stop that instead.
+  if (activeExchange) {
+    exchangeCancelled = true
+    activeExchange.abort()
+    return true
+  }
+  return false
 }
 
 /**
@@ -206,16 +215,20 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
           return
         }
 
+        // The state check comes first. A request that cannot prove it belongs to this sign-in is
+        // ignored, and the listener stays open for the real redirect: another program on this
+        // computer must not be able to end the sign-in or put its own text in front of the person.
+        if (returnedState !== state) {
+          res.writeHead(400)
+          res.end()
+          return
+        }
+
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end(COMPLETION_PAGE)
         server.close()
         focusAppWindow()
 
-        // The state check comes first: a request that cannot prove it belongs to this sign-in must
-        // not be able to put its own error text in front of the person.
-        if (returnedState !== state) {
-          return finish(() => reject(new Error(MSG_STATE_MISMATCH)))
-        }
         if (error) return finish(() => reject(new Error(signInCancelledMessage(error))))
         finish(() => resolve({ code: returnedCode!, redirectUri }))
       })
@@ -284,8 +297,14 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
     },
   )
 
-  // Exchange the authorization code for tokens (PKCE — no client secret).
+  // Exchange the authorization code for tokens (PKCE — no client secret). It can be cancelled and it
+  // times out, so a stalled connection cannot leave the person on "Signing in…" with a dead button.
+  const exchange = new AbortController()
+  activeExchange = exchange
+  exchangeCancelled = false
+  const exchangeTimer = setTimeout(() => exchange.abort(), 30_000)
   let tokenRes: Response
+  let bodyText: string
   try {
     tokenRes = await fetch(TOKEN_ENDPOINT, {
       method: 'POST',
@@ -298,16 +317,26 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
         grant_type: 'authorization_code',
         redirect_uri: redirectUri,
       }).toString(),
+      signal: exchange.signal,
     })
+    bodyText = await tokenRes.text()
   } catch {
+    if (exchangeCancelled) throw new Error(SIGN_IN_STOPPED)
     throw new Error(MSG_UNREACHABLE)
+  } finally {
+    clearTimeout(exchangeTimer)
+    activeExchange = null
   }
   if (!tokenRes.ok) {
-    const detail = await tokenRes.text().catch(() => '')
-    throw new Error(tokenExchangeMessage(tokenRes.status, detail))
+    throw new Error(tokenExchangeMessage(tokenRes.status, bodyText))
   }
 
-  const data = (await tokenRes.json()) as TokenResponse
+  let data: TokenResponse
+  try {
+    data = JSON.parse(bodyText) as TokenResponse
+  } catch {
+    throw new Error(tokenExchangeMessage(tokenRes.status, 'The response from Google could not be read.'))
+  }
   if (!data.refresh_token) {
     throw new Error(MSG_NO_REFRESH_TOKEN)
   }

@@ -93,7 +93,7 @@ export function whatIsAsked(url: string): string | undefined {
     return undefined
   }
   if (/^\/courses\/\d+\/?$/.test(path)) return undefined // the course itself
-  if (/^\/(courses|accounts)\/?$/.test(path)) return 'your list of courses'
+  if (/^\/(courses|accounts|users\/self\/courses|accounts\/\d+\/courses)\/?$/.test(path)) return 'your list of courses'
   return 'part of this course'
 }
 

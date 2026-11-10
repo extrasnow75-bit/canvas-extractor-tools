@@ -388,10 +388,11 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
           ) : nameError ? (
             <span id="course-url-error" className="text-xs text-red-700">
               <ErrorText message={nameError} />
-              <ErrorDetails message={nameError} />
             </span>
           ) : null}
         </div>
+        {/* Outside the live region above, so opening or copying the details is not read out again. */}
+        {nameError && <ErrorDetails message={nameError} />}
 
         {/* Appears only once an extraction has finished. White on green-800 (#166534) measures
             6.6:1, comfortably past the 4.5:1 needed for normal text — green-600 and
