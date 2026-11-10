@@ -12,4 +12,8 @@ Since v1.1.1:
 - **Plain-English Canvas errors.** When Canvas will not do something, the message now says what happened and what to do: a saved access code that no longer works, an account that is not allowed in the course, a course Canvas cannot find, Canvas asking the app to slow down, Canvas having trouble on its end, and no connection. Each has a **Show technical details** link with a **Copy details** button for whoever supports the app.
 - **Fixed: "Insufficient Permission" when saving to Google Drive.** If Google signs you in but you did not tick the Drive box on its consent screen, the message now says so and tells you to sign out, sign in again and tick the box. Google sign-in messages use the same **Show technical details** link.
 - **Who to contact.** Error messages that need help now name Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com) instead of "the person who supports this app".
+- **Cancel a Google sign-in.** While the app waits for Google in your browser, a **Cancel sign-in** button lets you stop waiting instead of waiting out the three minutes. This helps when Google shows "Access blocked".
+- **Asks before sending your Canvas token to another site.** The Boise State Canvas site is trusted. For any other Canvas address, a pop-up window asks once whether your token may be sent there.
+- **Saved `.html` pages block scripts.** A page saved to your computer can no longer run a script that was left in a course page. Links in error messages open only the places the app sends you to.
+- **Extractions to Google stop early** if your Google sign-in is missing or has expired, before any course content is read, so you do not lose a long run at the end.
 - **Fixed: two scroll bars** on the right side of the window. There is now one.

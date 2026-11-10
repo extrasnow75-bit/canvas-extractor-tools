@@ -163,7 +163,7 @@ export function CoursePicker({ token, defaultSite, onChoose }: Props) {
 
           <div className="max-h-[290px] overflow-auto" role="region" aria-label="Your courses" tabIndex={groups.length === 0 ? 0 : undefined}>
             {loading && (
-              <p className="p-3.5 text-[13px] text-gray-700 flex items-center gap-2">
+              <p role="status" className="p-3.5 text-[13px] text-gray-700 flex items-center gap-2">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Loading your courses…
               </p>
             )}
