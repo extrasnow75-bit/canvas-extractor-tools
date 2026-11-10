@@ -178,7 +178,9 @@ export function CoursePicker({ token, defaultSite, onChoose }: Props) {
             )}
             {courses && shown === 0 && (
               <p className="p-3.5 text-[13px] text-gray-700">
-                No courses match. Try fewer words.
+                {courses.length === 0
+                  ? 'No courses were found where you are a teacher, TA or designer on this site. Check the site above, or paste a course address.'
+                  : 'No courses match. Try fewer words.'}
               </p>
             )}
             {groups.map((g) => (

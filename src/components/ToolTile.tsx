@@ -795,9 +795,10 @@ export function ToolTile({
             </>
           )}
         </p>
-        <p role="alert" className={itemsError ? 'text-xs text-red-700' : 'sr-only'}>
-          {itemsError}
-        </p>
+        <div className={itemsError ? 'text-xs text-red-700' : 'sr-only'}>
+          <p role="alert">{itemsError && <ErrorText message={itemsError} />}</p>
+          {itemsError && <ErrorDetails message={itemsError} />}
+        </div>
         {items && (
           <>
             <div className="flex items-center justify-between mb-1.5">

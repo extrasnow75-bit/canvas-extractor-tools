@@ -1,3 +1,4 @@
+import { SUPPORT_CONTACT } from '../utils/supportContact'
 import React, { useEffect, useRef, useState } from 'react'
 import { Eye, EyeOff, LogOut, SlidersHorizontal, ChevronDown, KeyRound, Shield, Loader2, AlertCircle } from 'lucide-react'
 import type { GoogleCheckState, GoogleStatus } from '../types'
@@ -369,6 +370,12 @@ export function SetupPanel({
                 <p className="text-[13px] text-gray-600 mb-2.5">
                   The app can only see files it creates — never the rest of your Drive.
                 </p>
+                {googleBusy && (
+                  <p role="status" className="text-[12.5px] text-gray-700 font-bold mb-2.5">
+                    Waiting for Google in your browser. If it does not finish, close the Google tab and try
+                    again. The app stops waiting after 3 minutes. If it keeps failing, contact {SUPPORT_CONTACT}.
+                  </p>
+                )}
                 {/* aria-disabled throughout, not disabled: pressing this opens the system
                     browser for the OAuth round-trip, and a truly disabled button blurs the
                     instant it flips — so the user came back from Google with focus on <body>.

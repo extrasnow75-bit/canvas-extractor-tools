@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron'
+import { finishingTouchNote, type FinishingFailure } from './ipc/finishingTouches'
 import { listMyCourses, normalizeSite } from './ipc/courseList'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -264,7 +265,7 @@ ipcMain.handle('canvas:cancelExport', (_e, jobId: string) => cancelJob(jobId))
 
 ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; token: string }) => {
   const parsed = parseCourseUrl(args.courseUrl)
-  if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+  if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
   const ref: CourseRef = { ...parsed, token: args.token }
   try {
     const course = await canvasGetOne<{ name: string; course_code?: string }>(
@@ -298,7 +299,7 @@ ipcMain.handle(
   'canvas:listItems',
   async (_e, args: { tool: PickerTool; courseUrl: string; token: string }) => {
     const parsed = parseCourseUrl(args.courseUrl)
-    if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+    if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
     const ref: CourseRef = { ...parsed, token: args.token }
     try {
       const items = await listItemsForTool(args.tool, ref)
@@ -333,7 +334,7 @@ ipcMain.handle(
     },
   ) => {
     const parsed = parseCourseUrl(args.courseUrl)
-    if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+    if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
     // Checked before any Canvas work. The upload is the last step, so without this a person who
     // is not signed in waits through the whole extraction and only then learns it cannot be saved.
     // Google being unreachable is not a reason to stop: that is tried anyway.
@@ -420,23 +421,19 @@ ipcMain.handle(
     // Draw the blue rules above/below each "Due by …" header via the Docs API — the one
     // part of the Blueprint spec the HTML importer can drop. Purely cosmetic, and the
     // document is already saved, so a failure here must not fail the whole extraction.
-    let borderNote = ''
+    const unfinished: FinishingFailure[] = []
     if (args.tool === 'content') {
       try {
         await applyDueHeaderBorders(id)
       } catch (e) {
-        borderNote =
-          ' Your document was saved, but the blue lines above and below the “Due by” headings could not be added. ' +
-          (e instanceof Error ? e.message : '')
+        unfinished.push({ missing: 'the blue lines above and below the “Due by” headings', error: e })
       }
       // The Canvas tool name on each tool line becomes the template's dropdown chip. Also
       // cosmetic: if it fails the document is still saved, with the names as plain red text.
       try {
         await applyToolChips(id)
       } catch (e) {
-        borderNote +=
-          ' Your document was saved, but the Canvas tool names could not be turned into dropdown menus; they are plain red text. ' +
-          (e instanceof Error ? e.message : '')
+        unfinished.push({ missing: 'the dropdown menus on the Canvas tool names (they stay plain red text)', error: e })
       }
     }
 
@@ -446,11 +443,10 @@ ipcMain.handle(
       try {
         await linkContentsToHeadings(id)
       } catch (e) {
-        borderNote =
-          ' Your document was saved, but the contents list at the top could not be linked to the headings. ' +
-          (e instanceof Error ? e.message : '')
+        unfinished.push({ missing: 'the links from the contents list to the headings', error: e })
       }
     }
+    const borderNote = finishingTouchNote(unfinished)
 
     await openInBrowser(webViewLink)
     return {

@@ -26,37 +26,45 @@ function details(text: string): string {
  */
 export class CanvasApiError extends Error {
   readonly status: number
-  constructor(status: number, body = '') {
-    super(canvasApiMessage(status, body))
+  constructor(status: number, body = '', what?: string) {
+    super(canvasApiMessage(status, body, what))
     this.name = 'CanvasApiError'
     this.status = status
   }
 }
 
-export function canvasApiMessage(status: number, body = ''): string {
+/**
+ * `what` names the thing that was being asked for when it is not "this course" (for example "your
+ * list of courses" or "part of this course"), so a 403 or 404 on a list or a sub-resource is not
+ * blamed on the course link the person pasted.
+ */
+export function canvasApiMessage(status: number, body = '', what?: string): string {
   const tail = details(`Canvas replied with status ${status}${body ? `: ${body}` : '.'}`)
   if (status === 401) {
     return (
-      'Canvas no longer accepts your saved access code. It may have expired. ' +
-      'What to do: open Initial setup at the top, make a new access token in Canvas ' +
-      '(Account → Settings → New Access Token), and paste it in.' +
+      'Canvas no longer accepts your saved access token. It may have expired. ' +
+      'What to do: make a new access token in Canvas (Account → Settings → New Access Token). ' +
+      'Then open Initial setup at the top, remove the old token, and paste the new one.' +
       tail
     )
   }
   if (status === 403) {
     return (
-      'Your Canvas account isn’t allowed to do this in this course. ' +
-      'What to do: make sure you are a teacher, designer or course administrator in the course, ' +
-      'or ask the course owner to add you.' +
-      tail
+      (what
+        ? `Canvas says your account isn’t allowed to see ${what}. ` +
+          'What to do: make sure you are a teacher, designer or course administrator in the course. Your school may also have turned this part off.'
+        : 'Your Canvas account isn’t allowed to do this in this course. ' +
+          'What to do: make sure you are a teacher, designer or course administrator in the course, ' +
+          'or ask the course owner to add you.') + tail
     )
   }
   if (status === 404) {
     return (
-      'Canvas can’t find this course. ' +
-      'What to do: check that the link you pasted is the right course, and that you are signed up in it. ' +
-      'Courses that have ended may no longer be available.' +
-      tail
+      (what
+        ? `Canvas couldn’t find ${what}. What to do: check the Canvas site address and your course link, then try again.`
+        : 'Canvas can’t find this course. ' +
+          'What to do: check that the link you pasted is the right course, and that you are signed up in it. ' +
+          'Courses that have ended may no longer be available.') + tail
     )
   }
   if (status === 429) {
@@ -74,6 +82,19 @@ export function canvasApiMessage(status: number, body = ''): string {
     `What to do: try again. If it fails again, send the technical details to ${SUPPORT_CONTACT}.` +
     tail
   )
+}
+
+/** What a Canvas API path is about, for the cases where "this course" would be the wrong thing to blame. */
+export function whatIsAsked(url: string): string | undefined {
+  let path: string
+  try {
+    path = new URL(url).pathname.replace(/^\/api\/v1/, '')
+  } catch {
+    return undefined
+  }
+  if (/^\/courses\/\d+\/?$/.test(path)) return undefined // the course itself
+  if (/^\/(courses|accounts)\/?$/.test(path)) return 'your list of courses'
+  return 'part of this course'
 }
 
 /** The request never got an answer. `cause` is the system's own description, kept for support. */

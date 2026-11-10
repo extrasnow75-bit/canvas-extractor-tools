@@ -1,4 +1,4 @@
-import { CanvasApiError, canvasUnreachableMessage } from './canvasMessages'
+import { CanvasApiError, canvasUnreachableMessage, whatIsAsked } from './canvasMessages'
 export interface CourseRef {
   baseUrl: string
   courseId: string
@@ -335,6 +335,7 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
     throw new CanvasApiError(
       throttled ? 429 : response.status,
       errorDetail(body) || response.statusText,
+      whatIsAsked(url),
     )
   }
 }

@@ -1,3 +1,4 @@
+import { ErrorText, ErrorDetails } from './ErrorText'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link2, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
 import { ToolTile } from './ToolTile'
@@ -386,7 +387,8 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
             </>
           ) : nameError ? (
             <span id="course-url-error" className="text-xs text-red-700">
-              {nameError}
+              <ErrorText message={nameError} />
+              <ErrorDetails message={nameError} />
             </span>
           ) : null}
         </div>

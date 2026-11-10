@@ -382,7 +382,7 @@ export async function handleRubricExport(
   args: RubricExportArgs,
 ): Promise<{ ok: boolean; message: string; cancelled?: boolean }> {
   const parsed = parseCourseUrl(args.courseUrl)
-  if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+  if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
 
   const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
   const cancel = beginJob(args.jobId)

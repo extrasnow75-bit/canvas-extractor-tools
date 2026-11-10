@@ -388,7 +388,7 @@ export async function handleCleanExport(
     return {
       ok: false,
       message:
-        'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345',
+        'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345',
     }
   }
   const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null

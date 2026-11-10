@@ -97,7 +97,7 @@ expire. Make a new one (see above) and paste it in.
 **Google sign-in stops working after a while.** Sign in again from the initial setup panel.
 The app clears the dead sign-in automatically, so the button will be waiting for you.
 
-**"Not a recognised Canvas course URL."** The URL must contain `/courses/` followed by the
+**"Not a recognized Canvas course URL."** The URL must contain `/courses/` followed by the
 course number. Copy it from your browser's address bar while you are on the course.
 
 **A purple "check manually" note appears in the document.** That item's text came back
