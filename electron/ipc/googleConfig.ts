@@ -4,8 +4,10 @@
  * The client ID is a PUBLIC identifier — the PKCE desktop-app flow (RFC 8252) uses no
  * client secret, so it is safe to commit. To create it:
  *   1. Google Cloud Console → APIs & Services → Enable the "Google Drive API".
- *   2. OAuth consent screen → External → add your ~14 users as Test users
- *      (or publish the app). Scopes: .../auth/drive.file, openid, email, profile.
+ *   2. OAuth consent screen → External, published ("In production"). Every scope is non-sensitive
+ *      (.../auth/drive.file, openid, email, profile), so no Google review is needed and nobody has
+ *      to be added. Do NOT add a sensitive or restricted scope: that brings the unverified-app
+ *      warning, a permanent 100-user limit, and a paid security review.
  *   3. Credentials → Create OAuth client ID → Application type: "Desktop app".
  *   4. Paste the client ID below (or set the GOOGLE_CLIENT_ID env var for local dev).
  */

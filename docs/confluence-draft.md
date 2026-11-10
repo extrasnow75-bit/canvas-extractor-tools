@@ -45,10 +45,10 @@ The token gives the app exactly the access you already have — no more. It is s
 encrypted on your own computer, tied to your Windows sign-in, and is never sent anywhere
 except Canvas.
 
-**2. Access to Google sign-in — only if you want the Drive extraction.** Google sign-in is
-currently limited to an approved list of accounts. **Contact the eCampus Center to be added
-before your first use**, or sign-in will fail with a message about the app not being
-verified. The local `.html` extraction needs no Google account at all.
+**2. Google sign-in — only if you want the Drive extraction.** Anyone with a Google account can
+sign in; nobody has to be added first. When Google asks what to allow, leave the Google Drive
+box ticked, or saving to Drive will fail. If sign-in fails, contact Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com).
+The local `.html` extraction needs no Google account at all.
 
 ## Installing
 
@@ -255,14 +255,17 @@ Two consequences:
    from an installer.** That is tolerable only because of the two controls below. Do not
    treat it as confidential; treat the controls as the actual security boundary.
 
-**The OAuth consent screen must stay in "Testing" — do not publish it.** Every user has to
-be added individually under **Test users** in the Google Cloud console. This is deliberate:
-it is what stops the extractable client ID/secret from being usable by anyone else.
-Onboarding a new user means adding their Google address there. Combined with PKCE, this is
-what makes public distribution acceptable.
+**The OAuth consent screen is published ("In production"), and that is safe only because the app
+asks for no sensitive scopes.** Nobody has to be added to a list, and Google does not force a new
+sign-in every week. Two things keep this acceptable: PKCE protects the sign-in itself, and the app
+can only touch Drive files it created, so a stranger who borrowed the client ID could not read
+anyone's Drive. Do not treat the client secret as confidential.
 
-**Keep the scope at `drive.file`.** Anything broader would require Google verification and
-would give the app far more access than it needs.
+**Keep the scopes non-sensitive: `drive.file`, plus sign-in and profile.** Never add a sensitive or
+restricted scope (for example `drive.readonly`) to this project. Google would then show its
+unverified-app warning, count users against a permanent limit of 100 that cannot be reset, and
+require a paid security review. The Rubric app asks for `drive.readonly`, which is why that project
+stays in Testing with a test-user list.
 
 ## Releasing
 

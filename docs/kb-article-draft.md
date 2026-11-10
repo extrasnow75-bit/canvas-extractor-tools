@@ -48,7 +48,7 @@ Then open the app normally. You need to do this once for each version you instal
 
 The token gives the app exactly the Canvas access you already have — no more. It is stored encrypted on your own computer and is never sent anywhere except Canvas.
 
-**2\. Google sign-in access — only if you want the Google Doc or Google Sheet output.** Google sign-in is currently limited to an approved list of accounts. **Contact the eCampus Center to be added before your first use**, or sign-in will fail with a message about the app not being verified. The alternative output — a local HTML file for content, quizzes and rubrics, or a local `.xlsx` file for settings — needs no Google account at all.
+**2\. Google sign-in — only if you want the Google Doc or Google Sheet output.** Anyone with a Google account can sign in; nobody has to be added first. When Google asks what to allow, leave the Google Drive box ticked, or saving to Drive will fail. If sign-in fails, contact Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com). The alternative output — a local HTML file for content, quizzes and rubrics, or a local `.xlsx` file for settings — needs no Google account at all.
 
 ## 🖥️Why a Desktop App and Not a Notebook?
 
@@ -335,9 +335,9 @@ Two consequences:
 1. **GitHub Actions secrets do not follow a repository when it moves.** If this repo is transferred to the eCampus org, `MAIN_VITE_GOOGLE_CLIENT_SECRET` must be added again on the other side, or the builds will quietly ship with Google sign-in broken.
 2. **Because the repo and its installers are public, anyone can extract that client secret from a release.** Treat it as public. The actual security boundary is the two controls below.
 
-**Do not publish the OAuth consent screen. It must stay in "Testing."** Every user has to be added by hand under **Test users** in the Google Cloud console — that's why onboarding someone means adding their Google address there. It looks like a limitation to remove; it's the thing that stops the extractable client ID and secret from being usable by anyone outside the approved list. Combined with PKCE, it's what makes public distribution acceptable.
+**The OAuth consent screen is published ("In production"), and that is safe only because the app asks for no sensitive scopes.** Nobody has to be added to a list, and Google does not force a new sign-in every week. Two things keep it acceptable: PKCE protects the sign-in itself, and the app can only touch Drive files it created, so a stranger who borrowed the client ID could not read anyone's Drive.
 
-**Keep the Google scope at `drive.file`.** That's "only the files this app created." Anything broader triggers a Google verification review and gives the app far more access to people's Drives than it needs.
+**Keep the Google scopes non-sensitive: `drive.file`, plus sign-in and profile.** Never add a sensitive or restricted scope (for example `drive.readonly`) to this project. Google would then show its unverified-app warning, count users against a permanent limit of 100 that cannot be reset, and require a paid security review. The Rubric app asks for `drive.readonly`, which is why that project stays in Testing with a test-user list.
 
 ## Releasing a new version
 

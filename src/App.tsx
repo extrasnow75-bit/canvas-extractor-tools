@@ -92,9 +92,9 @@ export default function App() {
     window.api.app.version().then(setAppVersion)
     window.api.app.checkUpdate().then(setUpdate)
 
-    // A stored Google sign-in can die between launches — Google expires refresh tokens
-    // after seven days while the OAuth consent screen is in Testing. When that surfaces
-    // mid-extraction, stop showing the user as signed in.
+    // A stored Google sign-in can die between launches — the person may remove the app in
+    // their Google Account, or Google may revoke a token that has gone unused. When that
+    // surfaces mid-extraction, stop showing the user as signed in.
     return window.api.google.onSignedOut(() => {
       googleEpoch.current++
       setGoogleCheck('expired')
