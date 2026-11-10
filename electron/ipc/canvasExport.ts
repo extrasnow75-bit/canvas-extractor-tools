@@ -1,3 +1,4 @@
+import { CanvasApiError } from './canvasMessages'
 import { IpcMainInvokeEvent } from 'electron'
 import { writeFileSync } from 'fs'
 import { consumeSavePath } from './savePaths'
@@ -355,7 +356,7 @@ async function hasFrontPage(ref: CourseRef): Promise<boolean> {
     return true
   } catch (err) {
     if (isCancellation(err)) throw err
-    return !(err instanceof Error && /Canvas API error 404/.test(err.message))
+    return !(err instanceof CanvasApiError && err.status === 404)
   }
 }
 

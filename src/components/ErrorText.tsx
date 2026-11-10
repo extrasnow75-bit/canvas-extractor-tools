@@ -77,8 +77,56 @@ function LinkedText({ text }: { text: string }) {
   return <>{parts}</>
 }
 
-export function ErrorText({ message }: { message: string }) {
+/** Where an error's technical cause starts. The main process writes it after the plain sentence. */
+const DETAILS_RE = /\s*Details for support:\s*/
+
+/** The sentence for the reader, and the technical cause (if any) kept for support. */
+export function splitDetails(message: string): { plain: string; details?: string } {
   const clean = cleanErrorMessage(message)
+  const match = DETAILS_RE.exec(clean)
+  if (!match) return { plain: clean }
+  const details = clean.slice(match.index + match[0].length).trim()
+  return { plain: clean.slice(0, match.index).trim(), details: details || undefined }
+}
+
+/** "Show technical details" with a Copy button, for the person who supports the app. */
+export function ErrorDetails({ message }: { message: string }) {
+  const { details } = splitDetails(message)
+  const [open, setOpen] = React.useState(false)
+  const [copied, setCopied] = React.useState(false)
+  if (!details) return null
+  const copy = () => {
+    void navigator.clipboard?.writeText(details).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="text-xs underline underline-offset-2 font-bold text-red-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+      >
+        {open ? 'Hide technical details' : 'Show technical details'}
+      </button>
+      {open && (
+        <div className="mt-1.5">
+          <pre className="text-xs text-red-900 bg-red-100 rounded-lg p-2.5 whitespace-pre-wrap break-all">{details}</pre>
+          <button
+            onClick={copy}
+            className="mt-1 text-xs underline underline-offset-2 font-bold text-red-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+          >
+            {copied ? 'Copied' : 'Copy details'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ErrorText({ message }: { message: string }) {
+  const clean = splitDetails(message).plain
   const segments = clean.split(PANEL_NAME)
 
   return (

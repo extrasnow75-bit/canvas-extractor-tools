@@ -5,7 +5,7 @@ import { ToolPanel } from './components/ToolPanel'
 import { HelpCenter } from './components/HelpCenter'
 import { UpdateBanner } from './components/UpdateBanner'
 import { ZoomControl } from './components/ZoomControl'
-import { ErrorText, cleanErrorMessage } from './components/ErrorText'
+import { ErrorText, ErrorDetails, cleanErrorMessage } from './components/ErrorText'
 import type { GoogleCheckState, GoogleStatus } from './types'
 import { googleReady, googleSignedIn } from './components/googleView'
 
@@ -214,9 +214,12 @@ export default function App() {
           {googleError && (
             <div className="max-w-2xl mx-auto flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-700" aria-hidden="true" />
-              <p>
-                <ErrorText message={googleError} />
-              </p>
+              <div className="min-w-0">
+                <p>
+                  <ErrorText message={googleError} />
+                </p>
+                <ErrorDetails message={googleError} />
+              </div>
             </div>
           )}
         </div>

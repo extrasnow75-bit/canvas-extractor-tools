@@ -10,7 +10,7 @@ import {
   Square,
 } from 'lucide-react'
 import type { CleanOptions, PickerItem, Tool } from '../types'
-import { ErrorText, cleanErrorMessage } from './ErrorText'
+import { ErrorText, ErrorDetails, splitDetails } from './ErrorText'
 import { ModuleSelectRow } from './ModuleSelectRow'
 import { LOOSE_GROUP } from './pickerGroups'
 import { withGroup } from './pickerSelection'
@@ -422,7 +422,7 @@ export function ToolTile({
           ? `${label} done. ${message}`
           : status === 'error'
             ? // Announced as plain text, so it needs the same tidying the visible copy gets.
-              `${label} failed. ${cleanErrorMessage(message)}`
+              `${label} failed. ${splitDetails(message).plain}`
             : ''
 
   /**
@@ -953,6 +953,7 @@ export function ToolTile({
             <p className="text-gray-700 mt-0.5 break-words">
               <ErrorText message={message} />
             </p>
+            <ErrorDetails message={message} />
           </div>
         </div>
       )}

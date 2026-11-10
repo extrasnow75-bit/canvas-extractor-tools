@@ -1,3 +1,4 @@
+import { CanvasApiError, canvasUnreachableMessage } from './canvasMessages'
 export interface CourseRef {
   baseUrl: string
   courseId: string
@@ -310,9 +311,7 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
         await sleepCancellable(NETWORK_RETRY_BACKOFF_MS[attempt], ref.cancel)
         continue
       }
-      throw new Error(
-        'Could not reach Canvas — the connection timed out. Check your network and try again.',
-      )
+      throw new Error(canvasUnreachableMessage(err instanceof Error ? err.message : String(err)))
     }
 
     if (response.ok) return response
@@ -331,11 +330,11 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
       continue
     }
 
-    const detail = throttled
-      ? 'Canvas is rate limiting this account. Wait a few minutes and try again.'
-      : errorDetail(body)
-    throw new Error(
-      `Canvas API error ${response.status}${detail ? `: ${detail}` : ` (${response.statusText})`}`,
+    // The wording lives in canvasMessages.ts. A throttle that outlasted its retries is a 429
+    // however Canvas phrased it (some instances answer 403 for it).
+    throw new CanvasApiError(
+      throttled ? 429 : response.status,
+      errorDetail(body) || response.statusText,
     )
   }
 }
