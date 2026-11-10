@@ -13,7 +13,10 @@
 /** What a check of the stored Google sign-in found. */
 export type GoogleCheck = 'valid' | 'expired' | 'unknown' | 'none'
 
-const ASK_SUPPORT = 'If it keeps happening, tell the person who supports this app.'
+/** Who a person stuck on a problem should contact. Change this one line to change every message. */
+export const SUPPORT_CONTACT = 'Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com)'
+
+const ASK_SUPPORT = `If it keeps happening, contact ${SUPPORT_CONTACT}.`
 const OR_LOCAL = 'Or choose “save a local copy” to save a file on your computer instead.'
 
 function details(text: string): string {
@@ -39,7 +42,7 @@ export const MSG_UNREACHABLE =
 export const MSG_NOT_SET_UP =
   'This copy of the app was not set up for Google sign-in, so Google features are not available in it. ' +
   'You can still choose “Continue without Google” and save files to your computer. ' +
-  'If you expected Google sign-in to work, tell the person who supports this app.'
+  `If you expected Google sign-in to work, contact ${SUPPORT_CONTACT}.`
 
 /**
  * MSG_NOT_SET_UP with the reason for support: which piece this copy of the app is missing.

@@ -68,7 +68,7 @@ describe('the "not set up" message', () => {
   it('says only what is true: this copy has no Google sign-in, and what to do about it', () => {
     expect(MSG_NOT_SET_UP).toMatch(/not set up for Google sign-in/)
     expect(MSG_NOT_SET_UP).toMatch(/Continue without Google/)
-    expect(MSG_NOT_SET_UP).toMatch(/tell the person who supports this app\.$/)
+    expect(MSG_NOT_SET_UP).toMatch(/contact Greg Snow \(gregsnow@boisestate\.edu or extrasnow75@gmail\.com\)\.$/)
   })
 
   it('does not suggest any approval or endorsement by anyone', () => {

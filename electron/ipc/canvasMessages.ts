@@ -8,6 +8,8 @@
  * Kept free of Electron imports so the wording can be unit tested.
  */
 
+import { SUPPORT_CONTACT } from './googleMessages'
+
 /** Longest technical detail kept. Plenty for a Canvas error, short enough not to flood the screen. */
 const MAX_DETAIL = 1500
 
@@ -67,7 +69,7 @@ export function canvasApiMessage(status: number, body = ''): string {
   }
   return (
     'Canvas wouldn’t accept that. ' +
-    'What to do: try again. If it fails again, send the technical details to the person who supports this app.' +
+    `What to do: try again. If it fails again, send the technical details to ${SUPPORT_CONTACT}.` +
     tail
   )
 }
