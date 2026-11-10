@@ -44,6 +44,7 @@ describe('every message', () => {
     ['api 403 quota', googleApiMessage('Drive', 'saving the file to Google Drive', 403, 'storageQuotaExceeded')],
     ['api 403 rate', googleApiMessage('Drive', 'saving the file to Google Drive', 403, 'userRateLimitExceeded')],
     ['api 403', googleApiMessage('Drive', 'saving the file to Google Drive', 403, 'forbidden')],
+    ['api 403 scopes', googleApiMessage('Drive', 'saving the file to Google Drive', 403, 'Insufficient Permission')],
     ['api 404', googleApiMessage('Docs', 'finishing the Google Doc', 404)],
     ['api 429', googleApiMessage('Sheets', 'creating the Google Sheet', 429)],
     ['api 503', googleApiMessage('Sheets', 'creating the Google Sheet', 503)],
@@ -114,6 +115,9 @@ describe('googleApiMessage', () => {
   it('tells a full Drive from a refusal', () => {
     expect(googleApiMessage('Drive', 'saving', 403, 'storageQuotaExceeded')).toMatch(/Google Drive is full/)
     expect(googleApiMessage('Drive', 'saving', 403, 'forbidden')).toMatch(/would not allow/)
+    expect(
+      googleApiMessage('Drive', 'saving', 403, '{"error":{"message":"Request had insufficient authentication scopes."}}'),
+    ).toMatch(/tick the Drive box/)
   })
 
   it('tells Google being busy or broken from the person’s own problem', () => {

@@ -93,6 +93,11 @@ export function googleApiMessage(service: string, doing: string, status: number,
   if (status === 429 || (status === 403 && /rateLimit|RATE_LIMIT/i.test(body))) {
     return `Google is busy right now. Wait a minute and try again.${tail}`
   }
+  // Google lets people untick the Drive box on its consent screen and still signs them in, so the
+  // sign-in works and the first save fails. The fix is to sign in again and leave that box ticked.
+  if (status === 403 && /insufficient (authentication scopes|permissions?)|insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(body)) {
+    return `Google signed you in, but you did not allow this app to use your Google Drive, so the file could not be saved. Open Initial setup at the top, sign out, choose Sign in with Google again, and tick the Drive box on the Google screen that asks what to allow. ${OR_LOCAL}${tail}`
+  }
   if (status === 403) {
     return `Google would not allow the app to do that while ${doing}. Try signing out and signing in again. ${ASK_SUPPORT}${tail}`
   }
