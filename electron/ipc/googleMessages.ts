@@ -10,6 +10,8 @@
  * Kept free of Electron imports so the wording can be unit tested.
  */
 
+import { redact } from './redact'
+
 /** What a check of the stored Google sign-in found. */
 export type GoogleCheck = 'valid' | 'expired' | 'unknown' | 'none'
 
@@ -20,7 +22,7 @@ const ASK_SUPPORT = `If it keeps happening, contact ${SUPPORT_CONTACT}.`
 const OR_LOCAL = 'Or choose “save a local copy” to save a file on your computer instead.'
 
 function details(text: string): string {
-  const clean = text.replace(/\s+/g, ' ').trim().slice(0, 200)
+  const clean = redact(text).replace(/\s+/g, ' ').trim().slice(0, 200)
   return clean ? ` Details for support: ${clean}` : ''
 }
 

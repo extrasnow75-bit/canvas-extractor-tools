@@ -93,34 +93,42 @@ export function splitDetails(message: string): { plain: string; details?: string
 export function ErrorDetails({ message }: { message: string }) {
   const { details } = splitDetails(message)
   const [open, setOpen] = React.useState(false)
-  const [copied, setCopied] = React.useState(false)
+  const [copyState, setCopyState] = React.useState<'idle' | 'copied' | 'failed'>('idle')
   if (!details) return null
   const copy = () => {
-    void navigator.clipboard?.writeText(details).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+    const done = (state: 'copied' | 'failed') => {
+      setCopyState(state)
+      setTimeout(() => setCopyState('idle'), 3000)
+    }
+    if (!navigator.clipboard?.writeText) return done('failed')
+    navigator.clipboard.writeText(details).then(() => done('copied'), () => done('failed'))
   }
+  const link =
+    'text-xs underline underline-offset-2 font-bold text-red-800 rounded py-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]'
   return (
-    <div className="mt-1.5">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="text-xs underline underline-offset-2 font-bold text-red-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
-      >
+    <div className="mt-0.5">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className={link}>
         {open ? 'Hide technical details' : 'Show technical details'}
       </button>
       {open && (
-        <div className="mt-1.5">
+        <div>
           <pre className="text-xs text-red-900 bg-red-100 rounded-lg p-2.5 whitespace-pre-wrap break-all">{details}</pre>
-          <button
-            onClick={copy}
-            className="mt-1 text-xs underline underline-offset-2 font-bold text-red-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
-          >
-            {copied ? 'Copied' : 'Copy details'}
+          <button onClick={copy} className={link}>
+            {copyState === 'copied' ? 'Copied' : 'Copy details'}
           </button>
+          {copyState === 'failed' && (
+            <p className="text-xs text-red-800" aria-hidden="true">Could not copy. Select the text above and copy it by hand.</p>
+          )}
         </div>
       )}
+      {/* Always mounted, so a screen reader announces the change. */}
+      <span role="status" className="sr-only">
+        {copyState === 'copied'
+          ? 'Details copied to the clipboard.'
+          : copyState === 'failed'
+            ? 'Could not copy. Select the technical details and copy them by hand.'
+            : ''}
+      </span>
     </div>
   )
 }

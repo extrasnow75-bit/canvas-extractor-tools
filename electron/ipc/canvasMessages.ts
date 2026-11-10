@@ -10,11 +10,13 @@
 
 import { SUPPORT_CONTACT } from './googleMessages'
 
+import { redact } from './redact'
+
 /** Longest technical detail kept. Plenty for a Canvas error, short enough not to flood the screen. */
 const MAX_DETAIL = 1500
 
 function details(text: string): string {
-  const clean = text.replace(/\s+/g, ' ').trim().slice(0, MAX_DETAIL)
+  const clean = redact(text).replace(/\s+/g, ' ').trim().slice(0, MAX_DETAIL)
   return clean ? ` Details for support: ${clean}` : ''
 }
 

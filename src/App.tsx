@@ -210,12 +210,13 @@ export default function App() {
             collapses itself once setup is complete — the normal state. The message rendered
             there could never be seen: not by a screen reader, and not by anyone else
             either. */}
-        <div role="alert" className={googleError ? 'px-6 pt-3' : 'sr-only'}>
+        <div className={googleError ? 'px-6 pt-3' : 'sr-only'}>
           {googleError && (
             <div className="max-w-2xl mx-auto flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 rounded-xl text-[12.5px] text-red-800">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-700" aria-hidden="true" />
               <div className="min-w-0">
-                <p>
+                {/* The alert is the sentence only, so opening or copying the details is not read out again. */}
+                <p role="alert">
                   <ErrorText message={googleError} />
                 </p>
                 <ErrorDetails message={googleError} />

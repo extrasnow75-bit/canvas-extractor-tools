@@ -188,10 +188,12 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
         server.close()
         focusAppWindow()
 
-        if (error) return finish(() => reject(new Error(signInCancelledMessage(error))))
+        // The state check comes first: a request that cannot prove it belongs to this sign-in must
+        // not be able to put its own error text in front of the person.
         if (returnedState !== state) {
           return finish(() => reject(new Error(MSG_STATE_MISMATCH)))
         }
+        if (error) return finish(() => reject(new Error(signInCancelledMessage(error))))
         finish(() => resolve({ code: returnedCode!, redirectUri }))
       })
 
