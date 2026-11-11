@@ -2,7 +2,15 @@ export interface Credentials {
   canvasToken: string
 }
 
-export type Tool = 'content' | 'quizzes' | 'rubrics' | 'settings'
+export type Tool = 'content' | 'clean' | 'quizzes' | 'rubrics' | 'settings'
+
+/** Options only the clean course document has. */
+export interface CleanOptions {
+  /** Start each activity on a new page. */
+  pageBreaks: boolean
+  /** Show the Canvas tool name (Page, Assignment...) under each activity title. */
+  toolLabels: boolean
+}
 
 export interface ExportResult {
   ok: boolean
@@ -17,6 +25,10 @@ export interface GoogleStatus {
   name?: string
   picture?: string
 }
+
+/** What a check of the stored Google sign-in found. 'checking' is the app waiting for the answer. */
+export type GoogleCheck = 'valid' | 'expired' | 'unknown' | 'none'
+export type GoogleCheckState = GoogleCheck | 'checking'
 
 export interface PickerItem {
   id: string
@@ -89,6 +101,14 @@ declare global {
           selectedIds?: string[]
           jobId?: string
         }): Promise<ExportResult>
+        exportClean(args: {
+          courseUrl: string
+          token: string
+          savePath: string
+          selectedIds?: string[]
+          jobId?: string
+          options?: CleanOptions
+        }): Promise<ExportResult>
         exportQuizzes(args: {
           courseUrl: string
           token: string
@@ -116,21 +136,40 @@ declare global {
           token: string
           selectedIds?: string[]
           jobId?: string
+          options?: CleanOptions
         }): Promise<ExportResult>
         cancelExport(jobId: string): Promise<boolean>
         onExportProgress(
           callback: (data: { jobId: string; done: number; total: number }) => void,
         ): () => void
         getCourseName(args: { courseUrl: string; token: string }): Promise<CourseNameResult>
+        listCourses(args: { site: string; token: string }): Promise<ListCoursesResult>
         listItems(args: { tool: Tool; courseUrl: string; token: string }): Promise<ListItemsResult>
       }
       google: {
         signIn(options?: { useAnotherAccount?: boolean }): Promise<GoogleStatus>
+        cancelSignIn(): Promise<boolean>
         signOut(): Promise<void>
         status(): Promise<GoogleStatus>
+        verify(): Promise<GoogleCheck>
         /** Fires when a stored sign-in turns out to be dead. Returns an unsubscribe function. */
         onSignedOut(callback: () => void): () => void
       }
     }
   }
 }
+
+export interface CourseChoice {
+  id: string
+  name: string
+  code: string
+  role: 'teacher' | 'ta' | 'designer'
+  term: string
+  termStart: string | null
+  ended: boolean
+  blueprint: boolean
+}
+
+export type ListCoursesResult =
+  | { ok: true; site: string; courses: CourseChoice[] }
+  | { ok: false; message: string }

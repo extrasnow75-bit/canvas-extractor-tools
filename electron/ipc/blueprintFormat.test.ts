@@ -3,6 +3,7 @@ import {
   formatCanvasBody,
   escapeHtml,
   htmlDocument,
+  withReadingLayout,
   LANDSCAPE_PAGE,
   CANVAS_LINK_HIGHLIGHT,
   highlightCanvasLinks,
@@ -11,39 +12,33 @@ import {
   toolLabel,
 } from './blueprintFormat'
 
-/**
- * The Canvas tool line, as the Blueprint template now draws it (QA change, 2026-09): the
- * tool name, the black circle, and "Link to settings tab" — on every tool, Page included,
- * with no semicolon between marker and phrase.
- */
+/** The Canvas tool line, as the Blueprint template draws it: the tool name, then "; Link to settings tab". */
 describe('toolLabel', () => {
   const text = (html: string) => html.replace(/<[^>]+>/g, '')
 
-  it('reads "<Tool> ⏺ Link to settings tab", with no semicolon', () => {
-    expect(text(toolLabel('Assignment'))).toBe(`Assignment ⏺ ${SETTINGS_TAB_PHRASE}`)
-    expect(text(toolLabel('Assignment'))).not.toContain(';')
+  it('reads "<Tool>; Link to settings tab", with no black circle', () => {
+    expect(text(toolLabel('Assignment'))).toBe(`Assignment; ${SETTINGS_TAB_PHRASE}`)
+    expect(text(toolLabel('Assignment'))).not.toContain('⏺')
   })
 
   it('puts the phrase on Page, File and External Link too, not just tools with a settings table', () => {
     for (const tool of ['Page', 'File', 'External Link'] as const) {
-      expect(text(toolLabel(tool)), tool).toBe(`${tool} ⏺ ${SETTINGS_TAB_PHRASE}`)
+      expect(text(toolLabel(tool)), tool).toBe(`${tool}; ${SETTINGS_TAB_PHRASE}`)
     }
   })
 
-  it('sets the phrase in red bold Arial 11, and keeps the marker black', () => {
+  it('sets the name and the phrase in red bold Arial 11', () => {
     const html = toolLabel('Discussion')
     const spans = [...html.matchAll(/<span style="([^"]*)">([^<]*)<\/span>/g)].map((m) => [m[1], m[2]])
-    expect(spans).toHaveLength(3)
-    const [name, marker, phrase] = spans
+    expect(spans).toHaveLength(2)
+    const [name, phrase] = spans
     for (const [style] of [name, phrase]) {
       expect(style).toContain('font-family:Arial')
       expect(style).toContain('font-size:11pt')
       expect(style).toContain('font-weight:bold')
       expect(style).toContain(`color:${RED}`)
     }
-    expect(phrase[1]).toBe(SETTINGS_TAB_PHRASE)
-    expect(marker[1].trim()).toBe('⏺')
-    expect(marker[0]).toContain('color:#000000')
+    expect(phrase[1]).toBe(`; ${SETTINGS_TAB_PHRASE}`)
   })
 })
 
@@ -253,5 +248,34 @@ describe('highlightCanvasLinks', () => {
   it('is applied by formatCanvasBody', () => {
     const out = formatCanvasBody('<p><a href="/courses/1/discussion_topics/2">f</a></p>', base)
     expect(out).toContain(mark)
+  })
+})
+
+describe('withReadingLayout', () => {
+  const doc = htmlDocument('T', ['<p>Hello</p>'])
+  it('adds a screen-only centred column with padding', () => {
+    const out = withReadingLayout(doc)
+    expect(out).toContain('@media screen')
+    expect(out).toContain('max-width: 50rem')
+    expect(out).toContain('margin: 0 auto !important')
+    expect(out).toContain('padding: 2.5rem 2rem !important')
+    expect(out.indexOf('<style>')).toBeLessThan(out.indexOf('</head>'))
+    expect(out).toContain('<p>Hello</p>')
+  })
+  it('takes a different width, and leaves a document without a head alone', () => {
+    expect(withReadingLayout(doc, '80rem')).toContain('max-width: 80rem')
+    expect(withReadingLayout('<p>x</p>')).toBe('<p>x</p>')
+  })
+  it('is not part of the document the Google upload uses', () => {
+    expect(doc).not.toContain('@media')
+  })
+})
+
+describe('withReadingLayout script policy', () => {
+  it('blocks scripts, plugins and forms in the saved page', () => {
+    const out = withReadingLayout('<html><head></head><body><script>alert(1)</script></body></html>')
+    expect(out).toContain('Content-Security-Policy')
+    expect(out).toContain("script-src 'none'")
+    expect(out).toContain("object-src 'none'")
   })
 })

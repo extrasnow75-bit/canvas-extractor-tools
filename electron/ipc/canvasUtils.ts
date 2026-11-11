@@ -1,3 +1,5 @@
+import { CanvasApiError, canvasUnreachableMessage, whatIsAsked } from './canvasMessages'
+import { SUPPORT_CONTACT } from './googleMessages'
 export interface CourseRef {
   baseUrl: string
   courseId: string
@@ -310,9 +312,7 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
         await sleepCancellable(NETWORK_RETRY_BACKOFF_MS[attempt], ref.cancel)
         continue
       }
-      throw new Error(
-        'Could not reach Canvas — the connection timed out. Check your network and try again.',
-      )
+      throw new Error(canvasUnreachableMessage(err instanceof Error ? err.message : String(err)))
     }
 
     if (response.ok) return response
@@ -331,11 +331,12 @@ async function canvasFetch(url: string, ref: CourseRef): Promise<FetchResponseLi
       continue
     }
 
-    const detail = throttled
-      ? 'Canvas is rate limiting this account. Wait a few minutes and try again.'
-      : errorDetail(body)
-    throw new Error(
-      `Canvas API error ${response.status}${detail ? `: ${detail}` : ` (${response.statusText})`}`,
+    // The wording lives in canvasMessages.ts. A throttle that outlasted its retries is a 429
+    // however Canvas phrased it (some instances answer 403 for it).
+    throw new CanvasApiError(
+      throttled ? 429 : response.status,
+      errorDetail(body) || response.statusText,
+      whatIsAsked(url),
     )
   }
 }
@@ -349,6 +350,9 @@ function isSameOrigin(candidate: string, expected: string): boolean {
   }
 }
 
+/** At 100 items a page this is 100,000 items, far beyond any real course. */
+const MAX_PAGES = 1000
+
 /**
  * GET a Canvas API endpoint, following pagination automatically.
  */
@@ -361,7 +365,14 @@ export async function canvasGet<T>(
   let url: string | null =
     `${ref.baseUrl}/api/v1${path}${path.includes('?') ? '&' : '?'}per_page=${perPage}`
 
+  let pages = 0
   while (url) {
+    // A site that keeps answering with another "next" page would otherwise run until memory ran out.
+    if (++pages > MAX_PAGES) {
+      throw new Error(
+        `Canvas sent far more pages of results than expected, so the app stopped. What to do: try again. If it happens again, contact ${SUPPORT_CONTACT}.`,
+      )
+    }
     const response = await canvasFetch(url, ref)
 
     const data = await response.json()

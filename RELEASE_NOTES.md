@@ -1,5 +1,19 @@
-## What's new in v1.1.1
+## What's new in v1.2.0
 
-Since v1.1.0:
+Since v1.1.1:
 
-- **Fixed: the app's own header line was missing "settings."** It read "Extract Canvas course content, quizzes, and rubrics" — now it lists all four: "Extract Canvas course content, quizzes, rubrics, and settings."
+- **New: Clean course document.** A readable copy of the course without the Blueprint markup: modules as headings, a contents list at the top that jumps to each activity, and the real due and availability dates from Canvas. Under **Advanced options** you can choose whether each activity starts on a new page and whether the Canvas tool name (Page, Assignment, Discussion…) is shown under each title. It saves as a Google Doc, or as an `.html` file if you are not signed in to Google.
+- **New: choose your course from a list.** Press **Choose from my courses** to pick from the courses where you are a teacher, TA or designer, on any Canvas site at an instructure.com address, instead of pasting an address. Master and template courses come first, you can search by name or code, and Blueprint courses are tagged. Pasting a course address still works.
+- **Smart chips in the Course content Google Doc.** The Canvas tool name on each tool line (Page, Assignment, Discussion, Quiz…) is now a dropdown chip, using the same list of tools as the Blueprint template.
+- **Better item pickers.** Each module has an **Everything in this module** box, you can choose the home page and syllabus on their own, and the list ends with a group, **Published content not in a module**, for published pages, assignments, discussions and classic quizzes that no module holds. Group headings are now pale-blue bars that stay in view as you scroll.
+- **Easier to tell documents apart.** The course address and the time of the extraction appear under the title. Google Docs are named "[Course name] — Course Content Extraction" or "[Course name] — Clean Course Content Extraction".
+- **Saved files.** Suggested file names include the course, for example `course_content_extraction_ecampus_demo.html`. Saved `.html` files open in a centered, padded column that is easier to read, and Save dialogs start in your Downloads folder.
+- **Clearer Google sign-in.** The app checks your Google sign-in when it starts, says plainly whether you are signed in and where files will go, and explains problems in everyday words.
+- **Plain-English Canvas errors.** When Canvas will not do something, the message now says what happened and what to do: a saved access code that no longer works, an account that is not allowed in the course, a course Canvas cannot find, Canvas asking the app to slow down, Canvas having trouble on its end, and no connection. Each has a **Show technical details** link with a **Copy details** button for whoever supports the app.
+- **Fixed: "Insufficient Permission" when saving to Google Drive.** If Google signs you in but you did not tick the Drive box on its consent screen, the message now says so and tells you to sign out, sign in again and tick the box. Google sign-in messages use the same **Show technical details** link.
+- **Who to contact.** Error messages that need help now name Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com) instead of "the person who supports this app".
+- **Cancel a Google sign-in.** While the app waits for Google in your browser, a **Cancel sign-in** button lets you stop waiting instead of waiting out the three minutes. This helps when Google shows "Access blocked".
+- **Asks before sending your Canvas token to another site.** The Boise State Canvas site is trusted. For any other Canvas address, a pop-up window asks once whether your token may be sent there.
+- **Saved `.html` pages block scripts.** A page saved to your computer can no longer run a script that was left in a course page. Links in error messages open only the places the app sends you to.
+- **Extractions to Google stop early** if your Google sign-in is missing or has expired, before any course content is read, so you do not lose a long run at the end.
+- **Fixed: two scroll bars** on the right side of the window. There is now one.

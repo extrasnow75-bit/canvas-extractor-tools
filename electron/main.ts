@@ -1,4 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, type IpcMainInvokeEvent } from 'electron'
+import { finishingTouchNote, type FinishingFailure } from './ipc/finishingTouches'
+import { listMyCourses, normalizeSite } from './ipc/courseList'
+import { isAllowedExternalUrl } from './ipc/externalUrls'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { handleCanvasExport, buildContentHtml, makeProgressReporter } from './ipc/canvasExport'
@@ -9,6 +12,7 @@ import { createSettingsSpreadsheet } from './ipc/googleSheets'
 import {
   parseCourseUrl,
   canvasGetOne,
+  canvasGet,
   CourseRef,
   beginJob,
   endJob,
@@ -16,10 +20,13 @@ import {
   isCancellation,
   verifyToken,
   courseCodeLabel,
+  DEFAULT_CANVAS_ORIGIN,
 } from './ipc/canvasUtils'
-import { signIn, getStatus, clearTokens } from './ipc/googleAuth'
+import { signIn, cancelSignIn, getStatus, clearTokens, verifySignIn } from './ipc/googleAuth'
+import { MSG_NOT_SIGNED_IN, MSG_SIGN_IN_EXPIRED } from './ipc/googleMessages'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
-import { applyDueHeaderBorders } from './ipc/googleDocs'
+import { applyDueHeaderBorders, linkContentsToHeadings, applyToolChips } from './ipc/googleDocs'
+import { buildCleanHtml, handleCleanExport, DEFAULT_CLEAN_OPTIONS } from './ipc/cleanExport'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, checkNow, RELEASES_PAGE } from './ipc/updateCheck'
 import { rememberSavePath } from './ipc/savePaths'
@@ -78,6 +85,8 @@ async function openExternalSafely(url: string): Promise<void> {
     return
   }
   if (scheme !== 'http:' && scheme !== 'https:') return
+  // Only the places the app itself sends people to (see externalUrls.ts).
+  if (!isAllowedExternalUrl(url)) return
   await shell.openExternal(url)
 }
 
@@ -186,7 +195,9 @@ ipcMain.handle('credentials:clear', () => {
 
 ipcMain.handle('dialog:saveFile', async (_e, opts: { defaultName: string; ext: string; label: string }) => {
   const { filePath } = await dialog.showSaveDialog({
-    defaultPath: opts.defaultName,
+    // A bare file name opens the dialog wherever it was last used, which on a fresh install is
+    // Documents. Files that are downloads belong in Downloads, on Windows and macOS alike.
+    defaultPath: join(app.getPath('downloads'), opts.defaultName),
     filters: [{ name: opts.label, extensions: [opts.ext] }],
   })
   if (!filePath) return null
@@ -239,15 +250,41 @@ ipcMain.handle('app:resetZoom', (e) => {
 
 // ─── Canvas feature handlers ──────────────────────────────────────────────────
 
-ipcMain.handle('canvas:verifyToken', (_e, args: { token: string; courseUrl?: string }) => {
-  const parsed = args.courseUrl ? parseCourseUrl(args.courseUrl) : null
-  return verifyToken(args.token, parsed?.baseUrl)
-})
+/**
+ * Every call that sends the Canvas token somewhere asks first if the site is not one the person has
+ * approved (see confirmCanvasHost). Guarding only the course check would leave the other calls as
+ * a way around it, and a Cancel would not actually keep the token from the site.
+ */
+async function denyUnapprovedHost(
+  e: IpcMainInvokeEvent,
+  courseUrl: string | undefined,
+): Promise<{ ok: false; message: string } | null> {
+  const parsed = courseUrl ? parseCourseUrl(courseUrl) : null
+  if (!parsed) return null // the handler reports a bad address in its own words
+  const host = new URL(parsed.baseUrl).host
+  if (await confirmCanvasHost(BrowserWindow.fromWebContents(e.sender), host)) return null
+  return { ok: false, message: 'Cancelled. Your Canvas token was not sent to that site.' }
+}
 
-ipcMain.handle('canvas:exportContent', handleCanvasExport)
-ipcMain.handle('canvas:exportQuizzes', handleQuizExport)
-ipcMain.handle('canvas:exportRubrics', handleRubricExport)
-ipcMain.handle('canvas:exportSettings', handleSettingsExport)
+function guarded<A extends { courseUrl?: string }, R>(
+  handler: (e: IpcMainInvokeEvent, args: A) => R | Promise<R>,
+): (e: IpcMainInvokeEvent, args: A) => Promise<R | { ok: false; message: string }> {
+  return async (e, args) => (await denyUnapprovedHost(e, args?.courseUrl)) ?? handler(e, args)
+}
+
+ipcMain.handle(
+  'canvas:verifyToken',
+  guarded((_e, args: { token: string; courseUrl?: string }) => {
+    const parsed = args.courseUrl ? parseCourseUrl(args.courseUrl) : null
+    return verifyToken(args.token, parsed?.baseUrl)
+  }),
+)
+
+ipcMain.handle('canvas:exportContent', guarded(handleCanvasExport))
+ipcMain.handle('canvas:exportClean', guarded(handleCleanExport))
+ipcMain.handle('canvas:exportQuizzes', guarded(handleQuizExport))
+ipcMain.handle('canvas:exportRubrics', guarded(handleRubricExport))
+ipcMain.handle('canvas:exportSettings', guarded(handleSettingsExport))
 
 // Stop a running extraction. Cancellation is cooperative: the builders check between
 // items, so the extraction ends at its next checkpoint rather than instantly.
@@ -255,10 +292,39 @@ ipcMain.handle('canvas:cancelExport', (_e, jobId: string) => cancelJob(jobId))
 
 // ─── Course lookup (for the shared Canvas-course card) ────────────────────────
 
-ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; token: string }) => {
+/**
+ * Canvas sites the person has approved in the native dialog during this run. The Boise State site is
+ * always trusted; any other address is asked about once, because the access token goes with every
+ * request and a look-alike site (anyone can open an instructure.com trial) would receive it.
+ */
+const approvedHosts = new Set<string>([new URL(DEFAULT_CANVAS_ORIGIN).host])
+
+async function confirmCanvasHost(win: BrowserWindow | null, host: string): Promise<boolean> {
+  if (approvedHosts.has(host)) return true
+  const { response } = win
+    ? await dialog.showMessageBox(win, {
+        type: 'warning',
+        buttons: ['Cancel', `Use ${host}`],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Send your Canvas token to this site?',
+        message: `Send your Canvas token to ${host}?`,
+        detail:
+          `The app will send your Canvas access token to ${host}.\n\nThat token can read your ` +
+          'courses, enrollments and student records, so only continue if this is your school\u2019s Canvas site.',
+      })
+    : { response: 0 }
+  if (response !== 1) return false
+  approvedHosts.add(host)
+  return true
+}
+
+ipcMain.handle('canvas:getCourseName', async (e, args: { courseUrl: string; token: string }) => {
   const parsed = parseCourseUrl(args.courseUrl)
-  if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+  if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
   const ref: CourseRef = { ...parsed, token: args.token }
+  const denied = await denyUnapprovedHost(e, args.courseUrl)
+  if (denied) return denied
   try {
     const course = await canvasGetOne<{ name: string; course_code?: string }>(
       `/courses/${ref.courseId}`,
@@ -273,13 +339,28 @@ ipcMain.handle('canvas:getCourseName', async (_e, args: { courseUrl: string; tok
   }
 })
 
+// ─── The person's own courses (for the "Choose from my courses" list) ─────────
+
+ipcMain.handle('canvas:listCourses', async (e, args: { site: string; token: string }) => {
+  const site = normalizeSite(args.site)
+  if (!site) return { ok: false, message: 'That is not a Canvas site address. It should look like yourschool.instructure.com' }
+  if (!(await confirmCanvasHost(BrowserWindow.fromWebContents(e.sender), new URL(site).host))) {
+    return { ok: false, message: 'Cancelled. Your Canvas token was not sent to that site, so no courses were loaded.' }
+  }
+  try {
+    return { ok: true, site, courses: await listMyCourses(site, args.token) }
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Could not load your courses.' }
+  }
+})
+
 // ─── Picker item listing (for "choose specific items" on each extraction tool) ─
 
 ipcMain.handle(
   'canvas:listItems',
-  async (_e, args: { tool: PickerTool; courseUrl: string; token: string }) => {
+  guarded(async (_e, args: { tool: PickerTool; courseUrl: string; token: string }) => {
     const parsed = parseCourseUrl(args.courseUrl)
-    if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+    if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
     const ref: CourseRef = { ...parsed, token: args.token }
     try {
       const items = await listItemsForTool(args.tool, ref)
@@ -287,13 +368,16 @@ ipcMain.handle(
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : 'Could not load items.' }
     }
-  },
+  }),
 )
 
 // ─── Google sign-in ───────────────────────────────────────────────────────────
 
 ipcMain.handle('google:signIn', (_e, options?: { useAnotherAccount?: boolean }) => signIn(options))
+ipcMain.handle('google:cancelSignIn', () => cancelSignIn())
 ipcMain.handle('google:status', () => getStatus())
+// Whether the stored sign-in still works, which 'status' does not say. See verifySignIn.
+ipcMain.handle('google:verify', () => verifySignIn())
 ipcMain.handle('google:signOut', () => clearTokens())
 
 // ─── Extract to Google Drive (build HTML → upload as Google Doc → open) ────────
@@ -303,15 +387,23 @@ ipcMain.handle(
   async (
     e,
     args: {
-      tool: 'content' | 'quizzes' | 'rubrics' | 'settings'
+      tool: 'content' | 'clean' | 'quizzes' | 'rubrics' | 'settings'
       courseUrl: string
       token: string
       selectedIds?: string[]
       jobId?: string
+      options?: { pageBreaks?: boolean; toolLabels?: boolean }
     },
   ) => {
     const parsed = parseCourseUrl(args.courseUrl)
-    if (!parsed) return { ok: false, message: 'That is not a recognised Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+    if (!parsed) return { ok: false, message: 'That is not a recognized Canvas course URL. It must look like https://yourschool.instructure.com/courses/12345' }
+    // Checked before any Canvas work. The upload is the last step, so without this a person who
+    // is not signed in waits through the whole extraction and only then learns it cannot be saved.
+    // Google being unreachable is not a reason to stop: that is tried anyway.
+    const signedIn = await verifySignIn()
+    if (signedIn === 'none') return { ok: false, message: MSG_NOT_SIGNED_IN }
+    if (signedIn === 'expired') return { ok: false, message: MSG_SIGN_IN_EXPIRED }
+
     const selectedIds = args.selectedIds ? new Set(args.selectedIds) : null
     const cancel = beginJob(args.jobId)
     const ref: CourseRef = { ...parsed, token: args.token, cancel }
@@ -358,7 +450,14 @@ ipcMain.handle(
         // rules of its own; applyDueHeaderBorders below is what draws the blue ones.
         const built = await buildContentHtml(ref, selectedIds, cancel, progress, false)
         html = built.html
-        docName = `${built.courseName} — Course Content`
+        docName = `${built.courseName} — Course Content Extraction`
+      } else if (args.tool === 'clean') {
+        const built = await buildCleanHtml(ref, selectedIds, cancel, progress, {
+          ...DEFAULT_CLEAN_OPTIONS,
+          ...args.options,
+        })
+        html = built.html
+        docName = `${built.courseName} — Clean Course Content Extraction`
       } else if (args.tool === 'quizzes') {
         const built = await buildQuizzesHtml(ref, selectedIds, cancel, progress)
         if (!built) return { ok: false, message: 'No quizzes found in this course.' }
@@ -384,17 +483,32 @@ ipcMain.handle(
     // Draw the blue rules above/below each "Due by …" header via the Docs API — the one
     // part of the Blueprint spec the HTML importer can drop. Purely cosmetic, and the
     // document is already saved, so a failure here must not fail the whole extraction.
-    let borderNote = ''
+    const unfinished: FinishingFailure[] = []
     if (args.tool === 'content') {
       try {
         await applyDueHeaderBorders(id)
       } catch (e) {
-        borderNote =
-          ' Note: the blue due-date rules could not be applied — ' +
-          'check that the Google Docs API is enabled for this project. ' +
-          (e instanceof Error ? e.message : '')
+        unfinished.push({ missing: 'the blue lines above and below the “Due by” headings', error: e })
+      }
+      // The Canvas tool name on each tool line becomes the template's dropdown chip. Also
+      // cosmetic: if it fails the document is still saved, with the names as plain red text.
+      try {
+        await applyToolChips(id)
+      } catch (e) {
+        unfinished.push({ missing: 'the dropdown menus on the Canvas tool names (they stay plain red text)', error: e })
       }
     }
+
+    // The clean document's contents list is plain paragraphs until this links them to the
+    // headings. Cosmetic like the borders: the document is saved, so a failure is a note.
+    if (args.tool === 'clean') {
+      try {
+        await linkContentsToHeadings(id)
+      } catch (e) {
+        unfinished.push({ missing: 'the links from the contents list to the headings', error: e })
+      }
+    }
+    const borderNote = finishingTouchNote(unfinished)
 
     await openInBrowser(webViewLink)
     return {

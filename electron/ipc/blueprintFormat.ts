@@ -7,8 +7,7 @@
  *
  * Two details QA treats as critical:
  *   1. The blue horizontal rules above AND below every "Due by …" header.
- *   2. The black circle marker after every Canvas tool name (Page, Assignment, …),
- *      followed by "Link to settings tab" in red.
+ *   2. "; Link to settings tab", in red, after every Canvas tool name (Page, Assignment, …).
  */
 
 // MAX_SCANNED_BODY_BYTES guards the scans below for the same reason it guards the one in
@@ -35,7 +34,7 @@ export const FONT = 'Arial'
 
 /** Blueprint has no hanging/left indents — force them off, since Google Docs' named
  *  heading styles can otherwise introduce their own indentation. */
-const NO_INDENT = 'margin-left:0;text-indent:0;padding-left:0;'
+export const NO_INDENT = 'margin-left:0;text-indent:0;padding-left:0;'
 
 /** Base run style for ordinary text: black Arial 11pt (Blueprint's NORMAL paragraph). */
 export const BODY_RUN = `font-family:${FONT};font-size:11pt;color:${BLACK};`
@@ -100,6 +99,25 @@ export function htmlDocument(title: string, bodyParts: string[], pageCss?: strin
 }
 
 /**
+ * For an HTML file saved to the computer and read in a browser: keeps the text in a centred column
+ * with space on both sides instead of running to the edges of the window.
+ *
+ * Screen only, so printing is unaffected. Used on the files written locally, never on what is
+ * uploaded to Google Docs, whose importer is not asked to interpret it. `!important` is needed
+ * because the body's own inline style sets its left margin and padding to zero.
+ */
+export function withReadingLayout(html: string, maxWidth = '50rem'): string {
+  const css =
+    `@media screen { body { max-width: ${maxWidth}; margin: 0 auto !important; ` +
+    'padding: 2.5rem 2rem !important; box-sizing: border-box; line-height: 1.5; } }'
+  // The page is Canvas course HTML written by course authors and opened from the local disk. A
+  // policy that allows no scripts, plugins or forms means a script left in a page cannot run there.
+  const csp =
+    `<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">`
+  return html.includes('</head>') ? html.replace('</head>', `${csp}\n<style>${css}</style>\n</head>`) : html
+}
+
+/**
  * Module header — Heading 2, Arial 17pt bold black.
  *
  * Run styling lives on an inner <span> throughout this module: Google Docs' HTML import
@@ -127,21 +145,14 @@ export function itemTitle(inner: string, escape = true): string {
   )
 }
 
-// ⏺ U+23FA BLACK CIRCLE FOR RECORD. Replaces the old grey chip highlight (Blueprint
-// Tools Code.gs, 2026-09-08): a background colour is one attribute per character, so
-// QA's light-green "ready for Canvas" highlight overwrote the grey outright and the one
-// cue that identified a Canvas tool vanished at exactly the moment the line mattered
-// most. A real character survives a highlight painted over it.
-const TOOL_MARKER = '⏺'
-// Black, not red: it is a structural mark that says "this line tags a Canvas tool", not
-// part of the tool's name or the settings-tab link text on either side of it.
-const TOOL_MARKER_COLOR = BLACK
+// The tool line is the chip, then a red semicolon and the phrase: "Page; Link to settings tab".
+// QA briefly used a black circle (⏺) in place of the semicolon so a highlight could not hide it;
+// the team's template (Nov 2026) is back to the semicolon, so that is what is written now.
+// The chip reader in docsToolChips.ts still recognises documents made with the circle.
 
 /**
- * The text after the marker, in the tool's red. It goes on every tool line, Page and File
- * included (QA's 2026-09 template change — before that, only tools with a Canvas Settings
- * tab carried it). No semicolon between the marker and the phrase: the same change dropped
- * it, and Blueprint Tools' TOOL_SUFFIX in Code.gs matches.
+ * The text after the tool name, in the tool's red. It goes on every tool line, Page and File
+ * included. The semicolon belongs to the red text, so the line reads "Page; Link to settings tab".
  */
 export const SETTINGS_TAB_PHRASE = 'Link to settings tab'
 
@@ -163,15 +174,14 @@ export type CanvasToolName =
 
 /**
  * Canvas tool line — Blueprint spec (Code.gs TOOL_MARKER/TOOL_SUFFIX): the tool name in
- * Arial 11pt bold red, a black circle marker, then "Link to settings tab" in the same red.
+ * Arial 11pt bold red, then "; Link to settings tab" in the same red.
  */
 export function toolLabel(label: CanvasToolName): string {
   const red = `font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};`
   return (
     `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;">` +
     `<span style="${red}">${escapeHtml(label)}</span>` +
-    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${TOOL_MARKER_COLOR};"> ${TOOL_MARKER} </span>` +
-    `<span style="${red}">${SETTINGS_TAB_PHRASE}</span>` +
+    `<span style="${red}">; ${SETTINGS_TAB_PHRASE}</span>` +
     '</p>'
   )
 }
@@ -193,7 +203,7 @@ const LEADING_DECOR_RE = /^[^\p{L}\p{N}]+/u
 const DUE_RE = /^due\s+by\b/i
 
 /** Strip leading whitespace, emoji, arrows and punctuation so matching sees the words. */
-function undecorate(title: string): string {
+export function undecorate(title: string): string {
   return title.replace(LEADING_DECOR_RE, '')
 }
 
@@ -368,7 +378,7 @@ export function matchIconLabelFromFileName(fileName: string): string | null {
 const API_ENDPOINT_FILE_RE = /\sdata-api-endpoint\s*=\s*(?:"|')[^"']*\/files\/(\d+)/i
 const SRC_FILE_RE = /\ssrc\s*=\s*(?:"|')[^"']*\/files\/(\d+)/i
 
-function canvasFileId(tag: string): string | null {
+export function canvasFileId(tag: string): string | null {
   return (API_ENDPOINT_FILE_RE.exec(tag) ?? SRC_FILE_RE.exec(tag))?.[1] ?? null
 }
 
@@ -388,7 +398,7 @@ export function collectImageFileIds(html: string): string[] {
  * to whatever the tag itself carries. The fallback matters for bodies whose images were
  * embedded by URL rather than uploaded, where the name is in the `src` path.
  */
-function matchIconLabel(tag: string, fileNames?: Map<string, string>): string | null {
+export function matchIconLabel(tag: string, fileNames?: Map<string, string>): string | null {
   const id = canvasFileId(tag)
   const fetched = id ? fileNames?.get(id) : undefined
   if (fetched) return matchIconLabelFromFileName(fetched)
@@ -415,17 +425,48 @@ function iconMarker(label: string): string {
   )
 }
 
-function normalizeCanvasImages(
+/** The icon's plain name, "Tip", from the "[Tip Icon]" label the matcher returns. */
+export function iconNameFromLabel(label: string): string {
+  return label.replace(/^\[/, '').replace(/ Icon\]$/, '')
+}
+
+/**
+ * Canvas file ids of the Blueprint icons used in this body. The clean extraction fetches these
+ * as real images, so it needs to know which ids are icons before it formats the body.
+ */
+export function collectIconFileIds(html: string, fileNames: Map<string, string>): string[] {
+  if (html.length > MAX_SCANNED_BODY_BYTES) return []
+  const ids = new Set<string>()
+  for (const tag of html.match(IMG_TAG_RE) ?? []) {
+    const id = canvasFileId(tag)
+    if (id && matchIconLabel(tag, fileNames)) ids.add(id)
+  }
+  return Array.from(ids)
+}
+
+/**
+ * What to put where a recognised Blueprint icon was. Given the icon's name ("Tip") and the
+ * Canvas file id when the tag had one. The default is the red text marker the QA extraction
+ * uses; the clean extraction supplies its own, which shows the picture.
+ */
+export type IconRenderer = (name: string, fileId: string | null) => string
+
+export function normalizeCanvasImages(
   html: string,
   baseUrl?: string,
   fileNames?: Map<string, string>,
+  renderIcon?: IconRenderer,
 ): string {
   if (html.length > MAX_SCANNED_BODY_BYTES) return html
   return html.replace(IMG_TAG_RE, (tag) => {
     // A recognised icon becomes text and the image is dropped; everything below applies to
     // the ordinary images that remain.
     const iconLabel = matchIconLabel(tag, fileNames)
-    if (iconLabel) return iconMarker(iconLabel)
+    if (iconLabel) {
+      return renderIcon
+        ? renderIcon(iconNameFromLabel(iconLabel), canvasFileId(tag))
+        : iconMarker(iconLabel)
+    }
 
     const wasDecorative =
       DATA_DECORATIVE_RE.test(tag) || ROLE_PRESENTATION_RE.test(tag) || ARIA_HIDDEN_RE.test(tag)
@@ -475,12 +516,12 @@ function normalizeCanvasImages(
  */
 
 // Quote-aware like IMG_TAG_RE, and bounded by the same size guard, for the same reason.
-const ANCHOR_RE = /<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/a\s*>/gi
-const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']*))/i
+export const ANCHOR_RE = /<a\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/a\s*>/gi
+export const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']*))/i
 // The RCE stamps every course link it inserts with the API object it resolves to — File,
 // Page, Discussion, Assignment, Quiz, Module — so the stamp alone says "this is Canvas",
 // whatever the href happens to look like.
-const API_RETURNTYPE_RE = /\sdata-api-returntype\s*=/i
+export const API_RETURNTYPE_RE = /\sdata-api-returntype\s*=/i
 
 /**
  * True when `href` points back into Canvas: a course-relative path, or an absolute URL on
@@ -517,7 +558,7 @@ export function isCanvasHref(href: string, baseUrl?: string): boolean {
  * button classes or by the anchor painting its own background, which body-text links never
  * do.
  */
-function isButton(attrs: string): boolean {
+export function isButton(attrs: string): boolean {
   const tag = `<a${attrs}>`
   if (hasClass(tag, 'Button') || hasClass(tag, 'btn')) return true
   return background(styleOf(tag)).trim() !== ''
