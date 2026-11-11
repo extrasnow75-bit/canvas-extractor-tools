@@ -1,7 +1,10 @@
-## What's new in v1.2.0
+## What's new in v1.2.0-rc.1
+
+> **This is a test version (pre-release).** It is not the final 1.2.0. If something looks wrong, tell Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com). The notes below describe what will be in the final release.
 
 Since v1.1.1:
 
+- **Tool lines now read "Page; Link to settings tab".** The Canvas tool name is a dropdown chip followed by a semicolon and "Link to settings tab", matching the Blueprint template. The black dot is gone. Older documents that still have the dot are recognized too.
 - **New: Clean course document.** A readable copy of the course without the Blueprint markup: modules as headings, a contents list at the top that jumps to each activity, and the real due and availability dates from Canvas. Under **Advanced options** you can choose whether each activity starts on a new page and whether the Canvas tool name (Page, Assignment, Discussion…) is shown under each title. It saves as a Google Doc, or as an `.html` file if you are not signed in to Google.
 - **New: choose your course from a list.** Press **Choose from my courses** to pick from the courses where you are a teacher, TA or designer, on any Canvas site at an instructure.com address, instead of pasting an address. Master and template courses come first, you can search by name or code, and Blueprint courses are tagged. Pasting a course address still works.
 - **Smart chips in the Course content Google Doc.** The Canvas tool name on each tool line (Page, Assignment, Discussion, Quiz…) is now a dropdown chip, using the same list of tools as the Blueprint template.
