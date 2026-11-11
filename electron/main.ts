@@ -490,12 +490,12 @@ ipcMain.handle(
       } catch (e) {
         unfinished.push({ missing: 'the blue lines above and below the “Due by” headings', error: e })
       }
-      // The Canvas tool name on each tool line becomes the template's dropdown chip. Also
+      // The Canvas tool name on each tool line, and each Blueprint icon marker, becomes the template's dropdown chip. Also
       // cosmetic: if it fails the document is still saved, with the names as plain red text.
       try {
         await applyToolChips(id)
       } catch (e) {
-        unfinished.push({ missing: 'the dropdown menus on the Canvas tool names (they stay plain red text)', error: e })
+        unfinished.push({ missing: 'the dropdown menus on the Canvas tool names and icons (they stay plain red text)', error: e })
       }
     }
 
