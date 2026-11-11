@@ -65,7 +65,7 @@ You choose **one** of four extractions each time you run the app. Each one produ
 * Content from pages and assignments in the order they appear on the course's **Modules** page
 * Home page and syllabus
 * Discussions and quiz **instructions** (not quiz questions — that is the second extraction)
-* Blueprint markup tags (e.g. **H2**, **H3**) and a tool line above every item, in the form the Blueprint template uses: **Assignment ⏺ Link to settings tab**. Tool names match the Blueprint dropdown — Assignment, Assignment (Not Graded), Discussion, Page, Quiz (Classic), Quiz (New) — and the phrase is where the link to that item's settings tab goes later.
+* Blueprint markup tags (e.g. **H2**, **H3**) and a tool line above every item, in the form the Blueprint template uses: **Assignment; Link to settings tab**. Tool names match the Blueprint dropdown — Assignment, Assignment (Not Graded), Discussion, Page, Quiz (Classic), Quiz (New) — and the phrase is where the link to that item's settings tab goes later.
 * Stylized HTML, named in red bold above the block it applies to (e.g. **\[Callout Box\]**, **\[Styled Dropdown\]**, **\[Styled Table\]**, **\[Alert Box\]**). The styling itself does not survive the trip out of Canvas, so the marker is what tells you a template was used. Anything not built from a template in the **HTML Templates** article — hand-written styling, buttons — comes through unmarked.
 * Due-date headers, with the blue Blueprint rules
 * Images

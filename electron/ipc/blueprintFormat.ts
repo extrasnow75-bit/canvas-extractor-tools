@@ -7,8 +7,7 @@
  *
  * Two details QA treats as critical:
  *   1. The blue horizontal rules above AND below every "Due by …" header.
- *   2. The black circle marker after every Canvas tool name (Page, Assignment, …),
- *      followed by "Link to settings tab" in red.
+ *   2. "; Link to settings tab", in red, after every Canvas tool name (Page, Assignment, …).
  */
 
 // MAX_SCANNED_BODY_BYTES guards the scans below for the same reason it guards the one in
@@ -146,21 +145,14 @@ export function itemTitle(inner: string, escape = true): string {
   )
 }
 
-// ⏺ U+23FA BLACK CIRCLE FOR RECORD. Replaces the old grey chip highlight (Blueprint
-// Tools Code.gs, 2026-09-08): a background colour is one attribute per character, so
-// QA's light-green "ready for Canvas" highlight overwrote the grey outright and the one
-// cue that identified a Canvas tool vanished at exactly the moment the line mattered
-// most. A real character survives a highlight painted over it.
-const TOOL_MARKER = '⏺'
-// Black, not red: it is a structural mark that says "this line tags a Canvas tool", not
-// part of the tool's name or the settings-tab link text on either side of it.
-const TOOL_MARKER_COLOR = BLACK
+// The tool line is the chip, then a red semicolon and the phrase: "Page; Link to settings tab".
+// QA briefly used a black circle (⏺) in place of the semicolon so a highlight could not hide it;
+// the team's template (Nov 2026) is back to the semicolon, so that is what is written now.
+// The chip reader in docsToolChips.ts still recognises documents made with the circle.
 
 /**
- * The text after the marker, in the tool's red. It goes on every tool line, Page and File
- * included (QA's 2026-09 template change — before that, only tools with a Canvas Settings
- * tab carried it). No semicolon between the marker and the phrase: the same change dropped
- * it, and Blueprint Tools' TOOL_SUFFIX in Code.gs matches.
+ * The text after the tool name, in the tool's red. It goes on every tool line, Page and File
+ * included. The semicolon belongs to the red text, so the line reads "Page; Link to settings tab".
  */
 export const SETTINGS_TAB_PHRASE = 'Link to settings tab'
 
@@ -182,15 +174,14 @@ export type CanvasToolName =
 
 /**
  * Canvas tool line — Blueprint spec (Code.gs TOOL_MARKER/TOOL_SUFFIX): the tool name in
- * Arial 11pt bold red, a black circle marker, then "Link to settings tab" in the same red.
+ * Arial 11pt bold red, then "; Link to settings tab" in the same red.
  */
 export function toolLabel(label: CanvasToolName): string {
   const red = `font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};`
   return (
     `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;">` +
     `<span style="${red}">${escapeHtml(label)}</span>` +
-    `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${TOOL_MARKER_COLOR};"> ${TOOL_MARKER} </span>` +
-    `<span style="${red}">${SETTINGS_TAB_PHRASE}</span>` +
+    `<span style="${red}">; ${SETTINGS_TAB_PHRASE}</span>` +
     '</p>'
   )
 }

@@ -10,10 +10,10 @@ const line = (start: number, text: string): ChipElement => ({
 describe('planToolChips', () => {
   const doc: ChipElement[] = [
     { startIndex: 1, endIndex: 10, paragraph: { elements: [{ textRun: { content: 'Module 1\n' } }] } },
-    line(10, 'Page ⏺ Link to settings tab'),
-    line(60, 'Assignment (Not Graded) ⏺ Link to settings tab'),
+    line(10, 'Page; Link to settings tab'),
+    line(60, 'Assignment (Not Graded); Link to settings tab'),
     line(120, 'Quiz (Classic) ⏺ Link to settings tab'),
-    line(180, 'File ⏺ Link to settings tab'),
+    line(180, 'File; Link to settings tab'),
     { startIndex: 220, endIndex: 240, paragraph: { elements: [{ textRun: { content: 'Page is a word here\n' } }] } },
   ]
   const { requests, chips } = planToolChips(doc)

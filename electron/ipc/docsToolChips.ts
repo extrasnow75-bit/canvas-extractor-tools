@@ -1,7 +1,7 @@
 /**
  * Turning the Canvas tool name on each tool line into a dropdown chip.
  *
- * The Blueprint template marks each Canvas item with a line such as "Page ⏺ Link to settings tab",
+ * The Blueprint template marks each Canvas item with a line such as "Page; Link to settings tab",
  * where the tool name is a dropdown chip (bold red, choosing from the list of Canvas tools). The
  * HTML import can only produce plain red text, so after the document exists this pass swaps each
  * tool name for the chip, with the matching tool selected. The rest of the line is left alone.
@@ -46,8 +46,8 @@ const NAMES = TOOL_OPTIONS.filter((o) => o.name !== 'Select Tool')
   .map((o) => o.name)
   .sort((a, b) => b.length - a.length)
 
-// The marker character, with whatever spaces the import left around it.
-const LINE_RE = new RegExp(`^(${NAMES.map((n) => n.replace(/[()]/g, '\\$&')).join('|')})\\s*⏺\\s*Link to settings tab\\s*$`)
+// The semicolon (or the black circle older extractions used), with whatever spaces the import left around it.
+const LINE_RE = new RegExp(`^(${NAMES.map((n) => n.replace(/[()]/g, '\\$&')).join('|')})\\s*[;⏺]\\s*Link to settings tab\\s*$`)
 
 export interface ChipElement {
   startIndex?: number
