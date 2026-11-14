@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { planToolChips, TOOL_OPTIONS, TOOL_DEFINITION_ID, definitionRequest, ICON_OPTIONS, ICON_DEFINITION_ID, ChipElement } from './docsToolChips'
+import { planToolChips, TOOL_OPTIONS, TOOL_DEFINITION_ID, definitionRequest, iconDefinitionRequest, ICON_OPTIONS, ICON_DEFINITION_ID, ChipElement } from './docsToolChips'
 
 const line = (start: number, text: string): ChipElement => ({
   startIndex: start,
@@ -65,21 +65,25 @@ describe('icon chips', () => {
     return { startIndex: start, endIndex: at, paragraph: { elements } }
   }
 
-  it('has the template\'s 15 icons, with Clock and without Audio or Document', () => {
+  it('has the template\'s 16 icons, in its order, shown with brackets under the title Icons', () => {
     expect(ICON_OPTIONS.map((o) => o.name)).toEqual([
-      'Reading', 'Video', 'Task', 'List', 'Attention', 'Warning', 'Tip', 'Discussion', 'Policies', 'Looking Ahead',
-      'Upload', 'Computer', 'Syllabus', 'Schedule', 'Clock',
+      'Attention', 'Audio', 'Computer', 'Document', 'Discussion', 'List', 'Looking Ahead', 'Policies',
+      'Reading', 'Schedule', 'Syllabus', 'Task', 'Tip', 'Upload', 'Video', 'Warning',
     ])
+    const def = (iconDefinitionRequest() as { createDropdownDefinition: { dropdownDefinition: { dropdownDefinitionProperties: { title: string; options: Array<{ displayValue: string }> } } } }).createDropdownDefinition.dropdownDefinition.dropdownDefinitionProperties
+    expect(def.title).toBe('Icons')
+    expect(def.options[0].displayValue).toBe('[Attention Icon]')
+    expect(def.options[15].displayValue).toBe('[Warning Icon]')
     expect(ICON_DEFINITION_ID).toMatch(/^kix\.[a-zA-Z0-9_-]{2,14}$/)
     for (const o of ICON_OPTIONS) expect(o.optionId).toMatch(/^dropdownItem\.[a-zA-Z0-9_-]{2,14}$/)
-    expect(new Set(ICON_OPTIONS.map((o) => o.optionId)).size).toBe(15)
+    expect(new Set(ICON_OPTIONS.map((o) => o.optionId)).size).toBe(16)
   })
 
   it('turns an icon marker inside a line into a chip and keeps the text around it', () => {
-    const { requests, chips } = planToolChips([para(5, ['[Clock Icon] ', 'Please note, this course\n'])])
+    const { requests, chips } = planToolChips([para(5, ['[Audio Icon] ', 'Please note, this course\n'])])
     expect(chips).toBe(1)
     expect(requests[0]).toMatchObject({ createDropdownDefinition: { dropdownDefinition: { dropdownDefinitionId: ICON_DEFINITION_ID } } })
-    expect(requests[1]).toEqual({ deleteContentRange: { range: { startIndex: 5, endIndex: 5 + '[Clock Icon]'.length } } })
+    expect(requests[1]).toEqual({ deleteContentRange: { range: { startIndex: 5, endIndex: 5 + '[Audio Icon]'.length } } })
     expect(requests[2]).toMatchObject({ insertDropdown: { location: { index: 5 }, dropdownDefinitionId: ICON_DEFINITION_ID } })
   })
 
@@ -99,12 +103,12 @@ describe('icon chips', () => {
   })
 
   it('leaves unknown icons and ordinary brackets as text', () => {
-    expect(planToolChips([para(1, ['[Audio Icon] and [Note] and [Clock icon]\n'])])).toEqual({ requests: [], chips: 0 })
+    expect(planToolChips([para(1, ['[Mystery Icon] and [Note] and [audio icon]\n'])])).toEqual({ requests: [], chips: 0 })
   })
 
   it('skips a marker that a picture splits', () => {
     const split: ChipElement = { startIndex: 1, endIndex: 20, paragraph: { elements: [
-      { startIndex: 1, textRun: { content: '[Clock ' } }, { startIndex: 8 }, { startIndex: 9, textRun: { content: 'Icon]\n' } },
+      { startIndex: 1, textRun: { content: '[Audio ' } }, { startIndex: 8 }, { startIndex: 9, textRun: { content: 'Icon]\n' } },
     ] } }
     expect(planToolChips([split]).chips).toBe(0)
   })

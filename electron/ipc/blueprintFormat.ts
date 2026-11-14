@@ -309,15 +309,16 @@ const SRC_ANY_RE = new RegExp(`\\ssrc\\s*=\\s*(?:"([^"]*)"|'([^']*)'|(${UNQUOTED
 const TITLE_RE = /\stitle\s*=\s*(?:"([^"]*)"|'([^']*)')/i
 
 /**
- * The Blueprint icon set (15 icons, as in the template's dropdown). In the extraction these are replaced by a red text marker rather than
+ * The Blueprint icon set (16 icons, as in the template's dropdown). In the extraction these are replaced by a red text marker rather than
  * the image itself: a reviewer needs to know *which* icon the author used, and a picture of
  * it says less than its name — especially once the image has been through Google Docs' HTML
  * importer, which is where they have been going missing.
  */
 const ICON_NAMES = [
   'Attention',
-  'Clock',
+  'Audio',
   'Computer',
+  'Document',
   'Discussion',
   'List',
   'Looking Ahead',

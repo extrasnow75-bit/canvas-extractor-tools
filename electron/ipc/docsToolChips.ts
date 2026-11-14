@@ -42,23 +42,24 @@ export const TOOL_OPTIONS: ToolOption[] = [
   { name: 'Quiz (New)', optionId: 'dropdownItem.ts-quiz-new', background: GREY_A, red: true },
 ]
 
-/** The template's icon list, in its order (15 icons). Option ids are made here: the colour is plain red text. */
+/** The template's "Icons" list, in its order (16 icons). Each is shown with its brackets, "[Reading Icon]", as in the template. Option ids are made here: the colour is plain red text on white. */
 export const ICON_NAMES = [
-  'Reading',
-  'Video',
-  'Task',
-  'List',
   'Attention',
-  'Warning',
-  'Tip',
-  'Discussion',
-  'Policies',
-  'Looking Ahead',
-  'Upload',
+  'Audio',
   'Computer',
-  'Syllabus',
+  'Document',
+  'Discussion',
+  'List',
+  'Looking Ahead',
+  'Policies',
+  'Reading',
   'Schedule',
-  'Clock',
+  'Syllabus',
+  'Task',
+  'Tip',
+  'Upload',
+  'Video',
+  'Warning',
 ] as const
 
 export const ICON_OPTIONS = ICON_NAMES.map((name) => ({
@@ -67,7 +68,7 @@ export const ICON_OPTIONS = ICON_NAMES.map((name) => ({
 }))
 
 export const ICON_DEFINITION_ID = 'kix.canvasicon'
-export const ICON_DEFINITION_TITLE = 'Icon'
+export const ICON_DEFINITION_TITLE = 'Icons'
 
 export const TOOL_DEFINITION_ID = 'kix.canvastool'
 export const TOOL_DEFINITION_TITLE = 'Tool/Page'
@@ -118,8 +119,11 @@ export function iconDefinitionRequest(): Record<string, unknown> {
           title: ICON_DEFINITION_TITLE,
           options: ICON_OPTIONS.map((o) => ({
             optionId: o.optionId,
-            displayValue: o.name,
-            textStyle: { foregroundColor: { color: { rgbColor: RED } } },
+            displayValue: `[${o.name} Icon]`,
+            textStyle: {
+              backgroundColor: { color: { rgbColor: { red: 1, green: 1, blue: 1 } } },
+              foregroundColor: { color: { rgbColor: RED } },
+            },
           })),
         },
       },
