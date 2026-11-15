@@ -14,6 +14,8 @@ export interface CourseChoice {
   name: string
   code: string
   role: CourseRole
+  /** What to show on the badge: the role's name in Canvas, which for a custom role such as "Course Administrator" is not "Teacher". */
+  roleLabel: string
   /** Term name, or NO_TERM for courses with none (and for Canvas's "Default Term"), such as masters. */
   term: string
   /** Start of the term, for ordering newest first. Null when Canvas has none. */
@@ -31,7 +33,7 @@ interface RawCourse {
   blueprint?: boolean
   end_at?: string | null
   term?: { name?: string; start_at?: string | null; end_at?: string | null } | null
-  enrollments?: Array<{ type?: string }>
+  enrollments?: Array<{ type?: string; role?: string }>
 }
 
 /** The group for masters and templates, which belong to no real term. */
@@ -48,6 +50,26 @@ export function roleOf(type: string | undefined): CourseRole | null {
   if (t === 'ta') return 'ta'
   if (t === 'designer') return 'designer'
   return null
+}
+
+const BUILT_IN_LABEL: Record<CourseRole, string> = { teacher: 'Teacher', ta: 'TA', designer: 'Designer' }
+
+/**
+ * The words for the badge. Canvas builds a custom role (Course Administrator, Lead Designer…) on
+ * top of one of the built-in types, so `type` says "TeacherEnrollment" for it too; the custom
+ * name is in `role`. A built-in role repeats the type there ("TeacherEnrollment"), which is not a
+ * name to show. Several enrollments in one course give several names, each once.
+ */
+export function roleLabelOf(enrollments: Array<{ type?: string; role?: string }>): string {
+  const labels: string[] = []
+  for (const e of enrollments) {
+    const base = roleOf(e.type)
+    if (base === null) continue
+    const custom = (e.role ?? '').trim()
+    const label = custom && roleOf(custom) === null ? custom : BUILT_IN_LABEL[base]
+    if (!labels.includes(label)) labels.push(label)
+  }
+  return labels.join(', ')
 }
 
 const PRIORITY: CourseRole[] = ['teacher', 'designer', 'ta']
@@ -68,6 +90,7 @@ export function chooseCourses(raw: RawCourse[], now = new Date()): CourseChoice[
       name: c.name?.trim() || `Course ${c.id}`,
       code: c.course_code?.trim() ?? '',
       role: PRIORITY.find((p) => roles.includes(p)) as CourseRole,
+      roleLabel: roleLabelOf(c.enrollments ?? []),
       term: real ? (c.term?.name as string).trim() : NO_TERM,
       termStart: real ? (c.term?.start_at ?? null) : null,
       // A course with no term is never "ended": masters stay in use, and the group is not labelled by it.

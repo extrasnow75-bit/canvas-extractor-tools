@@ -164,6 +164,8 @@ export interface CourseChoice {
   name: string
   code: string
   role: 'teacher' | 'ta' | 'designer'
+  /** The role's name in Canvas, for the badge (a custom role such as "Course Administrator" is not "Teacher"). */
+  roleLabel: string
   term: string
   termStart: string | null
   ended: boolean

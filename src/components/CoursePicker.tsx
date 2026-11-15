@@ -211,7 +211,7 @@ export function CoursePicker({ token, defaultSite, onChoose }: Props) {
                       <span className="text-[11px] font-black rounded-full px-2 py-0.5 bg-gray-100 text-gray-800">Blueprint</span>
                     )}
                     <span className={`text-[11px] font-black rounded-full px-2 py-0.5 ${ROLE_STYLE[c.role]}`}>
-                      {ROLE_LABEL[c.role]}
+                      {c.roleLabel || ROLE_LABEL[c.role]}
                     </span>
                   </button>
                 ))}

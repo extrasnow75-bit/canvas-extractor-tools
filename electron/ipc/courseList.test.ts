@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chooseCourses, normalizeSite, roleOf, NO_TERM } from './courseList'
+import { chooseCourses, normalizeSite, roleOf, roleLabelOf, NO_TERM } from './courseList'
 
 const NOW = new Date('2026-11-04T12:00:00Z')
 const course = (id: number, over: Record<string, unknown> = {}) => ({
@@ -69,5 +69,31 @@ describe('normalizeSite', () => {
     expect(normalizeSite('http://myschool.instructure.com')).toBeNull()
     expect(normalizeSite('instructure.com.evil.com')).toBeNull()
     expect(normalizeSite('')).toBeNull()
+  })
+})
+
+describe('role names on the badge', () => {
+  it('names a custom role, which Canvas files under the Teacher type', () => {
+    expect(roleLabelOf([{ type: 'TeacherEnrollment', role: 'Course Administrator' }])).toBe('Course Administrator')
+  })
+  it('keeps the plain names for the built-in roles', () => {
+    expect(roleLabelOf([{ type: 'TeacherEnrollment', role: 'TeacherEnrollment' }])).toBe('Teacher')
+    expect(roleLabelOf([{ type: 'teacher' }])).toBe('Teacher')
+    expect(roleLabelOf([{ type: 'TaEnrollment', role: 'TaEnrollment' }])).toBe('TA')
+    expect(roleLabelOf([{ type: 'DesignerEnrollment', role: 'DesignerEnrollment' }])).toBe('Designer')
+  })
+  it('lists each name once when a person holds several roles in a course', () => {
+    expect(roleLabelOf([
+      { type: 'TeacherEnrollment', role: 'TeacherEnrollment' },
+      { type: 'TeacherEnrollment', role: 'Course Administrator' },
+      { type: 'TeacherEnrollment', role: 'Course Administrator' },
+    ])).toBe('Teacher, Course Administrator')
+  })
+  it('ignores student and observer enrollments', () => {
+    expect(roleLabelOf([{ type: 'StudentEnrollment', role: 'StudentEnrollment' }])).toBe('')
+  })
+  it('reaches the course list', () => {
+    const list = chooseCourses([{ id: 7, name: 'Sandbox Copy', enrollments: [{ type: 'TeacherEnrollment', role: 'Course Administrator' }] }])
+    expect(list[0]).toMatchObject({ role: 'teacher', roleLabel: 'Course Administrator' })
   })
 })
