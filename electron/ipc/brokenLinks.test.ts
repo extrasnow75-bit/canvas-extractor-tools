@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isBrokenHref, highlightBrokenLinks, BROKEN_LINK_HIGHLIGHT } from './brokenLinks'
+import { isBrokenHref, highlightBrokenLinks, unlinkBareEmails, isBareEmailHref, BROKEN_LINK_HIGHLIGHT } from './brokenLinks'
 import { replaceEmbeddedMedia } from './embeddedMedia'
 import { formatCanvasBody } from './blueprintFormat'
 import { formatCleanBody } from './cleanFormat'
@@ -15,6 +15,9 @@ describe('isBrokenHref', () => {
   })
   it('flags a web address typed without https://, which Canvas reads as a page in the course', () => {
     for (const h of ['www.youtube.com/watch?v=abc', 'docs.google.com/document/d/1', 'boisestate.edu', 'youtu.be/abc', 'example.io/x']) expect(isBrokenHref(h), h).toBe(true)
+  })
+  it('flags about:blank', () => {
+    expect(isBrokenHref('about:blank')).toBe(true)
   })
   it('flags an http address with no real host', () => {
     expect(isBrokenHref('https://')).toBe(true)
@@ -104,5 +107,29 @@ describe('performance and structure', () => {
   it('keeps text between links, finds tags in any letter case, and ignores <abbr>', () => {
     const out = highlightBrokenLinks('a <A HREF="">x</A> b <abbr title="t">y</abbr> c <a href="https://ok.org">z</a> d')
     expect(out).toBe(`a <a HREF=""><span style="background-color:${BROKEN_LINK_HIGHLIGHT};">x</span></a> b <abbr title="t">y</abbr> c <a href="https://ok.org">z</a> d`)
+  })
+})
+
+describe('email addresses', () => {
+  it('recognises an email address used as a link destination', () => {
+    for (const h of ['helpdesk@boisestate.edu', 'helpdesk@boisestate.edu)', 'Jane.Doe@mail.boisestate.edu']) expect(isBareEmailHref(h), h).toBe(true)
+    for (const h of ['mailto:helpdesk@boisestate.edu', 'https://example.org/a@b.edu', 'https://boisestate.edu', '/courses/1/pages/x', '']) expect(isBareEmailHref(h), h).toBe(false)
+  })
+  it('turns a bare-email link into plain text, with no highlight and no mailto', () => {
+    const out = unlinkBareEmails('<p>Write to <a href="helpdesk@boisestate.edu" target="_blank">helpdesk@boisestate.edu</a>.</p>')
+    expect(out).toBe('<p>Write to helpdesk@boisestate.edu.</p>')
+  })
+  it('leaves a working mailto link and other links alone', () => {
+    const ok = '<a href="mailto:helpdesk@boisestate.edu">email</a> <a href="https://example.org">site</a>'
+    expect(unlinkBareEmails(ok)).toBe(ok)
+  })
+  it('in both documents the email is plain text and nothing is marked', () => {
+    const body = '<p><a href="helpdesk@boisestate.edu">helpdesk@boisestate.edu</a></p>'
+    for (const out of [formatCanvasBody(body, 'https://x.instructure.com'), formatCleanBody(body, { baseUrl: 'https://x.instructure.com' })]) {
+      expect(out).toContain('helpdesk@boisestate.edu')
+      expect(out).not.toContain('<a ')
+      expect(out).not.toContain(BROKEN_LINK_HIGHLIGHT)
+      expect(out).not.toContain('mailto')
+    }
   })
 })

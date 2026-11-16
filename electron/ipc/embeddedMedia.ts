@@ -90,7 +90,7 @@ function line(kind: 'video' | 'audio' | 'content', src: string, title: string, o
   if (!target) {
     return `${o.renderLabel(label)} <span style="background-color:${BROKEN_LINK_HIGHLIGHT};">${escapeHtml(shown || 'no web address found')}</span>`
   }
-  return `${o.renderLabel(label)} <a href="${escapeHtml(target)}">${escapeHtml(shown || target)}</a>`
+  return `${o.renderLabel(label)} <a href="${escapeHtml(target)}" data-embed="1">${escapeHtml(shown || target)}</a>`
 }
 
 /** Replace every <iframe>, <video> and <audio> in a body with a label and a link. */

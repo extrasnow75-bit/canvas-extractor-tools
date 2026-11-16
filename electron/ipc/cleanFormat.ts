@@ -26,7 +26,7 @@ import {
 } from './blueprintFormat'
 import { LOOKAHEAD, MAX_SCANNED_BODY_BYTES, classifyTemplate } from './styledHtml'
 import { replaceEmbeddedMedia } from './embeddedMedia'
-import { highlightBrokenLinks } from './brokenLinks'
+import { highlightBrokenLinks, unlinkBareEmails } from './brokenLinks'
 
 export const GREY = '#595959' // dates: 7:1 on white, so it stays legible for low-vision readers
 const OPEN_TAG_RE_SRC = '<([a-zA-Z][a-zA-Z0-9-]*)\\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>'
@@ -411,7 +411,7 @@ export function formatCleanBody(html: string | null | undefined, opts: CleanBody
   // The QA wording for missing alt text describes the course, not the picture.
   out = out.replace(/alt="Image \((?:marked decorative|no alt text) in Canvas\)"/g, 'alt="Image"')
   // Unlink first: a link into Canvas loses its anchor here, and must not keep a highlight with nothing to click.
-  out = highlightBrokenLinks(unlinkCanvasLinks(out, opts.baseUrl))
+  out = highlightBrokenLinks(unlinkCanvasLinks(unlinkBareEmails(out), opts.baseUrl))
   out = drawTemplates(out)
   out = remapHeadings(out)
   return out

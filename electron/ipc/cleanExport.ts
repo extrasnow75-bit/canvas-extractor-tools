@@ -15,6 +15,7 @@ import {
   mapWithConcurrency,
   CANVAS_CONCURRENCY,
 } from './canvasUtils'
+import { markDeadVideos } from './videoCheck'
 import {
   CanvasAssignment,
   CanvasCourse,
@@ -374,7 +375,7 @@ export async function buildCleanHtml(
   ]
 
   return {
-    html: htmlDocument(`${course.name} — Clean Course Content Extraction`, parts),
+    html: await markDeadVideos(htmlDocument(`${course.name} — Clean Course Content Extraction`, parts), { isCancelled: () => cancel?.cancelled === true }),
     courseName: course.name,
     moduleCount: plan.length,
     /** Every heading in order, with whether it starts a page: what the Docs pass needs. */

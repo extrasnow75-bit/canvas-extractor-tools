@@ -1,9 +1,10 @@
 import { ErrorText, ErrorDetails } from './ErrorText'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Link2, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
+import { Link2, CheckCircle2, Check, Loader2, RotateCcw } from 'lucide-react'
 import { ToolTile } from './ToolTile'
 import { CoursePicker } from './CoursePicker'
 import { googleLine } from './googleView'
+import { validateView } from './validateView'
 import type { GoogleCheckState } from '../types'
 
 interface Props {
@@ -199,6 +200,9 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
   // has no recognisable department + number, in which case the plain names are used.
   const [courseCode, setCourseCode] = useState<string | null>(null)
   const [validating, setValidating] = useState(false)
+  // A course chosen from the list is looked up for you; until that starts, the card already says so.
+  const [pendingList, setPendingList] = useState(false)
+  const [lookupSource, setLookupSource] = useState<'typed' | 'list'>('typed')
   const [nameError, setNameError] = useState<string | null>(null)
   // Bumped by "Start again": it is part of each tile's key, so the tiles remount with
   // completely fresh state rather than relying on this file knowing what they hold.
@@ -253,8 +257,11 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
     setResetKey((k) => k + 1)
   }
 
+  const view = validateView({ urlValid, validating: validating || pendingList, courseName, nameError, source: lookupSource })
+
   const validateCourse = async (url = courseUrl) => {
     if (!COURSE_URL_RE.test(url.trim()) || validating) return
+    setPendingList(false)
     setValidating(true)
     setCourseName(null)
     setCourseCode(null)
@@ -298,6 +305,8 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
           token={token}
           defaultSite={siteOf(courseUrl)}
           onChoose={(url) => {
+            setLookupSource('list')
+            setPendingList(true)
             setCourseUrl(url)
             // The address change clears the name (effect below); look it up after that has run.
             setTimeout(() => void validateCourse(url), 0)
@@ -321,9 +330,13 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
             inputMode="url"
             spellCheck={false}
             value={courseUrl}
-            onChange={(e) => setCourseUrl(e.target.value)}
+            onChange={(e) => {
+              setLookupSource('typed')
+              setPendingList(false)
+              setCourseUrl(e.target.value)
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void validateCourse()
+              if (e.key === 'Enter' && view.pressable) void validateCourse()
             }}
             placeholder="https://boisestatecanvas.instructure.com/courses/12345"
             aria-invalid={!!nameError || !!(courseUrl && !urlValid)}
@@ -341,20 +354,23 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
               input and a keyboard user on this button had no way to reach it. */}
           <button
             onClick={() => {
-              if (urlValid && !validating) void validateCourse()
+              if (view.pressable) void validateCourse()
             }}
-            aria-disabled={!urlValid || validating}
+            aria-disabled={!view.pressable}
             /* Condition matches the hint's own render condition exactly, so this never points
                at an element that is not there. */
             aria-describedby={courseUrl && !urlValid ? 'course-url-hint' : undefined}
             className={`flex-shrink-0 px-4 rounded-xl border-2 font-black text-sm transition flex items-center gap-1.5 ${
-              !urlValid || validating
-                ? 'border-gray-400 text-gray-600 cursor-not-allowed'
-                : 'border-[#0033a0] text-[#0033a0] hover:bg-blue-50'
+              view.tone === 'done'
+                ? 'border-green-300 bg-green-50 text-green-800 cursor-default'
+                : !view.pressable
+                  ? 'border-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'border-[#0033a0] text-[#0033a0] hover:bg-blue-50'
             }`}
           >
-            {validating && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
-            {validating ? 'Checking…' : 'Validate'}
+            {view.tone === 'busy' && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+            {view.tone === 'done' && <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+            {view.label}
           </button>
         </div>
         {/* Guidance on the expected format, not a failure — the user has usually just not
@@ -364,13 +380,21 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
             Enter the full course URL, e.g. https://boisestatecanvas.instructure.com/courses/12345
           </p>
         )}
+        {/* Not announced as it appears: it comes and goes while typing. The state it describes is also the
+            button's own label. */}
+        {view.note?.kind === 'todo' && (
+          <p className="mt-2.5 flex items-center gap-2 text-[13px] text-amber-900">
+            <span className="w-2 h-2 rounded-full bg-amber-600 flex-shrink-0" aria-hidden="true" />
+            {view.note.text}
+          </p>
+        )}
         {/* The looked-up course name arrives asynchronously, so announce it rather than
             letting it appear silently for anyone not watching the card. */}
         {/* Mounted unconditionally — a live region that appears with its text already in it
             is announced unreliably. Collapsed to sr-only rather than removed when empty. */}
         <div
           className={
-            courseName || nameError
+            courseName || nameError || view.note?.kind === 'busy'
               ? 'mt-2.5 flex items-center gap-2 min-h-[1.25rem]'
               : 'sr-only'
           }
@@ -389,6 +413,8 @@ export function ToolPanel({ token, googleCheck, googleWho, googleReady, onOpenSe
             <span id="course-url-error" className="text-xs text-red-700">
               <ErrorText message={nameError} />
             </span>
+          ) : view.note?.kind === 'busy' ? (
+            <span className="text-[13px] text-gray-700">{view.note.text}</span>
           ) : null}
         </div>
         {/* Outside the live region above, so opening or copying the details is not read out again. */}

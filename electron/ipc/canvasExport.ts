@@ -17,6 +17,7 @@ import {
   mapWithConcurrency,
   CANVAS_CONCURRENCY,
 } from './canvasUtils'
+import { markDeadVideos } from './videoCheck'
 import {
   FONT,
   htmlDocument,
@@ -522,7 +523,7 @@ export async function buildContentHtml(
   }
 
   return {
-    html: htmlDocument(`${course.name} — Course Content Extraction`, parts),
+    html: await markDeadVideos(htmlDocument(`${course.name} — Course Content Extraction`, parts), { isCancelled: () => cancel?.cancelled === true }),
     courseName: course.name,
     moduleCount: plan.length,
   }

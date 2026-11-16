@@ -16,7 +16,7 @@
 // thread. See the constant's own comment for the measurements that set the number.
 import { annotateStyledHtml, background, hasClass, MAX_SCANNED_BODY_BYTES, styleOf } from './styledHtml'
 import { replaceEmbeddedMedia } from './embeddedMedia'
-import { highlightBrokenLinks } from './brokenLinks'
+import { highlightBrokenLinks, unlinkBareEmails } from './brokenLinks'
 
 export const DEEP_BLUE = '#0033a0' // due-header text
 export const RED = '#ff0000' // Canvas tool labels + heading-level tags
@@ -654,7 +654,7 @@ export function formatCanvasBody(
       `<span style="font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};">${escapeHtml(text)}:</span>`,
   })
   let out = annotateStyledHtml(
-    highlightBrokenLinks(highlightCanvasLinks(normalizeCanvasImages(withEmbeds, baseUrl, fileNames), baseUrl)),
+    highlightBrokenLinks(highlightCanvasLinks(normalizeCanvasImages(unlinkBareEmails(withEmbeds), baseUrl, fileNames), baseUrl)),
     styledHtmlMarker,
   )
   // Same ceiling, same reason as the passes above: the quote-aware alternation scans to

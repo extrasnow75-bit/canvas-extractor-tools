@@ -8,7 +8,7 @@ const plain = { renderLabel: (t: string) => `<b>${t}:</b>`, baseUrl: 'https://bo
 describe('replaceEmbeddedMedia', () => {
   it('turns a YouTube embed into a label and a watch link', () => {
     const out = replaceEmbeddedMedia('<p><iframe width="560" src="https://www.youtube.com/embed/abc123" title="Intro video" allowfullscreen></iframe></p>', plain)
-    expect(out).toBe('<p><b>Embed video:</b> <a href="https://www.youtube.com/watch?v=abc123">Intro video</a></p>')
+    expect(out).toBe('<p><b>Embed video:</b> <a href="https://www.youtube.com/watch?v=abc123" data-embed="1">Intro video</a></p>')
   })
   it('turns a Panopto embed into its viewer address', () => {
     const out = replaceEmbeddedMedia('<iframe src="https://boisestate.hosted.panopto.com/Panopto/Pages/Embed.aspx?id=xyz&amp;autoplay=false" title="Lecture 1"></iframe>', plain)
@@ -24,15 +24,15 @@ describe('replaceEmbeddedMedia', () => {
   })
   it('labels an unknown player as embedded content and keeps its address', () => {
     const out = replaceEmbeddedMedia('<iframe src="https://example.org/widget?a=1&b=2" title="Poll"></iframe>', plain)
-    expect(out).toBe('<b>Embed content:</b> <a href="https://example.org/widget?a=1&amp;b=2">Poll</a>')
+    expect(out).toBe('<b>Embed content:</b> <a href="https://example.org/widget?a=1&amp;b=2" data-embed="1">Poll</a>')
   })
   it('resolves a host-relative Canvas source', () => {
     const out = replaceEmbeddedMedia('<iframe src="/media_objects_iframe/m-1?type=video" title="Canvas clip"></iframe>', plain)
     expect(out).toContain('href="https://boisestatecanvas.instructure.com/media_objects_iframe/m-1?type=video"')
   })
   it('handles <video> and <audio>, with the address on a <source> tag', () => {
-    expect(replaceEmbeddedMedia('<video controls><source src="https://x.org/a.mp4" type="video/mp4">Your browser</video>', plain)).toBe('<b>Embed video:</b> <a href="https://x.org/a.mp4">x.org</a>')
-    expect(replaceEmbeddedMedia('<audio src="https://x.org/a.mp3" title="Podcast"></audio>', plain)).toBe('<b>Embed audio:</b> <a href="https://x.org/a.mp3">Podcast</a>')
+    expect(replaceEmbeddedMedia('<video controls><source src="https://x.org/a.mp4" type="video/mp4">Your browser</video>', plain)).toBe('<b>Embed video:</b> <a href="https://x.org/a.mp4" data-embed="1">x.org</a>')
+    expect(replaceEmbeddedMedia('<audio src="https://x.org/a.mp3" title="Podcast"></audio>', plain)).toBe('<b>Embed audio:</b> <a href="https://x.org/a.mp3" data-embed="1">Podcast</a>')
   })
   it('never links a javascript: or data: source, and keeps the label', () => {
     const out = replaceEmbeddedMedia('<iframe src="javascript:alert(1)" title="Bad"></iframe>', plain)
@@ -87,7 +87,7 @@ describe('in the two documents', () => {
 describe('player edge cases', () => {
   const o = { renderLabel: (t: string) => `<b>${t}:</b>`, baseUrl: 'https://x.instructure.com' }
   it('reads an unquoted src and title', () => {
-    expect(replaceEmbeddedMedia('<iframe src=https://www.youtube.com/embed/abc title=Intro></iframe>', o)).toContain('href="https://www.youtube.com/watch?v=abc">Intro</a>')
+    expect(replaceEmbeddedMedia('<iframe src=https://www.youtube.com/embed/abc title=Intro></iframe>', o)).toContain('href="https://www.youtube.com/watch?v=abc" data-embed="1">Intro</a>')
   })
   it('removes the fallback content inside an iframe along with it', () => {
     const out = replaceEmbeddedMedia('<iframe src="https://x.org/v" title="V"><p>Your browser cannot show this</p></iframe>after', o)
