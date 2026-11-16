@@ -11,22 +11,20 @@
  * marker and the clean document its plain wording. Pure: strings in, string out.
  */
 import { MAX_SCANNED_BODY_BYTES } from './styledHtml'
+import { BROKEN_LINK_HIGHLIGHT } from './brokenLinks'
+import { replaceElements } from './tagScan'
 
 export interface EmbedOptions {
   /** The Canvas host, to resolve a host-relative source. */
   baseUrl?: string
-  /** How the label is drawn, given its plain text, for example "Embedded video (YouTube)". */
+  /** How the label is drawn, given its plain text, for example "Embed video" (the caller adds the colon). */
   renderLabel(text: string): string
 }
 
-// Quote-aware, like the other tag patterns here: a `>` inside an attribute value must not end the tag.
-const TAG = '(?:[^>"\']|"[^"]*"|\'[^\']*\')*'
-const IFRAME_RE = new RegExp(`<iframe\\b${TAG}>(?:\\s*</iframe\\s*>)?`, 'gi')
-const MEDIA_RE = new RegExp(`<(video|audio)\\b${TAG}>[\\s\\S]*?</\\1\\s*>`, 'gi')
-const ATTR_DQ = (name: string) => new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i')
-const SRC_RE = ATTR_DQ('src')
-const TITLE_RE = ATTR_DQ('title')
-const SOURCE_RE = new RegExp(`<source\\b${TAG}>`, 'i')
+const SOURCE_RE = /<source\b((?:[^>"']|"[^"]*"|'[^']*')*)>/i
+const ATTR = (name: string) => new RegExp(String.raw`\s${name}\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))`, 'i')
+const SRC_RE = ATTR('src')
+const TITLE_RE = ATTR('title')
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -36,7 +34,7 @@ const decode = (s: string): string =>
 
 function attr(tag: string, re: RegExp): string {
   const m = re.exec(tag)
-  return decode((m?.[1] ?? m?.[2] ?? '').trim())
+  return decode((m?.[1] ?? m?.[2] ?? m?.[3] ?? '').trim())
 }
 
 /** An absolute http(s) address, or null for anything else (javascript:, data:, empty). */
@@ -84,21 +82,27 @@ function line(kind: 'video' | 'audio' | 'content', src: string, title: string, o
   const u = absolute(src, o.baseUrl)
   const known = u ? recognise(u) : null
   const noun = kind === 'content' && known && known.provider !== 'H5P' ? 'video' : kind
-  const label = `Embedded ${noun}${known ? ` (${known.provider})` : ''}`
+  // The provider is not named: the link shows the address, which says where the video lives.
+  const label = `Embed ${noun}`
   const shown = title || (u ? u.hostname : '')
   const target = known?.watch ?? u?.toString()
-  if (!target) return `${o.renderLabel(label)}${shown ? ` ${escapeHtml(shown)}` : ''}`
+  // No usable address: the player cannot work, so the name is marked in light red.
+  if (!target) {
+    return `${o.renderLabel(label)} <span style="background-color:${BROKEN_LINK_HIGHLIGHT};">${escapeHtml(shown || 'no web address found')}</span>`
+  }
   return `${o.renderLabel(label)} <a href="${escapeHtml(target)}">${escapeHtml(shown || target)}</a>`
 }
 
 /** Replace every <iframe>, <video> and <audio> in a body with a label and a link. */
 export function replaceEmbeddedMedia(html: string, o: EmbedOptions): string {
   if (!html || html.length > MAX_SCANNED_BODY_BYTES) return html
-  let out = html.replace(IFRAME_RE, (tag) => line('content', attr(tag, SRC_RE), attr(tag, TITLE_RE), o))
-  out = out.replace(MEDIA_RE, (whole, kind: string) => {
-    const open = whole.slice(0, whole.indexOf('>') + 1)
-    const src = attr(open, SRC_RE) || attr(SOURCE_RE.exec(whole)?.[0] ?? '', SRC_RE)
-    return line(kind.toLowerCase() as 'video' | 'audio', src, attr(open, TITLE_RE), o)
-  })
+  // An iframe's own content is only what a browser shows when it cannot load it, so it goes with it.
+  let out = replaceElements(html, 'iframe', 'optional', (attrs) => line('content', attr(attrs, SRC_RE), attr(attrs, TITLE_RE), o))
+  for (const kind of ['video', 'audio'] as const) {
+    out = replaceElements(out, kind, 'required', (attrs, inner) => {
+      const src = attr(attrs, SRC_RE) || attr(SOURCE_RE.exec(inner)?.[1] ?? '', SRC_RE)
+      return line(kind, src, attr(attrs, TITLE_RE), o)
+    })
+  }
   return out
 }

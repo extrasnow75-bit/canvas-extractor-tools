@@ -1,6 +1,4 @@
-## What's new in v1.2.0-rc.1
-
-> **This is a test version (pre-release).** It is not the final 1.2.0. If something looks wrong, tell Greg Snow (gregsnow@boisestate.edu or extrasnow75@gmail.com). The notes below describe what will be in the final release.
+## What's new in v1.2.0
 
 Since v1.1.1:
 
@@ -21,5 +19,6 @@ Since v1.1.1:
 - **Saved `.html` pages block scripts.** A page saved to your computer can no longer run a script that was left in a course page. Links in error messages open only the places the app sends you to.
 - **Extractions to Google stop early** if your Google sign-in is missing or has expired, before any course content is read, so you do not lose a long run at the end.
 - **Fixed: page breaks in the Clean course document.** The page-break choice did nothing in a Google Doc, because Google ignores the setting when it imports the page. The app now sets the breaks after the document is created: every module, the Home Page and the Syllabus start a page, and so does each activity when **Page breaks** is ticked.
-- **Embedded videos now show up.** YouTube, Panopto, Vimeo and other embedded players used to disappear from Google Docs without a trace. Each one is now a line, "Embedded video (YouTube)" for example, with a link to the video, in both the Course content and Clean course documents.
+- **Embedded videos now show up.** YouTube, Panopto, Vimeo and other embedded players used to disappear from Google Docs without a trace. Each one is now a line that starts "Embed video:" followed by a link to the video, in both the Course content and Clean course documents.
+- **Broken links are highlighted in light red.** A link whose address cannot work as written is marked in light red in both Google Docs: an empty address, a web address typed without "https://" (which Canvas reads as a page in the course), a mistyped one such as "htp://", and an embedded video with no usable address. The app does not visit the links, so it cannot tell that a well-formed link points at a video that was deleted.
 - **Fixed: two scroll bars** on the right side of the window. There is now one.
