@@ -47,3 +47,18 @@ describe('URL detection in error text', () => {
     expect(urlsIn('Canvas API error 401: Invalid access token.')).toEqual([])
   })
 })
+
+import { splitDetails } from './ErrorText'
+
+describe('splitDetails', () => {
+  it('separates the sentence from the technical cause', () => {
+    const raw = "Error invoking remote method 'x': Error: Canvas is having trouble. Details for support: Canvas replied with status 503."
+    expect(splitDetails(raw)).toEqual({
+      plain: 'Canvas is having trouble.',
+      details: 'Canvas replied with status 503.',
+    })
+  })
+  it('leaves a message with no details alone', () => {
+    expect(splitDetails('Nothing technical.')).toEqual({ plain: 'Nothing technical.' })
+  })
+})

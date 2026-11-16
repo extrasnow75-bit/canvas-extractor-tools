@@ -1,4 +1,5 @@
 import { getAccessToken } from './googleAuth'
+import { googleApiMessage, googleFetch } from './googleMessages'
 import { SettingsData } from './settingsExport'
 import { cellValue, sheetRangeA1, sheetsFormatRequests, validationRuns } from './sheetsLayout'
 import { apiNotEnabledMessage } from './googleSheetsErrors'
@@ -36,7 +37,7 @@ interface SheetsApiSheet {
 }
 
 async function sheetsFetch(url: string, accessToken: string, init?: RequestInit): Promise<unknown> {
-  const res = await fetch(url, {
+  const res = await googleFetch(url, {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -48,9 +49,7 @@ async function sheetsFetch(url: string, accessToken: string, init?: RequestInit)
     const detail = await res.text().catch(() => '')
     const friendly = apiNotEnabledMessage(detail)
     if (friendly) throw new Error(friendly)
-    // 400 is the length that keeps a Sheets validation complaint readable; the old 200 cut
-    // most of them off mid-sentence.
-    throw new Error(`Sheets API request failed (${res.status}). ${detail.slice(0, 400)}`)
+    throw new Error(googleApiMessage('Sheets', 'creating the Google Sheet', res.status, detail))
   }
   return res.json()
 }

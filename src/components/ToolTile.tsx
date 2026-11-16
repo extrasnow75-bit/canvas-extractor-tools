@@ -1,3 +1,4 @@
+import { localFileName } from './fileNames'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
@@ -8,8 +9,11 @@ import {
   ExternalLink,
   Square,
 } from 'lucide-react'
-import type { PickerItem, Tool } from '../types'
-import { ErrorText, cleanErrorMessage } from './ErrorText'
+import type { CleanOptions, PickerItem, Tool } from '../types'
+import { ErrorText, ErrorDetails, splitDetails } from './ErrorText'
+import { ModuleSelectRow } from './ModuleSelectRow'
+import { LOOSE_GROUP } from './pickerGroups'
+import { withGroup } from './pickerSelection'
 
 interface Props {
   tool: Tool
@@ -20,7 +24,14 @@ interface Props {
   courseUrl: string
   /** "RESPCARE 560", or null when the course has no code of that shape. Prefixes saved files. */
   courseCode: string | null
+  courseName: string | null
   token: string
+  /**
+   * Whether to offer saving to Google Drive. When it is false (not signed in, or the sign-in has
+   * expired) the main button saves a file on the computer instead, rather than offering an action
+   * that is certain to fail.
+   */
+  googleReady?: boolean
   /**
    * Reports this tile's status upward, so the panel can decide when to offer "Start again":
    * only once something has actually been extracted, and not while one is still going.
@@ -44,6 +55,7 @@ function formatDuration(seconds: number): string {
 
 const LOCAL_FILE_NAMES: Record<Tool, string> = {
   content: 'course_content_extraction.html',
+  clean: 'clean_course_extraction.html',
   quizzes: 'quiz_questions.html',
   rubrics: 'course_rubrics.html',
   settings: 'course_settings_tables.xlsx',
@@ -52,6 +64,7 @@ const LOCAL_FILE_NAMES: Record<Tool, string> = {
 /** File-save-dialog extension + filter label per tool. Every tool but Settings writes HTML. */
 const LOCAL_FILE_KIND: Record<Tool, { ext: string; label: string }> = {
   content: { ext: 'html', label: 'HTML File' },
+  clean: { ext: 'html', label: 'HTML File' },
   quizzes: { ext: 'html', label: 'HTML File' },
   rubrics: { ext: 'html', label: 'HTML File' },
   settings: { ext: 'xlsx', label: 'Excel File' },
@@ -60,25 +73,10 @@ const LOCAL_FILE_KIND: Record<Tool, { ext: string; label: string }> = {
 /** The Drive file type each tool produces — drives the badge and the button wording. */
 const GOOGLE_KIND: Record<Tool, { badge: string; noun: string }> = {
   content: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
+  clean: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
   quizzes: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
   rubrics: { badge: 'GOOGLE DOC', noun: 'Google Doc' },
   settings: { badge: 'GOOGLE SHEET', noun: 'Google Sheet' },
-}
-
-/**
- * "RESPCARE_560_quiz_questions.html" — the course's department and number in front of the
- * plain name, so a folder of extractions from several courses can be told apart at a glance.
- *
- * Anything outside [A-Za-z0-9] becomes an underscore before it reaches the save dialog:
- * the label is derived from an institution-set course code, and a stray slash or colon in
- * it would be rejected by Windows or, worse, read as a path. Falls back to the plain name
- * when there is no code, and when sanitising leaves nothing behind.
- */
-function localFileName(tool: Tool, courseCode: string | null): string {
-  const base = LOCAL_FILE_NAMES[tool]
-  if (!courseCode) return base
-  const prefix = courseCode.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-  return prefix ? `${prefix}_${base}` : base
 }
 
 const LOCAL_HANDLERS: Record<
@@ -89,9 +87,11 @@ const LOCAL_HANDLERS: Record<
     savePath: string
     selectedIds?: string[]
     jobId?: string
+    options?: CleanOptions
   }) => Promise<{ ok: boolean; message: string; cancelled?: boolean }>
 > = {
   content: (args) => window.api.canvas.exportContent(args),
+  clean: (args) => window.api.canvas.exportClean(args),
   quizzes: (args) => window.api.canvas.exportQuizzes(args),
   rubrics: (args) => window.api.canvas.exportRubrics(args),
   settings: (args) => window.api.canvas.exportSettings(args),
@@ -105,7 +105,9 @@ export function ToolTile({
   tileBg,
   courseUrl,
   courseCode,
+  courseName,
   token,
+  googleReady = true,
   onStatusChange,
 }: Props) {
   const [status, setStatus] = useState<Status>('idle')
@@ -150,6 +152,16 @@ export function ToolTile({
   const [itemsError, setItemsError] = useState<string | null>(null)
   const [loadingItems, setLoadingItems] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Only the clean course document has options. On by default: a page per activity is what
+  // makes the document easy to hand to one reader at a time.
+  const [pageBreaks, setPageBreaks] = useState(true)
+  const [toolLabels, setToolLabels] = useState(true)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const toolOptions: CleanOptions | undefined = tool === 'clean' ? { pageBreaks, toolLabels } : undefined
+  // These two list module items, so a group is a module. The others group by something else
+  // (the settings picker groups by item type) or not at all, and "everything in this module"
+  // would be wrong there.
+  const moduleSelect = tool === 'content' || tool === 'clean'
 
   /**
    * A selection belongs to the course it was made in. Without this, picking items in one
@@ -241,6 +253,7 @@ export function ToolTile({
         token,
         selectedIds,
         jobId: id,
+        options: toolOptions,
       })
       if (result.ok) {
         setStatus('success')
@@ -282,7 +295,7 @@ export function ToolTile({
   const [localNoticeOpen, setLocalNoticeOpen] = useState(false)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const pendingLocalSave = useRef<string[] | undefined>(undefined)
-  const noticeApplies = tool === 'content' || tool === 'settings'
+  const noticeApplies = tool === 'content' || tool === 'clean' || tool === 'settings'
 
   // The notice appears below the button that was just pressed, so focus has to be moved into
   // it — otherwise it is silent to a screen reader and easy to miss with the keyboard.
@@ -326,10 +339,10 @@ export function ToolTile({
    * prefix for anyone who pastes a URL and extracts straight away. One small request, and a
    * failure just means the plain name.
    */
-  async function resolveCourseCode(): Promise<string | null> {
-    if (courseCode) return courseCode
+  async function resolveCourseLabel(): Promise<{ code: string | null; name: string | null }> {
+    if (courseCode || courseName) return { code: courseCode, name: courseName }
     const res = await window.api.canvas.getCourseName({ courseUrl, token }).catch(() => null)
-    return res?.ok ? (res.code ?? null) : null
+    return res?.ok ? { code: res.code ?? null, name: res.name ?? null } : { code: null, name: null }
   }
 
   async function runLocalSave(selectedIds?: string[]) {
@@ -338,7 +351,8 @@ export function ToolTile({
     // like it had done nothing. Announced rather than shown: it is normally instant, and a
     // spinner that flashes for 40ms is worse than none.
     setPreparingSave(true)
-    const defaultName = localFileName(tool, await resolveCourseCode())
+    const label = await resolveCourseLabel()
+    const defaultName = localFileName(LOCAL_FILE_NAMES[tool], label.code, label.name)
     setPreparingSave(false)
 
     const savePath = await window.api.dialog.saveFile({
@@ -357,7 +371,14 @@ export function ToolTile({
     setMessage('')
     setWebViewLink(null)
     try {
-      const result = await LOCAL_HANDLERS[tool]({ courseUrl, token, savePath, selectedIds, jobId: id })
+      const result = await LOCAL_HANDLERS[tool]({
+        courseUrl,
+        token,
+        savePath,
+        selectedIds,
+        jobId: id,
+        options: toolOptions,
+      })
       if (result.cancelled) {
         setStatus('cancelled')
         setMessage('')
@@ -398,10 +419,10 @@ export function ToolTile({
       : status === 'cancelled'
         ? `${label} stopped. Nothing was saved.`
         : status === 'success'
-          ? `${label} done. ${message}`
+          ? `${label} done. ${splitDetails(message).plain}`
           : status === 'error'
             ? // Announced as plain text, so it needs the same tidying the visible copy gets.
-              `${label} failed. ${cleanErrorMessage(message)}`
+              `${label} failed. ${splitDetails(message).plain}`
             : ''
 
   /**
@@ -436,6 +457,7 @@ export function ToolTile({
   const nothingSelected = hasSelection && selected.size === 0
   const selectionArgs = hasSelection ? Array.from(selected) : undefined
   const extractLabel = `Extract ${isSubset ? 'selected' : 'all'} to a ${GOOGLE_KIND[tool].noun}`
+  const localLabel = `Save ${isSubset ? 'selected' : 'all'} to your computer (.${LOCAL_FILE_KIND[tool].ext})`
 
   return (
     /* A section with its own heading, so each tile is a stop in heading navigation. The tile
@@ -460,7 +482,7 @@ export function ToolTile({
           <p className="text-xs text-gray-600 mt-0.5">{description}</p>
         </div>
         <span className="text-[10px] font-black tracking-wide px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
-          {GOOGLE_KIND[tool].badge}
+          {googleReady ? GOOGLE_KIND[tool].badge : 'SAVES TO COMPUTER'}
         </span>
       </div>
 
@@ -536,8 +558,11 @@ export function ToolTile({
                 be read by keyboard or screen reader. This stays reachable and announces its
                 own state, and the reason is rendered as real text below. */}
             <button
+              ref={googleReady ? undefined : localSaveRef}
               onClick={() => {
-                if (!nothingSelected) runDriveExport(selectionArgs)
+                if (nothingSelected) return
+                if (googleReady) void runDriveExport(selectionArgs)
+                else void requestLocalSave(selectionArgs)
               }}
               aria-disabled={nothingSelected}
               aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
@@ -548,7 +573,7 @@ export function ToolTile({
               }`}
             >
               <Download className="w-4 h-4" aria-hidden="true" />
-              {nothingSelected ? 'Nothing selected' : extractLabel}
+              {nothingSelected ? 'Nothing selected' : googleReady ? extractLabel : localLabel}
             </button>
             <button
               onClick={openPicker}
@@ -570,6 +595,45 @@ export function ToolTile({
             </p>
           )}
 
+          {tool === 'clean' && (
+            <div className="mt-3">
+              <button
+                onClick={() => setAdvancedOpen((o) => !o)}
+                aria-expanded={advancedOpen}
+                aria-controls={advancedOpen ? "clean-advanced" : undefined}
+                className="flex items-center gap-1 text-xs font-black text-[#0033a0] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0]"
+              >
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+                Advanced options
+              </button>
+              {advancedOpen && (
+                <div id="clean-advanced" className="mt-2 space-y-2 rounded-xl border border-gray-200 p-3">
+                  <label className="flex items-center gap-2 text-[12.5px] text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={pageBreaks}
+                      onChange={(e) => setPageBreaks(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-[#0033a0]"
+                    />
+                    Start each activity on a new page
+                  </label>
+                  <label className="flex items-center gap-2 text-[12.5px] text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={toolLabels}
+                      onChange={(e) => setToolLabels(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-[#0033a0]"
+                    />
+                    Show the Canvas tool name under each title (Page, Assignment, Discussion…)
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Settings tables are one whole tab per item, so a full course turns into dozens of
               tabs and a correspondingly long run. Nudging people toward the picker up front is
               cheaper than letting them discover that after a five-minute extraction. */}
@@ -586,21 +650,28 @@ export function ToolTile({
               to touch and keyboard (1.4.1). The underline is what marks it as a control when
               it is live, and dropping the underline plus lightening to gray-500 is what marks
               it as unavailable; gray-500 is the permitted case for genuinely inactive UI. */}
-          <button
-            ref={localSaveRef}
-            onClick={() => {
-              if (!nothingSelected) void requestLocalSave(selectionArgs)
-            }}
-            aria-disabled={nothingSelected}
-            aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
-            className={`w-full text-center text-xs font-bold mt-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] ${
-              nothingSelected
-                ? 'text-gray-500 cursor-not-allowed'
-                : 'text-gray-600 underline underline-offset-2 hover:text-gray-900'
-            }`}
-          >
-            or save a local copy (.{LOCAL_FILE_KIND[tool].ext})
-          </button>
+          {googleReady ? (
+            <button
+              ref={localSaveRef}
+              onClick={() => {
+                if (!nothingSelected) void requestLocalSave(selectionArgs)
+              }}
+              aria-disabled={nothingSelected}
+              aria-describedby={nothingSelected ? `${tool}-nothing-selected` : undefined}
+              className={`w-full text-center text-xs font-bold mt-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0033a0] ${
+                nothingSelected
+                  ? 'text-gray-500 cursor-not-allowed'
+                  : 'text-gray-600 underline underline-offset-2 hover:text-gray-900'
+              }`}
+            >
+              or save a local copy (.{LOCAL_FILE_KIND[tool].ext})
+            </button>
+          ) : (
+            <p className="text-xs text-gray-700 mt-2 text-center">
+              You are not signed in to Google, so this saves a file on your computer. To save as a{' '}
+              {GOOGLE_KIND[tool].noun}, sign in under <em>Initial setup</em>.
+            </p>
+          )}
 
           {localNoticeOpen && (
             /* role="dialog" rather than "group", and aria-describedby pointing at the body
@@ -640,6 +711,13 @@ export function ToolTile({
                         /<span className="font-bold">FALSE</span> text rather than the tickable
                         boxes the Google Sheets version has. Everything else — labels, values,
                         and the dropdown option lists — comes across as normal.
+                      </p>
+                    ) : tool === 'clean' ? (
+                      <p className="text-[12.5px] text-gray-700 mt-1">
+                        In a local file the contents list at the top is not linked to the
+                        headings until you open it in Google Docs, and Docs may link it only
+                        partly. Everything else — headings, dates, icons, callout boxes — comes
+                        across as normal.
                       </p>
                     ) : (
                       <p className="text-[12.5px] text-gray-700 mt-1">
@@ -717,9 +795,10 @@ export function ToolTile({
             </>
           )}
         </p>
-        <p role="alert" className={itemsError ? 'text-xs text-red-700' : 'sr-only'}>
-          {itemsError}
-        </p>
+        <div className={itemsError ? 'text-xs text-red-700' : 'sr-only'}>
+          <p role="alert">{itemsError && <ErrorText message={itemsError} />}</p>
+          {itemsError && <ErrorDetails message={itemsError} />}
+        </div>
         {items && (
           <>
             <div className="flex items-center justify-between mb-1.5">
@@ -755,17 +834,32 @@ export function ToolTile({
                   aria-labelledby={group ? `${tool}-grp-${slugify(group)}` : undefined}
                 >
                   {group && (
+                    // Pale blue with navy text: 10.8 to 1 contrast, well over the 4.5 to 1 needed.
                     <p
                       id={`${tool}-grp-${slugify(group)}`}
-                      className="text-[10px] font-black uppercase tracking-wide text-gray-600 mt-2 mb-0.5 px-1"
+                      className="sticky top-0 z-10 mt-2 mb-0.5 rounded-md bg-[#dbe7fb] px-2.5 py-1.5 text-[12px] font-black uppercase tracking-wider text-[#0a2a6b]"
                     >
                       {group}
+                      <span className="ml-2 font-normal normal-case tracking-normal">
+                        {rows.length} item{rows.length === 1 ? '' : 's'}
+                      </span>
                     </p>
+                  )}
+                  {group && moduleSelect && rows.length > 0 && (
+                    <ModuleSelectRow
+                      moduleName={group}
+                      noun={group === LOOSE_GROUP ? 'group' : 'module'}
+                      ids={rows.map((r) => r.id)}
+                      selected={selected}
+                      onChange={(on) => setSelected((prev) => withGroup(prev, rows.map((r) => r.id), on))}
+                    />
                   )}
                   {rows.map((row) => (
                     <label
                       key={row.id}
-                      className="flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-gray-50 text-[13px] cursor-pointer"
+                      className={`flex items-center gap-2 py-1 px-1 rounded-lg hover:bg-gray-50 text-[13px] cursor-pointer ${
+                        group && moduleSelect ? 'pl-6' : ''
+                      }`}
                     >
                       <input
                         type="checkbox"
@@ -785,7 +879,9 @@ export function ToolTile({
                 the explanation of why. */}
             <button
               onClick={() => {
-                if (!busy && selected.size > 0) runDriveExport(Array.from(selected))
+                if (busy || selected.size === 0) return
+                if (googleReady) void runDriveExport(Array.from(selected))
+                else void requestLocalSave(Array.from(selected))
               }}
               aria-disabled={busy || selected.size === 0}
               aria-describedby={!busy && selected.size === 0 ? `${tool}-nothing-selected` : undefined}
@@ -795,7 +891,7 @@ export function ToolTile({
                   : 'bg-[#0033a0] hover:bg-[#002d8f] text-white'
               }`}
             >
-              Extract selected to a {GOOGLE_KIND[tool].noun}
+              {googleReady ? `Extract selected to a ${GOOGLE_KIND[tool].noun}` : 'Save selected to your computer'}
             </button>
           </>
         )}
@@ -834,7 +930,8 @@ export function ToolTile({
           <div className="flex-1">
             {/* `label` already ends in "extraction" ("Course content extraction"), so no extra noun. */}
             <p className="font-black">{label} done</p>
-            <p className="text-gray-700 mt-0.5">{message}</p>
+            <p className="text-gray-700 mt-0.5">{splitDetails(message).plain}</p>
+            <ErrorDetails message={message} />
             {webViewLink && (
               <button
                 onClick={() => window.open(webViewLink, '_blank')}
@@ -858,6 +955,7 @@ export function ToolTile({
             <p className="text-gray-700 mt-0.5 break-words">
               <ErrorText message={message} />
             </p>
+            <ErrorDetails message={message} />
           </div>
         </div>
       )}

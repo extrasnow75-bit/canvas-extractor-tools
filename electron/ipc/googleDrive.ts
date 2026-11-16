@@ -1,5 +1,6 @@
 import { shell } from 'electron'
 import { getAccessToken } from './googleAuth'
+import { googleApiMessage, googleFetch } from './googleMessages'
 
 const UPLOAD_ENDPOINT =
   'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink'
@@ -25,7 +26,7 @@ export async function uploadHtmlAsDoc(
     html +
     `\r\n--${boundary}--`
 
-  const res = await fetch(UPLOAD_ENDPOINT, {
+  const res = await googleFetch(UPLOAD_ENDPOINT, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -36,7 +37,7 @@ export async function uploadHtmlAsDoc(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    throw new Error(`Google Drive upload failed (${res.status}). ${detail.slice(0, 200)}`)
+    throw new Error(googleApiMessage('Drive', 'saving the file to Google Drive', res.status, detail))
   }
 
   return (await res.json()) as { id: string; webViewLink: string }
