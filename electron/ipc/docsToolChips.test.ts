@@ -113,3 +113,37 @@ describe('icon chips', () => {
     expect(planToolChips([split]).chips).toBe(0)
   })
 })
+
+describe('a Page line is the name alone', () => {
+  const red = { bold: true, foregroundColor: { color: { rgbColor: { red: 1 } } } }
+  const lone = (start: number, text: string, style: object | undefined): ChipElement => ({
+    startIndex: start,
+    endIndex: start + text.length + 1,
+    paragraph: { elements: [{ startIndex: start, textRun: { content: `${text}\n`, textStyle: style } }] },
+  })
+  it('becomes a chip when it is drawn as a tool line (bold red)', () => {
+    const { requests, chips } = planToolChips([lone(10, 'Page', red)])
+    expect(chips).toBe(1)
+    expect(requests.find((r) => 'deleteContentRange' in r)).toEqual({ deleteContentRange: { range: { startIndex: 10, endIndex: 14 } } })
+    expect(requests.find((r) => 'insertDropdown' in r)).toMatchObject({ insertDropdown: { location: { index: 10 }, selectedOptionId: 'dropdownItem.ts-page' } })
+  })
+  it('stays text when it is ordinary writing: plain, not bold, or not red', () => {
+    expect(planToolChips([lone(10, 'Page', {})]).chips).toBe(0)
+    expect(planToolChips([lone(10, 'Page', undefined)]).chips).toBe(0)
+    expect(planToolChips([lone(10, 'Page', { bold: true })]).chips).toBe(0)
+    expect(planToolChips([lone(10, 'Page', { foregroundColor: { color: { rgbColor: { red: 1 } } } })]).chips).toBe(0)
+    expect(planToolChips([lone(10, 'Page', { bold: true, foregroundColor: { color: { rgbColor: { red: 0.2, green: 0.2, blue: 0.9 } } } })]).chips).toBe(0)
+  })
+  it('does not turn a longer line that starts with Page into a chip', () => {
+    expect(planToolChips([lone(10, 'Page 2 of the syllabus', red)]).chips).toBe(0)
+    expect(planToolChips([lone(10, 'Pages', red)]).chips).toBe(0)
+  })
+  it('still recognises the older lines that carry the phrase, for every tool', () => {
+    expect(planToolChips([line(10, 'Page; Link to settings tab'), line(60, 'Discussion; Link to settings tab')]).chips).toBe(2)
+  })
+  it('works with the rest of the document, last position first', () => {
+    const { requests } = planToolChips([lone(10, 'Page', red), line(60, 'Assignment; Link to settings tab')])
+    const at = requests.filter((r) => 'insertDropdown' in r).map((r) => (r as { insertDropdown: { location: { index: number } } }).insertDropdown.location.index)
+    expect(at).toEqual([60, 10])
+  })
+})

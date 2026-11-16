@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { videoRef, oembedUrl, checkVideo, markDeadVideos } from './videoCheck'
+import { videoRef, oembedUrl, checkVideo, lookupVideo, isGenericName, markDeadVideos } from './videoCheck'
 import { BROKEN_LINK_HIGHLIGHT } from './brokenLinks'
 
 const reply = (status: number) => (async () => new Response('{}', { status })) as unknown as typeof fetch
@@ -99,5 +99,41 @@ describe('markDeadVideos', () => {
   it('does not double-highlight', async () => {
     const already = `<a href="https://www.youtube.com/watch?v=FshUPVADcu4" data-embed="1"><span style="${hl}">x</span></a>`
     expect(await markDeadVideos(already, { fetch: reply(404) })).toBe(already)
+  })
+})
+
+const answer = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
+
+describe('the video\'s own title', () => {
+  const ref = { provider: 'youtube' as const, id: 'FshUPVADcu4' }
+  it('is read from a good answer, and trimmed', async () => {
+    expect(await lookupVideo(ref, { fetch: answer(200, { title: '  Welcome to Ornithology ' }) })).toEqual({ verdict: 'found', title: 'Welcome to Ornithology' })
+  })
+  it('is left out when the answer has none, or is not readable', async () => {
+    expect(await lookupVideo(ref, { fetch: answer(200, {}) })).toEqual({ verdict: 'found', title: undefined })
+    expect(await lookupVideo(ref, { fetch: (async () => new Response('not json', { status: 200 })) as unknown as typeof fetch })).toEqual({ verdict: 'found', title: undefined })
+  })
+  it('is not sent for a missing video', async () => {
+    expect(await lookupVideo(ref, { fetch: answer(404, { title: 'x' }) })).toEqual({ verdict: 'gone' })
+  })
+  it('recognises names that say nothing about the video', () => {
+    for (const n of ['', 'www.youtube.com', 'youtube.com', 'YouTube video player', 'Vimeo video player', 'Video player', 'video', 'https://youtu.be/abc']) expect(isGenericName(n), n).toBe(true)
+    for (const n of ['Welcome to Ornithology', 'Week 3 lecture', 'YouTube tips for teachers', 'Player stats']) expect(isGenericName(n), n).toBe(false)
+  })
+  const embed = (text: string) => `<a href="https://www.youtube.com/watch?v=FshUPVADcu4" data-embed="1">${text}</a>`
+  it('replaces a generic name on an embedded player with the real title', async () => {
+    const out = await markDeadVideos(embed('www.youtube.com'), { fetch: answer(200, { title: 'Welcome to Ornithology' }) })
+    expect(out).toBe(embed('Welcome to Ornithology'))
+    expect(await markDeadVideos(embed('YouTube video player'), { fetch: answer(200, { title: 'A & B' }) })).toBe(embed('A &amp; B'))
+  })
+  it('keeps a name the course author chose, and never renames an ordinary link', async () => {
+    expect(await markDeadVideos(embed('Intro to birds'), { fetch: answer(200, { title: 'Other' }) })).toBe(embed('Intro to birds'))
+    const plain = '<a href="https://www.youtube.com/watch?v=FshUPVADcu4">www.youtube.com</a>'
+    expect(await markDeadVideos(plain, { fetch: answer(200, { title: 'Other' }) })).toBe(plain)
+  })
+  it('keeps the name when the video is gone, and marks it', async () => {
+    const out = await markDeadVideos(embed('www.youtube.com'), { fetch: answer(404, {}) })
+    expect(out).toContain('>www.youtube.com</span>')
+    expect(out).toContain('f4cccc')
   })
 })

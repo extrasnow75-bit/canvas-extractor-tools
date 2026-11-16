@@ -86,7 +86,21 @@ const ICON_RE = new RegExp(`\\[(${ICON_NAMES.map((n) => n.replace(/[()]/g, '\\$&
 export interface ChipElement {
   startIndex?: number
   endIndex?: number
-  paragraph?: { elements?: Array<{ startIndex?: number; textRun?: { content?: string } }> }
+  paragraph?: {
+    elements?: Array<{
+      startIndex?: number
+      textRun?: { content?: string; textStyle?: { bold?: boolean; foregroundColor?: { color?: { rgbColor?: { red?: number; green?: number; blue?: number } } } } }
+    }>
+  }
+}
+
+/** A tool name that stands alone on its line, with no "Link to settings tab" after it. */
+const BARE_TOOL = 'Page'
+
+/** Bold and the template's pure red: what a tool line is drawn in, which is how a lone "Page" is told from the word in a sentence. */
+function isRedBold(run: { textStyle?: { bold?: boolean; foregroundColor?: { color?: { rgbColor?: { red?: number; green?: number; blue?: number } } } } } | undefined): boolean {
+  const c = run?.textStyle?.foregroundColor?.color?.rgbColor
+  return run?.textStyle?.bold === true && (c?.red ?? 0) >= 0.99 && (c?.green ?? 0) < 0.1 && (c?.blue ?? 0) < 0.1
 }
 
 export function definitionRequest(): Record<string, unknown> {
@@ -187,6 +201,13 @@ export function planToolChips(content: ChipElement[]): { requests: Array<Record<
     if (m) {
       const option = TOOL_OPTIONS.find((o) => o.name === m[1]) as ToolOption
       edits.push({ start: el.startIndex, length: m[1].length, definitionId: TOOL_DEFINITION_ID, optionId: option.optionId })
+    } else if (text.trim() === BARE_TOOL) {
+      // A Page line is just the name. It is only a tool line when it is drawn like one.
+      const firstText = el.paragraph.elements.find((e) => e.textRun?.content !== undefined && e.textRun.content.trim() !== '')
+      if (firstText && isRedBold(firstText.textRun)) {
+        const option = TOOL_OPTIONS.find((o) => o.name === BARE_TOOL) as ToolOption
+        edits.push({ start: firstText.startIndex ?? el.startIndex, length: BARE_TOOL.length, definitionId: TOOL_DEFINITION_ID, optionId: option.optionId })
+      }
     }
     edits.push(...iconEdits(el))
   }

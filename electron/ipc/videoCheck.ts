@@ -64,20 +64,58 @@ export interface CheckOptions {
  *   For an embedded player that is as good as broken; for a plain link it may still open, so the caller decides.
  */
 export async function checkVideo(ref: VideoRef, o: CheckOptions = {}): Promise<Verdict> {
+  return (await lookupVideo(ref, o)).verdict
+}
+
+export interface VideoLookup {
+  verdict: Verdict
+  /** The video's own title, when the service gave one. */
+  title?: string
+}
+
+/** The same question as checkVideo, keeping the title the service sends back with a good answer. */
+export async function lookupVideo(ref: VideoRef, o: CheckOptions = {}): Promise<VideoLookup> {
   const doFetch = o.fetch ?? fetch
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), o.timeoutMs ?? 6000)
   try {
     const res = await doFetch(oembedUrl(ref), { signal: ctl.signal, redirect: 'follow', credentials: 'omit' as RequestCredentials })
-    if (res.ok) return 'found'
-    if (res.status === 404 || res.status === 410) return 'gone'
-    if (res.status === 401 || res.status === 403) return 'blocked'
-    return 'unknown'
+    if (res.ok) {
+      let title: string | undefined
+      try {
+        const t = ((await res.json()) as { title?: unknown }).title
+        if (typeof t === 'string' && t.trim() !== '') title = t.trim().slice(0, 200)
+      } catch {
+        // An answer without a readable title still says the video is there.
+      }
+      return { verdict: 'found', title }
+    }
+    if (res.status === 404 || res.status === 410) return { verdict: 'gone' }
+    if (res.status === 401 || res.status === 403) return { verdict: 'blocked' }
+    return { verdict: 'unknown' }
   } catch {
-    return 'unknown'
+    return { verdict: 'unknown' }
   } finally {
     clearTimeout(timer)
   }
+}
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+const decodeText = (s: string): string =>
+  s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+
+/**
+ * True when a link's text says nothing about which video it is: empty, just a website's name, or the
+ * stock title a player gives itself ("YouTube video player"). A name the course author chose is kept.
+ */
+export function isGenericName(innerHtml: string): boolean {
+  const text = decodeText(innerHtml.replace(/<[^>]+>/g, '')).trim()
+  if (text === '') return true
+  if (/^https?:\/\//i.test(text)) return true
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(text)) return true
+  return /^(?:(?:youtube|vimeo)\s+)?(?:video\s+)?player$|^(?:embedded\s+)?video$/i.test(text)
 }
 
 const HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i
@@ -99,13 +137,13 @@ export async function markDeadVideos(html: string, o: CheckOptions = {}): Promis
   if (refs.size === 0) return html
 
   const list = [...refs.entries()].slice(0, o.maxChecks ?? 150)
-  const verdicts = new Map<string, Verdict>()
+  const verdicts = new Map<string, VideoLookup>()
   let next = 0
   await Promise.all(
     Array.from({ length: Math.min(o.concurrency ?? 6, list.length) }, async () => {
       while (next < list.length && !o.isCancelled?.()) {
         const [key, ref] = list[next++]
-        verdicts.set(key, await checkVideo(ref, o))
+        verdicts.set(key, await lookupVideo(ref, o))
       }
     }),
   )
@@ -115,7 +153,9 @@ export async function markDeadVideos(html: string, o: CheckOptions = {}): Promis
     const ref = m ? videoRef(m[1] ?? m[2] ?? m[3] ?? '') : null
     const v = ref ? verdicts.get(`${ref.provider}:${ref.id}`) : undefined
     const embedded = /\sdata-embed\b/i.test(attrs)
-    const dead = v === 'gone' || (v === 'blocked' && embedded)
+    // An embedded player that names no video gets the video's own title.
+    if (v?.verdict === 'found' && v.title && embedded && isGenericName(inner)) return `<a${attrs}>${escapeHtml(v.title)}</a>`
+    const dead = v?.verdict === 'gone' || (v?.verdict === 'blocked' && embedded)
     if (!dead || /^\s*<span style="background-color:/i.test(inner)) return whole
     return `<a${attrs}><span style="background-color:${BROKEN_LINK_HIGHLIGHT};">${inner}</span></a>`
   })

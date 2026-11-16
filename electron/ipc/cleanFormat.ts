@@ -25,7 +25,7 @@ import {
   undecorate,
 } from './blueprintFormat'
 import { LOOKAHEAD, MAX_SCANNED_BODY_BYTES, classifyTemplate } from './styledHtml'
-import { replaceEmbeddedMedia } from './embeddedMedia'
+import { replaceEmbeddedMedia, embedLink, brokenEmbedName, type EmbedParts } from './embeddedMedia'
 import { highlightBrokenLinks, unlinkBareEmails } from './brokenLinks'
 
 export const GREY = '#595959' // dates: 7:1 on white, so it stays legible for low-vision readers
@@ -287,6 +287,28 @@ function findClose(html: string, from: number, tag: string): { innerEnd: number;
   return null
 }
 
+/** The grey of the website name under a card's title: 9.8 to 1 on the card's background. */
+const CARD_GREY = '#3C4043'
+
+/**
+ * An embedded video, audio clip or other player as a card: a pale box with a blue edge, a small blue
+ * label, the title as a link, and the website's name beneath. Google drops the player itself, so this
+ * shows that it was there and where to open it.
+ */
+export function embedCard(e: EmbedParts): string {
+  const label = e.kind === 'video' ? '▶ VIDEO' : e.kind === 'audio' ? '♪ AUDIO' : 'EMBEDDED CONTENT'
+  const title = e.href ? embedLink(e.href, e.name) : brokenEmbedName(e.name)
+  const line = (style: string, inner: string) => `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;${style}">${inner}</p>`
+  return box(
+    line(run('9pt', 'bold', DEEP_BLUE), label) +
+      line(`margin-top:2pt;${run('12pt', 'bold', BLACK)}`, title) +
+      (e.host ? line(`margin-top:2pt;${run('10pt', 'normal', CARD_GREY)}`, escapeHtml(e.host)) : ''),
+    '#F6F7F9',
+    `4px solid ${DEEP_BLUE}`,
+    BLACK,
+  ) + `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;font-size:6pt;">&nbsp;</p>` // Google ignores space after a table
+}
+
 /** A one-cell table: the only box Google Docs' importer reliably keeps its fill and edge for. */
 function box(inner: string, bg: string, left: string, color: string, edge = 'none'): string {
   const border = edge === 'none' ? `border:none;border-left:${left};` : `border:${edge};`
@@ -404,6 +426,7 @@ export function formatCleanBody(html: string | null | undefined, opts: CleanBody
   const withEmbeds = replaceEmbeddedMedia(html, {
     baseUrl: opts.baseUrl,
     renderLabel: (text) => `<strong>${escapeHtml(text)}:</strong>`,
+    renderEmbed: embedCard,
   })
   let out = normalizeCanvasImages(withEmbeds, opts.baseUrl, opts.fileNames, (name, fileId) =>
     iconHtml(name, fileId, opts.iconData),

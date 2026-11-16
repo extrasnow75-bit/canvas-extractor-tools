@@ -7,7 +7,8 @@
  *
  * Two details QA treats as critical:
  *   1. The blue horizontal rules above AND below every "Due by …" header.
- *   2. "; Link to settings tab", in red, after every Canvas tool name (Page, Assignment, …).
+ *   2. "; Link to settings tab", in red, after a Canvas tool name that has a settings tab
+ *      (Assignment, Discussion, Quiz); a Page, File or External Link is the name alone.
  */
 
 // MAX_SCANNED_BODY_BYTES guards the scans below for the same reason it guards the one in
@@ -147,16 +148,26 @@ export function itemTitle(inner: string, escape = true): string {
   )
 }
 
-// The tool line is the chip, then a red semicolon and the phrase: "Page; Link to settings tab".
+// The tool line is the chip, then a red semicolon and the phrase: "Assignment; Link to settings tab".
+// A Page line is only the chip: a page has no settings tab to link to.
 // QA briefly used a black circle (⏺) in place of the semicolon so a highlight could not hide it;
 // the team's template (Nov 2026) is back to the semicolon, so that is what is written now.
 // The chip reader in docsToolChips.ts still recognises documents made with the circle.
 
 /**
- * The text after the tool name, in the tool's red. It goes on every tool line, Page and File
- * included. The semicolon belongs to the red text, so the line reads "Page; Link to settings tab".
+ * The text after the tool name, in the tool's red. The semicolon belongs to the red text, so the line
+ * reads "Assignment; Link to settings tab". Only the tools that have a settings tab carry it.
  */
 export const SETTINGS_TAB_PHRASE = 'Link to settings tab'
+
+/** The tools that have a settings tab to link to: both assignment types, discussions and both quiz types. */
+const TOOLS_WITH_SETTINGS_TAB: ReadonlySet<CanvasToolName> = new Set([
+  'Assignment',
+  'Assignment (Not Graded)',
+  'Discussion',
+  'Quiz (Classic)',
+  'Quiz (New)',
+])
 
 /**
  * The tool names the line may carry — Blueprint Tools' CANVAS_TOOL_OPTIONS, plus the two
@@ -176,14 +187,15 @@ export type CanvasToolName =
 
 /**
  * Canvas tool line — Blueprint spec (Code.gs TOOL_MARKER/TOOL_SUFFIX): the tool name in
- * Arial 11pt bold red, then "; Link to settings tab" in the same red.
+ * Arial 11pt bold red, then "; Link to settings tab" in the same red. A Page, a File and an
+ * External Link have no settings tab, so their line is the name alone.
  */
 export function toolLabel(label: CanvasToolName): string {
   const red = `font-family:${FONT};font-size:11pt;font-weight:bold;color:${RED};`
   return (
     `<p style="${NO_INDENT}margin-top:0;margin-bottom:0;">` +
     `<span style="${red}">${escapeHtml(label)}</span>` +
-    `<span style="${red}">; ${SETTINGS_TAB_PHRASE}</span>` +
+    (TOOLS_WITH_SETTINGS_TAB.has(label) ? `<span style="${red}">; ${SETTINGS_TAB_PHRASE}</span>` : '') +
     '</p>'
   )
 }

@@ -75,10 +75,14 @@ describe('in the two documents', () => {
     expect(out).toContain('href="https://www.youtube.com/watch?v=abc"')
     expect(out).not.toContain('<iframe')
   })
-  it('the clean document shows plain wording and the link', () => {
+  it('the clean document shows a video card with the title as a link', () => {
     const out = formatCleanBody(body, { baseUrl: 'https://boisestatecanvas.instructure.com' })
-    expect(out).toContain('<strong>Embed video:</strong>')
-    expect(out).not.toContain('YouTube')
+    expect(out).toContain('▶ VIDEO')
+    expect(out).toContain('>Intro</a>')
+    expect(out).toContain('www.youtube.com</p>')
+    expect(out).toContain('<table')
+    expect(out).not.toContain('Embed video')
+    expect(out).not.toContain('(YouTube)')
     expect(out).toContain('href="https://www.youtube.com/watch?v=abc"')
     expect(out).not.toContain('<iframe')
   })
@@ -101,5 +105,31 @@ describe('player edge cases', () => {
   })
   it('leaves an unterminated <video> as it is', () => {
     expect(replaceEmbeddedMedia('<p>a</p><video src="https://x.org/a.mp4">no end', o)).toBe('<p>a</p><video src="https://x.org/a.mp4">no end')
+  })
+})
+
+import { embedCard } from './cleanFormat'
+
+describe('the video card in the clean document', () => {
+  const card = (over: object = {}) => embedCard({ kind: 'video', label: 'Embed video', name: 'Welcome to Ornithology', host: 'www.youtube.com', href: 'https://www.youtube.com/watch?v=abc', ...over })
+  it('has a label, the title as a link marked as a player, and the website in dark grey', () => {
+    const out = card()
+    expect(out).toContain('▶ VIDEO')
+    expect(out).toContain('<a href="https://www.youtube.com/watch?v=abc" data-embed="1">Welcome to Ornithology</a>')
+    expect(out).toContain('color:#3C4043')
+    expect(out).toContain('www.youtube.com')
+    expect(out).toContain('border-left:4px solid #0033a0')
+  })
+  it('names audio and other players for what they are', () => {
+    expect(card({ kind: 'audio' })).toContain('♪ AUDIO')
+    expect(card({ kind: 'content', host: 'open.spotify.com' })).toContain('EMBEDDED CONTENT')
+  })
+  it('marks a player with no usable address in light red, with no link', () => {
+    const out = card({ href: null, name: 'Lecture' })
+    expect(out).not.toContain('<a ')
+    expect(out).toContain('background-color:#f4cccc;">Lecture</span>')
+  })
+  it('escapes a title with markup in it', () => {
+    expect(card({ name: 'a <b> & "c"' })).toContain('a &lt;b&gt; &amp; &quot;c&quot;')
   })
 })

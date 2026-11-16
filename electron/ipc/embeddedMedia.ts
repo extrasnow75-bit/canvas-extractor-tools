@@ -19,6 +19,33 @@ export interface EmbedOptions {
   baseUrl?: string
   /** How the label is drawn, given its plain text, for example "Embed video" (the caller adds the colon). */
   renderLabel(text: string): string
+  /**
+   * Draws the whole embed itself instead of "label, then link". It is given the pieces and uses
+   * embedLink() for the link, so the later steps (the dead-video check, the real video title) can find it.
+   */
+  renderEmbed?(e: EmbedParts): string
+}
+
+export interface EmbedParts {
+  kind: 'video' | 'audio' | 'content'
+  /** The plain label, "Embed video". */
+  label: string
+  /** The title the course gave it, or the website's name when it gave none. */
+  name: string
+  /** The website's name, "www.youtube.com". */
+  host: string
+  /** The address to open, or null when there is no usable one. */
+  href: string | null
+}
+
+/** The link an embed is drawn with. data-embed marks it as a player, not an ordinary link. */
+export function embedLink(href: string, text: string): string {
+  return `<a href="${escapeHtml(href)}" data-embed="1">${escapeHtml(text)}</a>`
+}
+
+/** What a missing address looks like: the name, marked light red, with no link. */
+export function brokenEmbedName(text: string): string {
+  return `<span style="background-color:${BROKEN_LINK_HIGHLIGHT};">${escapeHtml(text)}</span>`
 }
 
 const SOURCE_RE = /<source\b((?:[^>"']|"[^"]*"|'[^']*')*)>/i
@@ -86,11 +113,14 @@ function line(kind: 'video' | 'audio' | 'content', src: string, title: string, o
   const label = `Embed ${noun}`
   const shown = title || (u ? u.hostname : '')
   const target = known?.watch ?? u?.toString()
+  if (o.renderEmbed) {
+    return o.renderEmbed({ kind: noun, label, name: shown || 'no web address found', host: u?.hostname ?? '', href: target ?? null })
+  }
   // No usable address: the player cannot work, so the name is marked in light red.
   if (!target) {
-    return `${o.renderLabel(label)} <span style="background-color:${BROKEN_LINK_HIGHLIGHT};">${escapeHtml(shown || 'no web address found')}</span>`
+    return `${o.renderLabel(label)} ${brokenEmbedName(shown || 'no web address found')}`
   }
-  return `${o.renderLabel(label)} <a href="${escapeHtml(target)}" data-embed="1">${escapeHtml(shown || target)}</a>`
+  return `${o.renderLabel(label)} ${embedLink(target, shown || target)}`
 }
 
 /** Replace every <iframe>, <video> and <audio> in a body with a label and a link. */

@@ -16,13 +16,17 @@ import {
 describe('toolLabel', () => {
   const text = (html: string) => html.replace(/<[^>]+>/g, '')
 
+  it('has no "Link to settings tab" after a Page, a File or an External Link', () => {
+    for (const tool of ['Page', 'File', 'External Link'] as const) expect(text(toolLabel(tool)), tool).toBe(tool)
+  })
+
   it('reads "<Tool>; Link to settings tab", with no black circle', () => {
     expect(text(toolLabel('Assignment'))).toBe(`Assignment; ${SETTINGS_TAB_PHRASE}`)
     expect(text(toolLabel('Assignment'))).not.toContain('⏺')
   })
 
-  it('puts the phrase on Page, File and External Link too, not just tools with a settings table', () => {
-    for (const tool of ['Page', 'File', 'External Link'] as const) {
+  it('keeps the phrase on both assignment types, discussions and both quiz types', () => {
+    for (const tool of ['Assignment', 'Assignment (Not Graded)', 'Discussion', 'Quiz (Classic)', 'Quiz (New)'] as const) {
       expect(text(toolLabel(tool)), tool).toBe(`${tool}; ${SETTINGS_TAB_PHRASE}`)
     }
   })
