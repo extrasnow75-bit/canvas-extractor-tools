@@ -25,6 +25,7 @@ import {
   undecorate,
 } from './blueprintFormat'
 import { LOOKAHEAD, MAX_SCANNED_BODY_BYTES, classifyTemplate } from './styledHtml'
+import { replaceEmbeddedMedia } from './embeddedMedia'
 
 export const GREY = '#595959' // dates: 7:1 on white, so it stays legible for low-vision readers
 const OPEN_TAG_RE_SRC = '<([a-zA-Z][a-zA-Z0-9-]*)\\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>'
@@ -205,6 +206,8 @@ export function dueByText(headerTitle: string): string {
 }
 
 export interface TocEntry {
+  /** Whether this heading starts a new page. Google's HTML import drops the CSS for that, so the export passes it on and a Docs API pass applies it. */
+  breakBefore?: boolean
   level: 1 | 2
   text: string
   id: string
@@ -396,7 +399,12 @@ export function remapHeadings(html: string): string {
 /** Everything a Canvas body needs to become reader-friendly document HTML. */
 export function formatCleanBody(html: string | null | undefined, opts: CleanBodyOptions = {}): string {
   if (!html || !html.trim()) return NOTHING
-  let out = normalizeCanvasImages(html, opts.baseUrl, opts.fileNames, (name, fileId) =>
+  // Google's import drops embedded players without a trace, so each becomes a label and a link.
+  const withEmbeds = replaceEmbeddedMedia(html, {
+    baseUrl: opts.baseUrl,
+    renderLabel: (text) => `<strong>${escapeHtml(text)}:</strong>`,
+  })
+  let out = normalizeCanvasImages(withEmbeds, opts.baseUrl, opts.fileNames, (name, fileId) =>
     iconHtml(name, fileId, opts.iconData),
   )
   // The QA wording for missing alt text describes the course, not the picture.

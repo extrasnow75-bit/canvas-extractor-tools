@@ -18,6 +18,52 @@ export interface DocsHeadingElement extends DocsElement {
   }
 }
 
+/**
+ * Which headings start a new page. Google's HTML import ignores the CSS `page-break-before`, so
+ * the page breaks are set afterwards with `pageBreakBefore`. `expected` lists the document's
+ * headings in order with whether each breaks; they are matched to the real headings by text, in
+ * order, exactly as the contents links are, so two headings with one name each get their own.
+ */
+export function planPageBreaks(
+  content: DocsHeadingElement[],
+  expected: Array<{ text: string; breakBefore: boolean }>,
+): object[] {
+  const textOf = (el: DocsHeadingElement) =>
+    (el.paragraph?.elements ?? []).map((e) => e.textRun?.content ?? '').join('')
+  const isH1 = (el: DocsHeadingElement) => el.paragraph?.paragraphStyle?.namedStyleType === 'HEADING_1'
+  const label = content.findIndex((el) => el.paragraph && textOf(el).trim() === 'Contents')
+  const firstHeading = content.findIndex((el, i) => i > label && isH1(el))
+  if (label < 0 || firstHeading < 0) return []
+
+  const headings = content.slice(firstHeading).filter((el) => {
+    const t = el.paragraph?.paragraphStyle?.namedStyleType
+    return t === 'HEADING_1' || t === 'HEADING_2'
+  })
+  const requests: object[] = []
+  let from = 0
+  for (const want of expected) {
+    let hit = -1
+    for (let i = from; i < headings.length; i++) {
+      if (textOf(headings[i]).trim() === want.text.trim()) {
+        hit = i
+        break
+      }
+    }
+    if (hit < 0) continue
+    from = hit + 1
+    if (!want.breakBefore) continue
+    const h = headings[hit]
+    requests.push({
+      updateParagraphStyle: {
+        range: { startIndex: h.startIndex, endIndex: h.endIndex },
+        paragraphStyle: { pageBreakBefore: true },
+        fields: 'pageBreakBefore',
+      },
+    })
+  }
+  return requests
+}
+
 /** Which contents lines to link to which headings. */
 export function planContentsLinks(content: DocsHeadingElement[]): object[] {
   const textOf = (el: DocsHeadingElement) =>

@@ -1,6 +1,6 @@
 import { getAccessToken } from './googleAuth'
 import { googleApiMessage, googleFetch } from './googleMessages'
-import { DocsHeadingElement, planContentsLinks } from './docsContents'
+import { DocsHeadingElement, planContentsLinks, planPageBreaks } from './docsContents'
 import { planToolChips, ChipElement } from './docsToolChips'
 
 /**
@@ -155,6 +155,39 @@ export async function linkContentsToHeadings(documentId: string): Promise<number
   if (!updRes.ok) {
     const detail = await updRes.text().catch(() => '')
     throw new Error(googleApiMessage('Docs', 'linking the contents list in the Google Doc', updRes.status, detail))
+  }
+  return requests.length
+}
+
+/**
+ * Start each module, and each activity if asked, on a new page. Google's HTML import drops the
+ * CSS for this, so it is set here with `pageBreakBefore`. Cosmetic like the other passes: the
+ * document is saved, so the caller turns a failure into a note. Returns how many breaks were set.
+ */
+export async function applyPageBreaks(
+  documentId: string,
+  headings: Array<{ text: string; breakBefore: boolean }>,
+): Promise<number> {
+  const accessToken = await getAccessToken()
+  const getRes = await googleFetch(`https://docs.googleapis.com/v1/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!getRes.ok) {
+    const detail = await getRes.text().catch(() => '')
+    throw new Error(googleApiMessage('Docs', 'adding the page breaks to the Google Doc', getRes.status, detail))
+  }
+  const doc = (await getRes.json()) as { body?: { content?: DocsHeadingElement[] } }
+  const requests = planPageBreaks(doc.body?.content ?? [], headings)
+  if (requests.length === 0) return 0
+  // updateParagraphStyle does not change text length, so there is no index drift.
+  const updRes = await googleFetch(`https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  })
+  if (!updRes.ok) {
+    const detail = await updRes.text().catch(() => '')
+    throw new Error(googleApiMessage('Docs', 'adding the page breaks to the Google Doc', updRes.status, detail))
   }
   return requests.length
 }

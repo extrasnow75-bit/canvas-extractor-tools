@@ -25,7 +25,7 @@ import {
 import { signIn, cancelSignIn, getStatus, clearTokens, verifySignIn } from './ipc/googleAuth'
 import { MSG_NOT_SIGNED_IN, MSG_SIGN_IN_EXPIRED } from './ipc/googleMessages'
 import { uploadHtmlAsDoc, openInBrowser } from './ipc/googleDrive'
-import { applyDueHeaderBorders, linkContentsToHeadings, applyToolChips } from './ipc/googleDocs'
+import { applyDueHeaderBorders, linkContentsToHeadings, applyToolChips, applyPageBreaks } from './ipc/googleDocs'
 import { buildCleanHtml, handleCleanExport, DEFAULT_CLEAN_OPTIONS } from './ipc/cleanExport'
 import { listItemsForTool, PickerTool } from './ipc/listItems'
 import { checkForUpdate, checkNow, RELEASES_PAGE } from './ipc/updateCheck'
@@ -442,6 +442,7 @@ ipcMain.handle(
     }
 
     let html: string
+    let cleanHeadings: Array<{ text: string; breakBefore: boolean }> = []
     let docName: string
 
     try {
@@ -457,6 +458,7 @@ ipcMain.handle(
           ...args.options,
         })
         html = built.html
+        cleanHeadings = built.headings
         docName = `${built.courseName} — Clean Course Content Extraction`
       } else if (args.tool === 'quizzes') {
         const built = await buildQuizzesHtml(ref, selectedIds, cancel, progress)
@@ -502,6 +504,11 @@ ipcMain.handle(
     // The clean document's contents list is plain paragraphs until this links them to the
     // headings. Cosmetic like the borders: the document is saved, so a failure is a note.
     if (args.tool === 'clean') {
+      try {
+        await applyPageBreaks(id, cleanHeadings)
+      } catch (e) {
+        unfinished.push({ missing: 'the page breaks before each module and activity', error: e })
+      }
       try {
         await linkContentsToHeadings(id)
       } catch (e) {

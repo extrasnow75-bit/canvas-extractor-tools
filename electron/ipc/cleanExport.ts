@@ -252,7 +252,7 @@ export async function buildCleanHtml(
   cancel?: CancelToken | null,
   progress?: ProgressReporter | null,
   options: CleanOptions = DEFAULT_CLEAN_OPTIONS,
-): Promise<{ html: string; courseName: string; moduleCount: number }> {
+): Promise<{ html: string; courseName: string; moduleCount: number; headings: Array<{ text: string; breakBefore: boolean }> }> {
   const course = await canvasGetOne<CanvasCourse>(
     `/courses/${ref.courseId}?include[]=syllabus_body`,
     ref,
@@ -318,18 +318,18 @@ export async function buildCleanHtml(
   const body: string[] = []
 
   if (front) {
-    toc.push({ level: 1, text: 'Home Page', id: 'sec-home' })
+    toc.push({ level: 1, text: 'Home Page', id: 'sec-home', breakBefore: true })
     body.push(sectionHeading('Home Page', 'sec-home'), front)
   }
   if (wantSyllabus && course.syllabus_body) {
-    toc.push({ level: 1, text: 'Syllabus', id: 'sec-syllabus' })
+    toc.push({ level: 1, text: 'Syllabus', id: 'sec-syllabus', breakBefore: true })
     body.push(sectionHeading('Syllabus', 'sec-syllabus'), syllabus)
   }
 
   let cursor = 0
   plan.forEach(({ mod, items }, m) => {
     const modId = `mod-${m + 1}`
-    toc.push({ level: 1, text: mod.name, id: modId })
+    toc.push({ level: 1, text: mod.name, id: modId, breakBefore: true })
     body.push(sectionHeading(mod.name, modId))
 
     // A module's own page break already starts its first activity on a fresh page.
@@ -345,7 +345,8 @@ export async function buildCleanHtml(
         return
       }
       const id = `act-${m + 1}-${i + 1}`
-      toc.push({ level: 2, text: f.plainTitle ?? f.title, id })
+      const breaks = options.pageBreaks && !first && !f.compact
+      toc.push({ level: 2, text: f.plainTitle ?? f.title, id, breakBefore: breaks })
       body.push(
         activity({
           title: f.title,
@@ -356,7 +357,7 @@ export async function buildCleanHtml(
           dueBy: f.scheduled ? dueBy : null,
           dates: f.dates,
           body: f.body,
-          pageBreak: options.pageBreaks && !first && !f.compact,
+          pageBreak: breaks,
         }),
       )
       first = false
@@ -376,6 +377,8 @@ export async function buildCleanHtml(
     html: htmlDocument(`${course.name} — Clean Course Content Extraction`, parts),
     courseName: course.name,
     moduleCount: plan.length,
+    /** Every heading in order, with whether it starts a page: what the Docs pass needs. */
+    headings: toc.map((e) => ({ text: e.text, breakBefore: e.breakBefore === true })),
   }
 }
 
