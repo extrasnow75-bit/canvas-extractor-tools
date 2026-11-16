@@ -133,3 +133,31 @@ describe('the video card in the clean document', () => {
     expect(card({ name: 'a <b> & "c"' })).toContain('a &lt;b&gt; &amp; &quot;c&quot;')
   })
 })
+
+describe('a video embedded through Canvas\'s external-tool address', () => {
+  const o = { renderLabel: (t: string) => `<b>${t}:</b>`, baseUrl: 'https://boisestatecanvas.instructure.com' }
+  const src = '/courses/5/external_tools/retrieve?display=borderless&amp;url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DFshUPVADcu4'
+  it('uses the video\'s own address, so it can be opened and checked', () => {
+    const out = replaceEmbeddedMedia(`<iframe class="lti-embed" title="National Geographic" src="${src}"></iframe>`, o)
+    expect(out).toBe('<b>Embed video:</b> <a href="https://www.youtube.com/watch?v=FshUPVADcu4" data-embed="1">National Geographic</a>')
+  })
+  it('shows the video\'s website, not Canvas, in the clean card', () => {
+    const out = formatCleanBody(`<iframe title="Flood" src="${src}"></iframe>`, { baseUrl: o.baseUrl })
+    expect(out).toContain('▶ VIDEO')
+    expect(out).toContain('href="https://www.youtube.com/watch?v=FshUPVADcu4"')
+    expect(out).toContain('www.youtube.com</p>')
+    expect(out).not.toContain('instructure.com')
+  })
+  it('leaves a wrapper with no usable video address as a Canvas address', () => {
+    const out = replaceEmbeddedMedia('<iframe title="x" src="/courses/5/external_tools/retrieve?display=borderless"></iframe>', o)
+    expect(out).toContain('/courses/5/external_tools/retrieve')
+  })
+})
+
+describe('the card when the title is only the website', () => {
+  it('shows the website once', () => {
+    const out = embedCard({ kind: 'content', label: 'Embed content', name: 'open.spotify.com', host: 'open.spotify.com', href: 'https://open.spotify.com/embed/episode/abc' })
+    expect(out.split('open.spotify.com').length - 1).toBe(2) // once in the address, once as the title
+    expect(out).not.toContain('#3C4043')
+  })
+})

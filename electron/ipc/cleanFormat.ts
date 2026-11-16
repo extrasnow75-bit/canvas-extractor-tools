@@ -302,7 +302,8 @@ export function embedCard(e: EmbedParts): string {
   return box(
     line(run('9pt', 'bold', DEEP_BLUE), label) +
       line(`margin-top:2pt;${run('12pt', 'bold', BLACK)}`, title) +
-      (e.host ? line(`margin-top:2pt;${run('10pt', 'normal', CARD_GREY)}`, escapeHtml(e.host)) : ''),
+      // When the title is only the website's name, saying it twice adds nothing.
+      (e.host && e.host !== e.name ? line(`margin-top:2pt;${run('10pt', 'normal', CARD_GREY)}`, escapeHtml(e.host)) : ''),
     '#F6F7F9',
     `4px solid ${DEEP_BLUE}`,
     BLACK,

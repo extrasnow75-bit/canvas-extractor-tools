@@ -105,8 +105,19 @@ export function recognise(u: URL): Known | null {
   return null
 }
 
+/**
+ * Canvas embeds a video from the editor's "Embed" button as a page of its own that wraps the real
+ * address: /courses/5/external_tools/retrieve?display=borderless&url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D...
+ * Opened from a copy of the course that page goes nowhere, so the video's own address is used instead.
+ */
+function unwrapExternalTool(u: URL): URL | null {
+  if (!/\/external_tools\/(?:retrieve|sessionless_launch)\/?$/i.test(u.pathname)) return null
+  return absolute(u.searchParams.get('url') ?? '')
+}
+
 function line(kind: 'video' | 'audio' | 'content', src: string, title: string, o: EmbedOptions): string {
-  const u = absolute(src, o.baseUrl)
+  const wrapped = absolute(src, o.baseUrl)
+  const u = (wrapped && unwrapExternalTool(wrapped)) || wrapped
   const known = u ? recognise(u) : null
   const noun = kind === 'content' && known && known.provider !== 'H5P' ? 'video' : kind
   // The provider is not named: the link shows the address, which says where the video lives.
