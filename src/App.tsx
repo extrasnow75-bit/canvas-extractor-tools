@@ -55,6 +55,18 @@ export default function App() {
    */
   const [skippedGoogle, setSkippedGoogle] = useState(false)
 
+  /**
+   * The tools have been shown this session. Once they have, they stay mounted until the app closes
+   * or the Canvas token is removed, even when the Google sign-in drops (signed out, or expired
+   * mid-session). Unmounting them threw away the chosen course and any extraction in progress;
+   * the tools' own status line already says when Google is not signed in and offers Sign in.
+   */
+  const [toolsShown, setToolsShown] = useState(false)
+  const googleAnswered = googleSignedIn(googleCheck) || googleCheck === 'checking' || skippedGoogle
+  // Adjusting state while rendering, React's pattern for state derived from other state.
+  if (canvasToken && googleAnswered && !toolsShown) setToolsShown(true)
+  if (!canvasToken && toolsShown) setToolsShown(false)
+
   const [appVersion, setAppVersion] = useState('')
   const [update, setUpdate] = useState<{ version: string } | null>(null)
   const [updateDismissed, setUpdateDismissed] = useState(false)
@@ -253,7 +265,7 @@ export default function App() {
           {/* Held back until the Google question has an answer. Revealing the extraction tools
               the moment a token was saved is what pulled attention past the sign-in card —
               the panel stayed open, but nobody was looking at it any more. */}
-          {canvasToken && (googleSignedIn(googleCheck) || googleCheck === 'checking' || skippedGoogle) && (
+          {canvasToken && (toolsShown || googleAnswered) && (
             <ToolPanel
               token={canvasToken}
               googleCheck={googleCheck}
