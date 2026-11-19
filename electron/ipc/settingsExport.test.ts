@@ -583,10 +583,11 @@ describe('sheetsFormatRequests', () => {
     for (const r of rules) expect(r.top).toBeDefined()
   })
 
-  it('never emits a formula — links go through textFormat, not =HYPERLINK', () => {
+  it('puts no formula and no cell-level link in the formatting — Sheets drops those links', () => {
+    // The template links are written afterwards as HYPERLINK formulas (see formulaLink).
     expect(JSON.stringify(requests)).not.toContain('formulaValue')
     expect(JSON.stringify(requests)).not.toContain('HYPERLINK')
-    expect(JSON.stringify(requests)).toContain('"link":{"uri":"https://docs.google.com/')
+    expect(JSON.stringify(requests)).not.toContain('"link":{"uri"')
   })
 })
 

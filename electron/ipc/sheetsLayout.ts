@@ -142,6 +142,7 @@ export interface CellStyle {
   /** Background, hex; absent for none. */
   fill?: string
   align: 'left' | 'center'
+  underline?: boolean
 }
 
 export interface RowLayout {
@@ -222,7 +223,12 @@ export function rowLayout(row: TemplateRow, values: Map<string, CellValue>): Row
   const isPlaceholder = row.kind === 'text' && !row.fixed && !values.has(row.key)
   if (isPlaceholder) {
     value.color = row.link ? PALETTE.link : PALETTE.placeholder
-    if (row.link) layout.link = row.link
+    if (row.link) {
+      // The address is written as a HYPERLINK formula (see formulaLink), not as a cell-level
+      // link: Sheets drops a cell-level link here, leaving blue text that goes nowhere.
+      layout.link = row.link
+      value.underline = true
+    }
   }
 
   return layout
@@ -262,7 +268,7 @@ function apiColor(hex: string): { red: number; green: number; blue: number } {
 
 const THIN_BORDER = { style: 'SOLID', width: 1, color: apiColor(PALETTE.black) }
 
-function apiCell(style: CellStyle, link?: string): unknown {
+function apiCell(style: CellStyle): unknown {
   return {
     userEnteredFormat: {
       backgroundColor: apiColor(style.fill ?? PALETTE.white),
@@ -274,7 +280,7 @@ function apiCell(style: CellStyle, link?: string): unknown {
         fontSize: FONT.size,
         bold: style.bold,
         foregroundColor: apiColor(style.color),
-        ...(link ? { link: { uri: link }, underline: true } : {}),
+        ...(style.underline ? { underline: true } : {}),
       },
     },
   }
@@ -313,7 +319,7 @@ export function sheetsFormatRequests(
     {
       updateCells: {
         range: block,
-        rows: layouts.map((l) => ({ values: [apiCell(l.label), apiCell(l.value, l.link)] })),
+        rows: layouts.map((l) => ({ values: [apiCell(l.label), apiCell(l.value)] })),
         fields:
           'userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,wrapStrategy,textFormat)',
       },
@@ -338,4 +344,30 @@ export function sheetsFormatRequests(
   }
 
   return requests
+}
+
+/** The address a value cell links to (the template's, while its placeholder shows), written as a HYPERLINK formula. */
+export function formulaLink(row: TemplateRow, values: Map<string, CellValue>): string | undefined {
+  return rowLayout(row, values).link
+}
+
+/** Only Google Doc addresses: the templates' own, opened for editing or to make a copy. */
+const SAFE_DOC_LINK = /^https:\/\/docs\.google\.com\/document\/(u\/\d+\/)?d\/[A-Za-z0-9_-]+\/(edit|copy)(\?[A-Za-z0-9_.=&-]*)?(#heading=[A-Za-z0-9_.-]+)?$/
+
+/**
+ * The formula for a linked value cell: =HYPERLINK("address", "text").
+ *
+ * Google Sheets keeps the blue styling of a cell-level link written through the API but not the
+ * address, so the cell looks like a link and goes nowhere. A HYPERLINK formula keeps the address.
+ * The text goes inside a quoted string with its quotes doubled, so it can never become formula
+ * code, and the address must be a Google Doc address; anything else gets no formula.
+ */
+export function hyperlinkFormula(uri: string, text: string): string | null {
+  if (!SAFE_DOC_LINK.test(uri)) return null
+  return `=HYPERLINK("${uri}", "${text.replace(/"/g, '""')}")`
+}
+
+/** A1 address of one value cell (column B) on a tab: template row `row` sits on sheet row row + 2. */
+export function valueCellA1(sheetName: string, row: number): string {
+  return `'${sheetName.replace(/'/g, "''")}'!B${row + 2}`
 }

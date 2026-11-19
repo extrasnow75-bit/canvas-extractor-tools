@@ -1,7 +1,7 @@
 import { getAccessToken } from './googleAuth'
 import { googleApiMessage, googleFetch } from './googleMessages'
 import { SettingsData } from './settingsExport'
-import { cellValue, sheetRangeA1, sheetsFormatRequests, validationRuns } from './sheetsLayout'
+import { cellValue, formulaLink, hyperlinkFormula, sheetRangeA1, sheetsFormatRequests, validationRuns, valueCellA1 } from './sheetsLayout'
 import { apiNotEnabledMessage } from './googleSheetsErrors'
 
 /**
@@ -136,6 +136,25 @@ export async function createSettingsSpreadsheet(
     method: 'POST',
     body: JSON.stringify({ valueInputOption: 'RAW', data: valueRanges }),
   })
+
+  // The template links (Template Rubrics, Template Quiz) as HYPERLINK formulas, because Sheets
+  // drops a cell-level link. USER_ENTERED is needed for a formula to be one; it is used only for
+  // these cells, whose text hyperlinkFormula has made safe.
+  const formulas: Array<{ range: string; values: string[][] }> = []
+  for (const tab of data.tabs) {
+    tab.template.rows.forEach((row, ri) => {
+      const link = formulaLink(row, tab.values)
+      if (!link) return
+      const formula = hyperlinkFormula(link, String(cellValue(row, tab.values)))
+      if (formula) formulas.push({ range: valueCellA1(tab.title, ri), values: [[formula]] })
+    })
+  }
+  if (formulas.length > 0) {
+    await sheetsFetch(`${SHEETS_BASE}/${spreadsheetId}/values:batchUpdate`, accessToken, {
+      method: 'POST',
+      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: formulas }),
+    })
+  }
 
   return { id: spreadsheetId, webViewLink: created.spreadsheetUrl }
 }
