@@ -13,6 +13,8 @@ import {
   tokenExchangeMessage,
   googleApiMessage,
   classifyRefreshFailure,
+  missingScopes,
+  MSG_DRIVE_NOT_ALLOWED,
 } from './googleMessages'
 
 // Words that mean something to a developer and nothing to the person reading.
@@ -147,4 +149,22 @@ describe('notSetUpMessage', () => {
     expect(m).toContain('Details for support: This copy was built without the Google client secret')
   })
 })
+})
+
+describe('missingScopes', () => {
+  const required = 'https://www.googleapis.com/auth/drive.file openid email profile'
+  it('finds an unticked Drive box', () => {
+    expect(missingScopes('openid https://www.googleapis.com/auth/userinfo.email', required)).toEqual([
+      'https://www.googleapis.com/auth/drive.file',
+    ])
+  })
+  it('passes when Drive was allowed, in any order', () => {
+    expect(missingScopes('openid https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile', required)).toEqual([])
+  })
+  it('assumes nothing when Google reports nothing', () => {
+    expect(missingScopes(undefined, required)).toEqual([])
+  })
+  it('tells the person what to do', () => {
+    expect(MSG_DRIVE_NOT_ALLOWED).toMatch(/tick the Google Drive box/)
+  })
 })

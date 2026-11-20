@@ -17,6 +17,8 @@ import {
   notSetUpMessage,
   MSG_NOT_SIGNED_IN,
   MSG_NO_REFRESH_TOKEN,
+  MSG_DRIVE_NOT_ALLOWED,
+  missingScopes,
   MSG_SIGN_IN_EXPIRED,
   MSG_SIGN_IN_TIMEOUT,
   MSG_UNREACHABLE,
@@ -44,6 +46,8 @@ interface TokenResponse {
   refresh_token?: string
   expires_in?: number
   id_token?: string
+  /** Space-separated scopes the person actually allowed. */
+  scope?: string
 }
 
 export interface GoogleStatus {
@@ -337,6 +341,11 @@ export async function signIn(options?: { useAnotherAccount?: boolean }): Promise
   } catch {
     throw new Error(tokenExchangeMessage(tokenRes.status, 'The response from Google could not be read.'))
   }
+  // Checked before anything is saved, so the person is told now, on the sign-in screen, rather
+  // than at their first save. Nothing is kept, and the next sign-in shows Google's boxes again.
+  if (missingScopes(data.scope, GOOGLE_SCOPES).length > 0) {
+    throw new Error(MSG_DRIVE_NOT_ALLOWED)
+  }
   if (!data.refresh_token) {
     throw new Error(MSG_NO_REFRESH_TOKEN)
   }
@@ -395,6 +404,11 @@ export async function getAccessToken(): Promise<string> {
     // only checks that a token exists, so the panel kept showing the user signed in while
     // every Drive call failed.
     if (classifyRefreshFailure(res.status) === 'expired') {
+      // The person may have signed in again while this refresh was on its way (the check at
+      // launch is the usual one). Then it is the old sign-in that failed, and clearing would
+      // throw away the new one — the app said "expired" just after a sign-in that worked. So
+      // use the new sign-in instead.
+      if (loadTokens()?.refreshToken !== t.refreshToken) return getAccessToken()
       clearTokens()
       notifySignedOut()
       throw new SignInRequiredError(MSG_SIGN_IN_EXPIRED)
@@ -403,6 +417,8 @@ export async function getAccessToken(): Promise<string> {
   }
 
   const data = (await res.json()) as TokenResponse
+  // Same race, other outcome: a newer sign-in must not be overwritten with this older one.
+  if (loadTokens()?.refreshToken !== t.refreshToken) return getAccessToken()
   const updated: StoredTokens = {
     ...t,
     accessToken: data.access_token,

@@ -62,6 +62,23 @@ export const MSG_STATE_MISMATCH =
 export const MSG_SIGN_IN_TIMEOUT =
   'Google sign-in took too long, so it was stopped. Choose Sign in with Google and finish signing in within three minutes.'
 
+/**
+ * The scopes Google's consent screen left unticked. Google shows each permission as its own box and
+ * still finishes the sign-in when one is left empty, so a sign-in that "worked" could not save a
+ * single file — and people only found out at their first save, then had to sign in all over again.
+ * Google always reports what was granted; if it ever says nothing, nothing is assumed missing.
+ */
+export function missingScopes(granted: string | undefined, required: string): string[] {
+  if (!granted) return []
+  const have = new Set(granted.split(/\s+/))
+  return required.split(/\s+/).filter((s) => s.includes('/auth/drive') && !have.has(s))
+}
+
+export const MSG_DRIVE_NOT_ALLOWED =
+  'You signed in, but the Google Drive box was not ticked on Google’s screen, so the app could not ' +
+  'save files to your Drive. Choose Sign in with Google again and tick the Google Drive box this time. ' +
+  OR_LOCAL
+
 export const MSG_NO_REFRESH_TOKEN =
   'Google signed you in but did not give the app lasting access. In your Google Account, open Security, ' +
   'then Third-party apps and services, remove Canvas Extractor Tools, and then sign in here again.'

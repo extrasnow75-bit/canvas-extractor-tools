@@ -317,8 +317,10 @@ export function SetupPanel({
 
             {googleBusy && (
               <p role="status" className="text-[12.5px] text-gray-700 font-bold mb-2.5">
-                Waiting for Google in your browser. If it does not finish, close the Google tab and try
-                again. The app stops waiting after 3 minutes. If it keeps failing, contact {SUPPORT_CONTACT}.
+                Waiting for Google in your browser. When Google asks what to allow, tick the Google Drive
+                box. If Google took you to Gmail or another page after you signed in, press Cancel sign-in
+                below, then choose Sign in with Google again. The app stops waiting after 3 minutes. If it
+                keeps failing, contact {SUPPORT_CONTACT}.
               </p>
             )}
             {googleBusy && (
@@ -385,7 +387,8 @@ export function SetupPanel({
                 {/* The purpose line above already says what signing in is for, so this keeps
                     only the part it does not cover. */}
                 <p className="text-[13px] text-gray-600 mb-2.5">
-                  The app can only see files it creates — never the rest of your Drive.
+                  The app can only see files it creates — never the rest of your Drive. When Google
+                  asks what to allow, <strong>tick the Google Drive box</strong>.
                 </p>
                 {/* aria-disabled throughout, not disabled: pressing this opens the system
                     browser for the OAuth round-trip, and a truly disabled button blurs the
