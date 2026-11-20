@@ -59,7 +59,9 @@
         }
       ],
       "icon": "resources/icon.png",
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "identity": "-",
+      "hardenedRuntime": false
     },
     "files": [
       "out/**"
